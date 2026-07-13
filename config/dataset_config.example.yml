@@ -1,0 +1,28 @@
+# Copy this file to dataset_config.local.yml and update values for your environment.
+# Do not commit local configuration files that contain personal paths or workspace-specific settings.
+# If your team uses Databricks volumes, workspace files, or another approved storage location,
+# adapt the source paths and document the final approach in the runbook.
+
+active_dataset: napa_5k
+
+available_datasets:
+  napa_5k:
+    description: 5K development dataset for Milestone 1 foundational readiness.
+    source_path: data/raw/napa_5k
+  napa_50k:
+    description: 50K validation dataset for Milestone 2 engineering readiness.
+    source_path: data/raw/napa_50k
+  napa_250k:
+    description: 250K production dataset for Milestone 3 final prototype build.
+    source_path: data/raw/napa_250k
+
+catalog:
+  target_catalog: napa_pickleball
+  bronze_schema: bronze
+  silver_schema: silver
+  gold_schema: gold
+  sandbox_schema: sandbox
+
+run:
+  run_id: replace_with_run_identifier
+  run_notes: replace_with_short_description

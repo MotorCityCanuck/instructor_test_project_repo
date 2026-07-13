@@ -1,0 +1,19 @@
+# Copy this file to project_config.local.yml and update values for your team.
+# Starter values are not analytical decisions. Teams must document their own assumptions and methods.
+
+project_name: napa_olympic_analytics
+team_name: replace_with_team_name
+
+country_scope:
+  - USA
+  - CAN
+
+competition_categories:
+  - mens_doubles
+  - womens_doubles
+  - mixed_doubles
+
+milestones:
+  milestone_1_dataset: napa_5k
+  milestone_2_dataset: napa_50k
+  milestone_3_dataset: napa_250k

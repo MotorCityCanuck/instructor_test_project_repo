@@ -1,0 +1,6 @@
+# Minimal local development helpers.
+# Databricks-native libraries such as PySpark may already be available in Databricks.
+# Add only the packages your team actually uses and can explain.
+
+pyyaml
+pytest

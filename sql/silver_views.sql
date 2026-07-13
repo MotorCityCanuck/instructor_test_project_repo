@@ -1,0 +1,7 @@
+-- Purpose: Reserve this file for student-authored Silver entity work if SQL is used.
+--
+-- Prompts for student teams:
+-- - Define cleaned Silver entities that support business interpretation.
+-- - Document business definitions and standardization rules.
+-- - Explain how keys resolve across players, teams, memberships, matches, and games.
+-- - Record validation steps before downstream Gold analytics depend on these entities.

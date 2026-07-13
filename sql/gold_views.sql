@@ -1,0 +1,7 @@
+-- Purpose: Reserve this file for student-authored Gold analytical products if SQL is used.
+--
+-- Prompts for student teams:
+-- - Define decision-ready products such as scorecards, rankings, and confidence summaries.
+-- - Explain how Gold outputs support final recommendations and milestone evidence.
+-- - Keep analytical methodology documented outside this file as well.
+-- - Preserve traceability between Gold outputs, quality findings, and final deliverables.

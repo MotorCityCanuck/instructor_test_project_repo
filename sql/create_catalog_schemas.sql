@@ -1,0 +1,8 @@
+-- Purpose: Student teams may adapt this file to create or document catalog and schema setup.
+--
+-- Example names only. Confirm what is supported in your Databricks environment.
+-- CREATE CATALOG IF NOT EXISTS napa_pickleball;
+-- CREATE SCHEMA IF NOT EXISTS napa_pickleball.bronze;
+-- CREATE SCHEMA IF NOT EXISTS napa_pickleball.silver;
+-- CREATE SCHEMA IF NOT EXISTS napa_pickleball.gold;
+-- CREATE SCHEMA IF NOT EXISTS napa_pickleball.sandbox;

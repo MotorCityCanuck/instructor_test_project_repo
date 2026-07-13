@@ -1,0 +1,7 @@
+-- Purpose: Reserve this file for student-authored Bronze table work if SQL is used.
+--
+-- Prompts for student teams:
+-- - Define source-aligned Bronze tables for each delivered source file.
+-- - Capture row-count evidence and schema summaries.
+-- - Record ingestion metadata needed for lineage and troubleshooting.
+-- - Document assumptions about file availability, partitions, and refresh behavior.

@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Secrets and local environment
+.env
+*.env
+config/*.local.yml
+config/*_local.yml
+
+# Data files: do not commit source or large generated data
+*.parquet
+*.csv
+*.xlsx
+*.xls
+*.delta
+*.db
+*.sqlite
+*.duckdb
+
+# Large/generated outputs
+outputs/**/*.parquet
+outputs/**/*.csv
+outputs/**/*.xlsx
+outputs/**/*.png
+outputs/**/*.jpg
+outputs/**/*.jpeg
+outputs/**/*.html
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
