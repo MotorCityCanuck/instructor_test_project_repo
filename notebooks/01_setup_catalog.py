@@ -7,15 +7,19 @@
 # Purpose:
 # Create the team-scoped schemas and raw volume used by the Databricks workflow.
 
-CATALOG = "workspace"
-TEAM_PREFIX = "team03"  # Change once for your assigned team
+from napa_pipeline.config import load_pipeline_config, register_pipeline_widgets
 
-RAW_SCHEMA = f"{TEAM_PREFIX}_raw"
-BRONZE_SCHEMA = f"{TEAM_PREFIX}_bronze"
-SILVER_SCHEMA = f"{TEAM_PREFIX}_silver"
-GOLD_SCHEMA = f"{TEAM_PREFIX}_gold"
-OPS_SCHEMA = f"{TEAM_PREFIX}_ops"
-RAW_VOLUME = "napa_files"
+# COMMAND ----------
+register_pipeline_widgets(dbutils)
+config = load_pipeline_config(dbutils)
+
+CATALOG = config.catalog
+RAW_SCHEMA = config.raw_schema
+BRONZE_SCHEMA = config.bronze_schema
+SILVER_SCHEMA = config.silver_schema
+GOLD_SCHEMA = config.gold_schema
+OPS_SCHEMA = config.ops_schema
+RAW_VOLUME = config.raw_volume
 
 existing_schemas = {
     row.databaseName for row in spark.sql(f"SHOW SCHEMAS IN {CATALOG}").collect()
