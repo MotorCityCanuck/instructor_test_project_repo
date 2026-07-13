@@ -9,18 +9,19 @@
 # corresponding Delta table in the Bronze schema.
 
 from pyspark.sql import functions as F
-from napa_pipeline.config import load_pipeline_config, register_pipeline_widgets
+
+# MAGIC %run ./_shared_pipeline_config
 
 # COMMAND ----------
 register_pipeline_widgets(dbutils)
 config = load_pipeline_config(dbutils)
 
-CATALOG = config.catalog
-RAW_SCHEMA = config.raw_schema
-BRONZE_SCHEMA = config.bronze_schema
-RAW_VOLUME = config.raw_volume
-DATASET_NAME = config.dataset_name
-source_path = config.source_path
+CATALOG = config["catalog"]
+RAW_SCHEMA = config["raw_schema"]
+BRONZE_SCHEMA = config["bronze_schema"]
+RAW_VOLUME = config["raw_volume"]
+DATASET_NAME = config["dataset_name"]
+source_path = config["resolved_source_path"]
 
 print(f"Catalog: {CATALOG}")
 print(f"Raw schema: {RAW_SCHEMA}")
