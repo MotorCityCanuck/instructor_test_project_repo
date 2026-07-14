@@ -79,21 +79,37 @@ def _read_parquet_with_uuid_fallback(parquet_path: str, source_file: str):
         "using PyArrow fallback and converting UUID values to strings."
     )
 
-    arrow_table = pq.read_table(parquet_path)
-    pandas_df = arrow_table.to_pandas()
+    if parquet_path.startswith("dbfs:/Volumes/"):
+        pyarrow_path = parquet_path.replace("dbfs:/Volumes/", "/Volumes/", 1)
+    elif parquet_path.startswith("dbfs:/"):
+        pyarrow_path = parquet_path.replace("dbfs:/", "/dbfs/", 1)
+    else:
+        pyarrow_path = parquet_path
 
-    for column_name in pandas_df.columns:
-        non_null_values = pandas_df[column_name].dropna()
-        if non_null_values.empty:
-            continue
+    arrow_table = pq.read_table(pyarrow_path)
+    records = arrow_table.to_pylist()
 
-        first_value = non_null_values.iloc[0]
-        if isinstance(first_value, uuid.UUID):
-            pandas_df[column_name] = pandas_df[column_name].apply(
-                lambda value: str(value) if value is not None else None
-            )
+    def _convert_uuid_values(value):
+        if isinstance(value, uuid.UUID):
+            return str(value)
+        if isinstance(value, dict):
+            return {
+                nested_key: _convert_uuid_values(nested_value)
+                for nested_key, nested_value in value.items()
+            }
+        if isinstance(value, list):
+            return [_convert_uuid_values(item) for item in value]
+        return value
 
-    return spark.createDataFrame(pandas_df)
+    normalized_records = [
+        {
+            column_name: _convert_uuid_values(column_value)
+            for column_name, column_value in record.items()
+        }
+        for record in records
+    ]
+
+    return spark.createDataFrame(normalized_records)
 
 
 def _is_uuid_parquet_error(exc: Exception) -> bool:
