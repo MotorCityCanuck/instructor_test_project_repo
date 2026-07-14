@@ -7,7 +7,38 @@
 # Purpose:
 # Create the team-scoped schemas and raw volume used by the Databricks workflow.
 
-# MAGIC %run ./_shared_pipeline_config
+from pathlib import Path
+
+
+def _load_shared_pipeline_config() -> None:
+    """Load shared notebook config helpers without relying on notebook magic."""
+    search_roots = []
+
+    if "__file__" in globals():
+        search_roots.append(Path(__file__).resolve().parent)
+
+    current_dir = Path.cwd().resolve()
+    search_roots.extend([current_dir, *current_dir.parents])
+
+    for root in search_roots:
+        candidate = root / "_shared_pipeline_config.py"
+        if candidate.exists():
+            exec(candidate.read_text(), globals())
+            return
+
+        candidate = root / "notebooks" / "_shared_pipeline_config.py"
+        if candidate.exists():
+            exec(candidate.read_text(), globals())
+            return
+
+    raise FileNotFoundError(
+        "Could not locate '_shared_pipeline_config.py'. "
+        "Run this file from the repository workspace or keep the shared "
+        "config helper under notebooks/."
+    )
+
+
+_load_shared_pipeline_config()
 
 # COMMAND ----------
 register_pipeline_widgets(dbutils)
