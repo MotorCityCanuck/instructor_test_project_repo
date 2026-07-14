@@ -66,41 +66,39 @@ print(f"Source path: {source_path}")
 def _read_parquet_with_uuid_fallback(parquet_path: str, source_file: str):
     """Read a Parquet file, falling back to PyArrow for native UUID columns."""
     try:
-        return spark.read.parquet(parquet_path)
-    except Exception as exc:
-        error_message = str(exc)
-        if "Illegal Parquet type: FIXED_LEN_BYTE_ARRAY (UUID)" not in error_message:
-            raise
+        import pyarrow.parquet as pq
+    except ImportError as import_exc:
+        raise ModuleNotFoundError(
+            "Spark could not read a Parquet UUID column and PyArrow is not "
+            "available for the fallback path. Install PyArrow on the cluster "
+            "or rewrite the source file with UUID columns cast to strings."
+        ) from import_exc
 
-        try:
-            import pyarrow.parquet as pq
-        except ImportError as import_exc:
-            raise ModuleNotFoundError(
-                "Spark could not read a Parquet UUID column and PyArrow is not "
-                "available for the fallback path. Install PyArrow on the cluster "
-                "or rewrite the source file with UUID columns cast to strings."
-            ) from import_exc
+    print(
+        f"Spark could not read native UUID columns in {source_file}; "
+        "using PyArrow fallback and converting UUID values to strings."
+    )
 
-        print(
-            f"Spark could not read native UUID columns in {source_file}; "
-            "using PyArrow fallback and converting UUID values to strings."
-        )
+    arrow_table = pq.read_table(parquet_path)
+    pandas_df = arrow_table.to_pandas()
 
-        arrow_table = pq.read_table(parquet_path)
-        pandas_df = arrow_table.to_pandas()
+    for column_name in pandas_df.columns:
+        non_null_values = pandas_df[column_name].dropna()
+        if non_null_values.empty:
+            continue
 
-        for column_name in pandas_df.columns:
-            non_null_values = pandas_df[column_name].dropna()
-            if non_null_values.empty:
-                continue
+        first_value = non_null_values.iloc[0]
+        if isinstance(first_value, uuid.UUID):
+            pandas_df[column_name] = pandas_df[column_name].apply(
+                lambda value: str(value) if value is not None else None
+            )
 
-            first_value = non_null_values.iloc[0]
-            if isinstance(first_value, uuid.UUID):
-                pandas_df[column_name] = pandas_df[column_name].apply(
-                    lambda value: str(value) if value is not None else None
-                )
+    return spark.createDataFrame(pandas_df)
 
-        return spark.createDataFrame(pandas_df)
+
+def _is_uuid_parquet_error(exc: Exception) -> bool:
+    """Return True when an exception indicates unsupported Parquet UUID typing."""
+    return "Illegal Parquet type: FIXED_LEN_BYTE_ARRAY (UUID)" in str(exc)
 
 
 # COMMAND ----------
@@ -132,11 +130,21 @@ for entry in sorted(parquet_entries, key=lambda item: item.name):
     table_existed = spark.catalog.tableExists(target_table)
 
     print(f"Reading source file: {entry.path}")
-    dataframe = _read_parquet_with_uuid_fallback(entry.path, source_file).withColumn(
-        "_source_file", F.lit(source_file)
-    ).withColumn("_ingested_at", F.current_timestamp())
+    try:
+        base_dataframe = spark.read.parquet(entry.path)
+        dataframe = base_dataframe.withColumn(
+            "_source_file", F.lit(source_file)
+        ).withColumn("_ingested_at", F.current_timestamp())
+        row_count = dataframe.count()
+    except Exception as exc:
+        if not _is_uuid_parquet_error(exc):
+            raise
 
-    row_count = dataframe.count()
+        base_dataframe = _read_parquet_with_uuid_fallback(entry.path, source_file)
+        dataframe = base_dataframe.withColumn(
+            "_source_file", F.lit(source_file)
+        ).withColumn("_ingested_at", F.current_timestamp())
+        row_count = dataframe.count()
 
     (
         dataframe.write.format("delta")
