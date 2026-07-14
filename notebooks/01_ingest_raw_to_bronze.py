@@ -12,6 +12,7 @@ from pathlib import Path
 import uuid
 
 from pyspark.sql import functions as F
+from pyspark.sql import types as T
 
 
 def _load_shared_pipeline_config() -> None:
@@ -66,6 +67,7 @@ print(f"Source path: {source_path}")
 def _read_parquet_with_uuid_fallback(parquet_path: str, source_file: str):
     """Read a Parquet file, falling back to PyArrow for native UUID columns."""
     try:
+        import pyarrow as pa
         import pyarrow.parquet as pq
     except ImportError as import_exc:
         raise ModuleNotFoundError(
@@ -89,6 +91,38 @@ def _read_parquet_with_uuid_fallback(parquet_path: str, source_file: str):
     arrow_table = pq.read_table(pyarrow_path)
     records = arrow_table.to_pylist()
 
+    def _arrow_type_to_spark_type(arrow_type):
+        type_text = str(arrow_type).lower()
+
+        if "uuid" in type_text:
+            return T.StringType()
+        if pa.types.is_null(arrow_type):
+            return T.StringType()
+        if pa.types.is_boolean(arrow_type):
+            return T.BooleanType()
+        if pa.types.is_int8(arrow_type):
+            return T.ByteType()
+        if pa.types.is_int16(arrow_type):
+            return T.ShortType()
+        if pa.types.is_integer(arrow_type):
+            return T.LongType()
+        if pa.types.is_float32(arrow_type):
+            return T.FloatType()
+        if pa.types.is_floating(arrow_type):
+            return T.DoubleType()
+        if pa.types.is_decimal(arrow_type):
+            return T.DecimalType(arrow_type.precision, arrow_type.scale)
+        if pa.types.is_date(arrow_type):
+            return T.DateType()
+        if pa.types.is_timestamp(arrow_type):
+            return T.TimestampType()
+        if pa.types.is_string(arrow_type) or pa.types.is_large_string(arrow_type):
+            return T.StringType()
+        if pa.types.is_binary(arrow_type) or pa.types.is_large_binary(arrow_type):
+            return T.BinaryType()
+
+        return T.StringType()
+
     def _convert_uuid_values(value):
         if isinstance(value, uuid.UUID):
             return str(value)
@@ -109,7 +143,18 @@ def _read_parquet_with_uuid_fallback(parquet_path: str, source_file: str):
         for record in records
     ]
 
-    return spark.createDataFrame(normalized_records)
+    spark_schema = T.StructType(
+        [
+            T.StructField(
+                field.name,
+                _arrow_type_to_spark_type(field.type),
+                nullable=True,
+            )
+            for field in arrow_table.schema
+        ]
+    )
+
+    return spark.createDataFrame(normalized_records, schema=spark_schema)
 
 
 def _is_uuid_parquet_error(exc: Exception) -> bool:
