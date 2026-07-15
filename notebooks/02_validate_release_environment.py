@@ -8,6 +8,10 @@
 # Resolve Raw-to-Bronze configuration for one release and validate or create the
 # required catalog, schemas, and raw volume in Databricks.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 from pathlib import Path
 
 

@@ -8,6 +8,10 @@
 # Resolve and validate the Raw-to-Bronze YAML configuration for one release and
 # display the key settings needed by downstream Databricks workflow tasks.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 from pathlib import Path
 
 

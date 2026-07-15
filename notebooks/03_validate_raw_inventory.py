@@ -8,6 +8,10 @@
 # Validate exact Raw file inventory, confirm configured sources are readable
 # Parquet, and capture source metadata needed before Bronze publication.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 from pathlib import Path
 
 

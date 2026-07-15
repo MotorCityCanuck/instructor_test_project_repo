@@ -8,6 +8,10 @@
 # Outline how the team will assemble executive-facing metrics, comparisons,
 # supporting tables, and presentation-ready evidence from validated Gold outputs.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 # Expected inputs:
 # - Student-created Gold outputs
 # - Data quality findings and confidence notes

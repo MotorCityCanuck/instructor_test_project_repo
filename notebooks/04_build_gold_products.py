@@ -8,6 +8,10 @@
 # Outline the Gold-layer products the team intends to build for decision support,
 # while keeping the analytical methodology fully student-designed and justified.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 # Expected inputs:
 # - Student-created Silver entities
 # - Documented data quality findings

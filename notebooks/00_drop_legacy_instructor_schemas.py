@@ -8,6 +8,10 @@
 # Remove the legacy shared instructor schemas after the release-specific
 # Raw-to-Bronze pipeline has been validated.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 LEGACY_SCHEMAS = [
     "workspace.instructor_raw",
     "workspace.instructor_bronze",

@@ -8,6 +8,10 @@
 # Outline how the team will transform Bronze data into cleaned, standardized,
 # business-ready Silver entities that support downstream analytics.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 # Expected inputs:
 # - Student-created Bronze tables
 # - Documented source interpretations and business definitions

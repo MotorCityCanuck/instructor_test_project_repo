@@ -3,6 +3,8 @@
 # Databricks notebook source
 
 # COMMAND ----------
+HELPER_VERSION = "2026.07.15.1"
+
 PIPELINE_WIDGET_DEFAULTS = {
     "catalog": "workspace",
     "raw_schema": "instructor_raw",

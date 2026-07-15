@@ -3,6 +3,8 @@
 # Databricks notebook source
 
 # COMMAND ----------
+HELPER_VERSION = "2026.07.15.1"
+
 from pathlib import Path
 import sys
 

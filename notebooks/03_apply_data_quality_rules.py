@@ -8,6 +8,10 @@
 # Outline how the team will define, run, and interpret data quality checks across
 # the entities used for downstream analytical products.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 # Expected inputs:
 # - Student-created Bronze and Silver entities
 # - Team-authored data quality rules and severity definitions

@@ -7,6 +7,10 @@
 # Purpose:
 # Create the team-scoped schemas and raw volume used by the Databricks workflow.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 from pathlib import Path
 
 

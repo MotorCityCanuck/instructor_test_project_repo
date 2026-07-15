@@ -8,6 +8,10 @@
 # This notebook is legacy and is no longer the authoritative Raw-to-Bronze
 # implementation path.
 
+NOTEBOOK_VERSION = "2026.07.15.1"
+
+print(f"Notebook version: {NOTEBOOK_VERSION}")
+
 message = """
 Legacy notebook notice:
 
