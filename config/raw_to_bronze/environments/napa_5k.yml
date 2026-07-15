@@ -1,0 +1,16 @@
+release:
+  release_name: napa_5k
+  expected_player_scale: 5000
+  role: development
+
+schemas:
+  raw: ${runtime.team_prefix}_5k_raw
+  bronze: ${runtime.team_prefix}_5k_bronze
+  operations: ${objects.operations_schema}
+
+volume:
+  name: ${objects.raw_volume_name}
+  path: /Volumes/${runtime.catalog}/${schemas.raw}/${objects.raw_volume_name}
+
+performance:
+  shuffle_partitions: 16

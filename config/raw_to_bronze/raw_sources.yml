@@ -1,0 +1,104 @@
+sources:
+  regions:
+    enabled: true
+    file_name: regions.parquet
+    bronze_table: regions
+    build_order: 10
+    grain: one geographic region
+    key_columns: [id]
+
+  clubs:
+    enabled: true
+    file_name: clubs.parquet
+    bronze_table: clubs
+    build_order: 20
+    grain: one club or facility
+    key_columns: [id]
+
+  club_memberships:
+    enabled: true
+    file_name: club_memberships.parquet
+    bronze_table: club_memberships
+    build_order: 30
+    grain: one player-club membership period
+    key_columns: [id]
+
+  player_master:
+    enabled: true
+    file_name: player_master.parquet
+    bronze_table: player_master
+    build_order: 40
+    grain: one current or snapshot player row
+    key_columns: [player_id]
+
+  player_registrations:
+    enabled: true
+    file_name: player_registrations.parquet
+    bronze_table: player_registrations
+    build_order: 50
+    grain: one player registration event
+    key_columns: [id]
+
+  player_assessment_history:
+    enabled: true
+    file_name: player_assessment_history.parquet
+    bronze_table: player_assessment_history
+    build_order: 60
+    grain: one player assessment observation
+    key_columns: [id]
+
+  teams:
+    enabled: true
+    file_name: teams.parquet
+    bronze_table: teams
+    build_order: 70
+    grain: one doubles team
+    key_columns: [id]
+
+  team_memberships:
+    enabled: true
+    file_name: team_memberships.parquet
+    bronze_table: team_memberships
+    build_order: 80
+    grain: one player-team membership period
+    key_columns: [id]
+
+  matches:
+    enabled: true
+    file_name: matches.parquet
+    bronze_table: matches
+    build_order: 90
+    grain: one match
+    key_columns: [id]
+
+  match_teams:
+    enabled: true
+    file_name: match_teams.parquet
+    bronze_table: match_teams
+    build_order: 100
+    grain: one match side
+    key_columns: [id]
+
+  match_team_players:
+    enabled: true
+    file_name: match_team_players.parquet
+    bronze_table: match_team_players
+    build_order: 110
+    grain: one player on a match side
+    key_columns: [id]
+
+  match_games:
+    enabled: true
+    file_name: match_games.parquet
+    bronze_table: match_games
+    build_order: 120
+    grain: one game within a match
+    key_columns: [id]
+
+  monthly_batches:
+    enabled: true
+    file_name: monthly_batches.parquet
+    bronze_table: monthly_batches
+    build_order: 130
+    grain: one processing or snapshot batch
+    key_columns: [id]

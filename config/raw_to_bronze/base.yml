@@ -1,0 +1,48 @@
+project:
+  name: napa_olympic_analytics
+  pipeline_name: raw_to_bronze
+  pipeline_version: "1.0.0"
+  processing_mode: full_refresh
+
+runtime:
+  catalog: workspace
+  team_prefix: instructor
+  default_release: napa_5k
+  timezone: America/New_York
+
+objects:
+  raw_volume_name: napa_files
+  operations_schema: ${runtime.team_prefix}_ops
+
+execution:
+  fail_fast: true
+  require_exact_source_inventory: true
+  unexpected_file_policy: fail
+  missing_file_policy: fail
+  empty_file_policy: fail
+  unexpected_column_policy: fail
+  missing_required_column_policy: fail
+  type_mismatch_policy: fail
+  publish_only_after_validation: true
+
+publication:
+  format: delta
+  mode: overwrite
+  overwrite_schema: true
+  use_staging: true
+
+metadata:
+  add_pipeline_run_id: true
+  add_pipeline_version: true
+  add_release_name: true
+  add_source_file_name: true
+  add_source_file_path: true
+  add_source_file_size: true
+  add_source_file_modification_ts: true
+  add_ingested_ts: true
+  add_source_record_hash: true
+
+performance:
+  cache_source_during_reconciliation: false
+  optimize_after_publish: false
+  vacuum_after_publish: false
