@@ -2,9 +2,12 @@
 
 from datetime import datetime, timezone
 
+import pytest
+
 from napa_pipeline.raw_to_bronze.config import load_raw_to_bronze_config
 from napa_pipeline.raw_to_bronze.environment import resolve_release_environment
 from napa_pipeline.raw_to_bronze.finalize import (
+    PipelineFinalizationError,
     finalize_pipeline_run,
     summarize_pipeline_run,
 )
@@ -136,6 +139,20 @@ def test_summarize_pipeline_run_reports_failure_when_counts_do_not_match() -> No
 
     assert summary.final_status == "FAILED"
     assert "completed_table_runs=1/2" in summary.summary_text
+
+
+def test_summarize_pipeline_run_raises_clear_error_when_run_id_has_no_records() -> None:
+    context = _context()
+    tables = {
+        f"{context.operations_schema_fqn}.table_runs": FakeTableData([]),
+        f"{context.operations_schema_fqn}.reconciliation_results": FakeTableData([]),
+    }
+
+    with pytest.raises(
+        PipelineFinalizationError,
+        match="No table_runs or reconciliation_results were found",
+    ):
+        summarize_pipeline_run(FakeSparkSession(tables), context, 13)
 
 
 def test_finalize_pipeline_run_merges_completion_into_open_record() -> None:

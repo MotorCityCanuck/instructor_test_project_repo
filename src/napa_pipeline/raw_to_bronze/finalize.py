@@ -66,6 +66,14 @@ def summarize_pipeline_run(
         1 for row in reconciliation_rows if row.get("status") != "MATCHED"
     )
 
+    if not table_run_rows and not reconciliation_rows:
+        raise PipelineFinalizationError(
+            "No table_runs or reconciliation_results were found for "
+            f"pipeline_run_id {context.pipeline_run_id}. "
+            "Run this finalization task with the same pipeline_run_id used by "
+            "tasks 02-05."
+        )
+
     final_status = "SUCCEEDED"
     if (
         len(table_run_rows) != expected_source_count
