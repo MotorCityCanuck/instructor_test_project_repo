@@ -36,6 +36,7 @@ def test_workflow_tasks_form_linear_raw_to_bronze_graph() -> None:
         "validate_raw_inventory",
         "build_bronze_tables",
         "validate_bronze_reconciliation",
+        "finalize_pipeline_run",
     ]
 
     depends_on = {
@@ -47,6 +48,15 @@ def test_workflow_tasks_form_linear_raw_to_bronze_graph() -> None:
     assert depends_on["validate_raw_inventory"] == ["validate_release_environment"]
     assert depends_on["build_bronze_tables"] == ["validate_raw_inventory"]
     assert depends_on["validate_bronze_reconciliation"] == ["build_bronze_tables"]
+    assert depends_on["finalize_pipeline_run"] == [
+        "resolve_configuration",
+        "validate_release_environment",
+        "validate_raw_inventory",
+        "build_bronze_tables",
+        "validate_bronze_reconciliation",
+    ]
+    final_task = next(task for task in tasks if task["task_key"] == "finalize_pipeline_run")
+    assert final_task["run_if"] == "ALL_DONE"
 
 
 def test_all_tasks_receive_shared_dataset_release_parameter() -> None:
