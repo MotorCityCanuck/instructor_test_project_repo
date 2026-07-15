@@ -134,7 +134,15 @@ print(f"Release name: {context.release_name}")
 print(f"Raw volume path: {environment.raw_volume_path}")
 print(f"Expected file count: {len(inventory_status.expected_files)}")
 print(f"Discovered file count: {len(inventory_status.discovered_files)}")
-print(f"Unexpected file policy: {inventory_status.policy}")
+print(
+    "Configured unexpected file policy: "
+    f"{inventory_status.policy} "
+    "(the run fails only if extra non-configured files are present)"
+)
+print(
+    "Raw inventory validation succeeded for "
+    f"{len(source_readiness)} configured sources."
+)
 
 try:
     dbutils.jobs.taskValues.set(key="pipeline_run_id", value=context.pipeline_run_id)
