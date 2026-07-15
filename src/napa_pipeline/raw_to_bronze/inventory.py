@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Any
 
 from napa_pipeline.raw_to_bronze.config import RawToBronzeConfig
@@ -67,7 +68,7 @@ def validate_raw_inventory(
     entries = dbutils.fs.ls(environment.raw_volume_path)
     discovered_files = tuple(
         RawFileRecord(
-            file_name=entry.name,
+            file_name=_normalize_entry_name(entry),
             file_path=entry.path,
             file_size=getattr(entry, "size", None),
             modification_ts=_normalize_modification_time(getattr(entry, "modificationTime", None)),
@@ -87,11 +88,15 @@ def validate_raw_inventory(
 
     if missing_files:
         raise RawInventoryError(
-            f"Missing required Raw files: {', '.join(missing_files)}."
+            f"Missing required Raw files: {', '.join(missing_files)}. "
+            f"Discovered entries in {environment.raw_volume_path}: "
+            f"{_format_discovered_entries(discovered_files)}."
         )
     if unexpected_files and policy == "fail":
         raise RawInventoryError(
-            f"Unexpected Raw files detected: {', '.join(unexpected_files)}."
+            f"Unexpected Raw files detected: {', '.join(unexpected_files)}. "
+            f"Discovered entries in {environment.raw_volume_path}: "
+            f"{_format_discovered_entries(discovered_files)}."
         )
 
     return RawInventoryStatus(
@@ -172,3 +177,20 @@ def _normalize_modification_time(modification_time: Any) -> datetime | None:
     if isinstance(modification_time, datetime):
         return modification_time
     return datetime.fromtimestamp(int(modification_time) / 1000)
+
+
+def _normalize_entry_name(entry: Any) -> str:
+    raw_name = str(getattr(entry, "name", "") or "").rstrip("/")
+    if raw_name:
+        return raw_name
+    path_value = str(getattr(entry, "path", "") or "").rstrip("/")
+    return PurePosixPath(path_value).name
+
+
+def _format_discovered_entries(discovered_files: tuple[RawFileRecord, ...]) -> str:
+    if not discovered_files:
+        return "<none>"
+    return ", ".join(
+        f"{record.file_name} [{record.file_path}]"
+        for record in discovered_files
+    )

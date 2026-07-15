@@ -42,6 +42,7 @@ bootstrap_napa_pipeline_imports()
 from napa_pipeline.raw_to_bronze.config import load_raw_to_bronze_config
 from napa_pipeline.raw_to_bronze.environment import resolve_release_environment
 from napa_pipeline.raw_to_bronze.inventory import (
+    RawInventoryError,
     validate_raw_inventory_and_readiness,
 )
 from napa_pipeline.raw_to_bronze.operations import (
@@ -72,12 +73,22 @@ context = create_pipeline_context(
 )
 ensure_operations_tables(spark, context)
 
-validation_result = validate_raw_inventory_and_readiness(
-    spark,
-    dbutils,
-    config,
-    environment,
-)
+try:
+    validation_result = validate_raw_inventory_and_readiness(
+        spark,
+        dbutils,
+        config,
+        environment,
+    )
+except RawInventoryError:
+    print(f"Release name: {context.release_name}")
+    print(f"Raw volume path: {environment.raw_volume_path}")
+    print("Direct listing from dbutils.fs.ls:")
+    for entry in dbutils.fs.ls(environment.raw_volume_path):
+        entry_name = str(getattr(entry, "name", "") or "").rstrip("/")
+        print(f"- {entry_name} | {entry.path}")
+    raise
+
 inventory_status = validation_result.inventory_status
 source_readiness = validation_result.source_readiness
 

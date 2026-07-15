@@ -154,6 +154,26 @@ def test_validate_raw_inventory_fails_on_unexpected_file_when_policy_is_fail() -
         validate_raw_inventory(dbutils, config, environment)
 
 
+def test_validate_raw_inventory_normalizes_trailing_slash_names() -> None:
+    config = load_raw_to_bronze_config("napa_5k")
+    environment = resolve_release_environment(config)
+    entries = [
+        FakeFileInfo(
+            name=f"{source['file_name']}/",
+            path=f"{environment.raw_volume_path}/{source['file_name']}",
+            size=123,
+            modificationTime=1721030400000,
+        )
+        for source in config.sources_in_build_order
+    ]
+
+    status = validate_raw_inventory(FakeDbutils(entries), config, environment)
+
+    assert status.unexpected_files == ()
+    assert status.missing_files == ()
+    assert status.discovered_files[0].file_name == "regions.parquet"
+
+
 def test_validate_source_readiness_captures_row_counts_and_schema_hashes() -> None:
     config = load_raw_to_bronze_config("napa_5k")
     environment = resolve_release_environment(config)
