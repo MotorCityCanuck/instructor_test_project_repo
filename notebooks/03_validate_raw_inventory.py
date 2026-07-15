@@ -140,6 +140,14 @@ print(
     "(the run fails only if extra non-configured files are present)"
 )
 print(
+    "Unexpected files detected: "
+    f"{', '.join(inventory_status.unexpected_files) if inventory_status.unexpected_files else '<none>'}"
+)
+print(
+    "Missing required files: "
+    f"{', '.join(inventory_status.missing_files) if inventory_status.missing_files else '<none>'}"
+)
+print(
     "Raw inventory validation succeeded for "
     f"{len(source_readiness)} configured sources."
 )
