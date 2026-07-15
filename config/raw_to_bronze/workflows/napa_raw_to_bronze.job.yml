@@ -1,0 +1,71 @@
+resources:
+  jobs:
+    napa_raw_to_bronze:
+      name: NAPA Raw to Bronze
+      description: >
+        Databricks job template for the instructor Raw-to-Bronze pipeline.
+        Provide bundle or workspace variables for notebook_root and
+        existing_cluster_id when deploying in a workspace.
+      max_concurrent_runs: 1
+      parameters:
+        - name: dataset_release
+          default: napa_5k
+      tags:
+        pipeline_name: raw_to_bronze
+        owner: instructor
+      tasks:
+        - task_key: resolve_configuration
+          existing_cluster_id: ${var.existing_cluster_id}
+          notebook_task:
+            notebook_path: ${var.notebook_root}/01_resolve_configuration.py
+            base_parameters:
+              dataset_release: "{{job.parameters.dataset_release}}"
+              config_root: ""
+              pipeline_run_id: ""
+
+        - task_key: validate_release_environment
+          existing_cluster_id: ${var.existing_cluster_id}
+          depends_on:
+            - task_key: resolve_configuration
+          notebook_task:
+            notebook_path: ${var.notebook_root}/02_validate_release_environment.py
+            base_parameters:
+              dataset_release: "{{job.parameters.dataset_release}}"
+              config_root: ""
+              create_missing: "true"
+              pipeline_run_id: "{{tasks.resolve_configuration.values.pipeline_run_id}}"
+
+        - task_key: validate_raw_inventory
+          existing_cluster_id: ${var.existing_cluster_id}
+          depends_on:
+            - task_key: validate_release_environment
+          notebook_task:
+            notebook_path: ${var.notebook_root}/03_validate_raw_inventory.py
+            base_parameters:
+              dataset_release: "{{job.parameters.dataset_release}}"
+              config_root: ""
+              pipeline_run_id: "{{tasks.resolve_configuration.values.pipeline_run_id}}"
+
+        - task_key: build_bronze_tables
+          existing_cluster_id: ${var.existing_cluster_id}
+          depends_on:
+            - task_key: validate_raw_inventory
+          notebook_task:
+            notebook_path: ${var.notebook_root}/04_build_bronze_tables.py
+            base_parameters:
+              dataset_release: "{{job.parameters.dataset_release}}"
+              config_root: ""
+              create_missing: "false"
+              pipeline_run_id: "{{tasks.resolve_configuration.values.pipeline_run_id}}"
+
+        - task_key: validate_bronze_reconciliation
+          existing_cluster_id: ${var.existing_cluster_id}
+          depends_on:
+            - task_key: build_bronze_tables
+          notebook_task:
+            notebook_path: ${var.notebook_root}/05_validate_bronze_reconciliation.py
+            base_parameters:
+              dataset_release: "{{job.parameters.dataset_release}}"
+              config_root: ""
+              create_missing: "false"
+              pipeline_run_id: "{{tasks.resolve_configuration.values.pipeline_run_id}}"

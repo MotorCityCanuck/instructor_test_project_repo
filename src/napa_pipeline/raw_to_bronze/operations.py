@@ -335,11 +335,12 @@ def build_reconciliation_record(
     raw_business_column_count: int,
     bronze_business_column_count: int,
     metadata_column_count: int,
+    status: str | None = None,
     evaluated_ts: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a reconciliation result record."""
     row_count_difference = bronze_row_count - raw_row_count
-    status = "MATCHED" if row_count_difference == 0 else "MISMATCH"
+    resolved_status = status or ("MATCHED" if row_count_difference == 0 else "MISMATCH")
     return {
         "pipeline_run_id": context.pipeline_run_id,
         "pipeline_name": context.pipeline_name,
@@ -352,7 +353,7 @@ def build_reconciliation_record(
         "raw_business_column_count": raw_business_column_count,
         "bronze_business_column_count": bronze_business_column_count,
         "metadata_column_count": metadata_column_count,
-        "status": status,
+        "status": resolved_status,
         "evaluated_ts": evaluated_ts or utc_now(),
     }
 
