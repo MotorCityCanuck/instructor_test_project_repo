@@ -57,15 +57,25 @@ from napa_pipeline.raw_to_bronze.operations import (
 )
 
 # COMMAND ----------
+ALLOWED_RELEASES = ["napa_5k", "napa_50k", "napa_250k"]
+
 dbutils.widgets.dropdown("release_name", "napa_5k", ["napa_5k", "napa_50k", "napa_250k"])
+dbutils.widgets.text("dataset_release", "")
 dbutils.widgets.text("config_root", "")
 dbutils.widgets.dropdown("create_missing", "true", ["true", "false"])
 dbutils.widgets.text("pipeline_run_id", "")
 
-release_name = dbutils.widgets.get("release_name").strip()
+dataset_release = dbutils.widgets.get("dataset_release").strip()
+release_name = dataset_release or dbutils.widgets.get("release_name").strip()
 config_root = dbutils.widgets.get("config_root").strip() or None
 create_missing = dbutils.widgets.get("create_missing").strip().lower() == "true"
 pipeline_run_id = dbutils.widgets.get("pipeline_run_id").strip() or None
+
+if release_name not in ALLOWED_RELEASES:
+    raise ValueError(
+        "dataset_release or release_name must be one of: "
+        f"{', '.join(ALLOWED_RELEASES)}."
+    )
 
 pipeline_started_ts = utc_now()
 config = load_raw_to_bronze_config(release_name, config_root=config_root)
@@ -105,6 +115,7 @@ append_records(
 
 # COMMAND ----------
 print(f"Release name: {config.release_name}")
+print(f"Dataset release parameter: {dataset_release or '<not provided>'}")
 print(f"Catalog: {status.release_environment.catalog}")
 print(f"Raw schema: {status.release_environment.raw_schema}")
 print(f"Bronze schema: {status.release_environment.bronze_schema}")
