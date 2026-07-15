@@ -10,6 +10,7 @@ from napa_pipeline.raw_to_bronze.operations import (
     SCHEMA_SNAPSHOTS_TABLE,
     TABLE_RUNS_TABLE,
     RECONCILIATION_RESULTS_TABLE,
+    append_records,
     build_pipeline_run_end_record,
     build_pipeline_run_start_record,
     build_reconciliation_record,
@@ -28,10 +29,48 @@ class FakeSparkSession:
 
     def __init__(self):
         self.executed_queries: list[str] = []
+        self.table_requests: list[str] = []
+        self.created_records: list[dict] | None = None
+        self.created_schema = None
 
     def sql(self, query: str):
         self.executed_queries.append(query)
         return None
+
+    def table(self, table_name: str):
+        self.table_requests.append(table_name)
+        return type("FakeTable", (), {"schema": "schema-from-table"})()
+
+    def createDataFrame(self, records, schema=None):
+        self.created_records = list(records)
+        self.created_schema = schema
+        return FakeWriteDataFrame()
+
+
+class FakeWriteBuilder:
+    """Minimal DataFrameWriter stub."""
+
+    def __init__(self):
+        self.calls: list[tuple[str, str | None]] = []
+
+    def format(self, value: str):
+        self.calls.append(("format", value))
+        return self
+
+    def mode(self, value: str):
+        self.calls.append(("mode", value))
+        return self
+
+    def saveAsTable(self, value: str):
+        self.calls.append(("saveAsTable", value))
+        return None
+
+
+class FakeWriteDataFrame:
+    """Minimal DataFrame stub with writer."""
+
+    def __init__(self):
+        self.write = FakeWriteBuilder()
 
 
 def _context():
@@ -160,3 +199,20 @@ def test_build_table_run_start_record_sets_running_status() -> None:
 
     assert record["status"] == "RUNNING"
     assert record["source_file_name"] == "clubs.parquet"
+
+
+def test_append_records_uses_existing_table_schema() -> None:
+    spark = FakeSparkSession()
+    records = [
+        {
+            "pipeline_run_id": "run-123",
+            "pipeline_name": "raw_to_bronze",
+            "completed_ts": None,
+        }
+    ]
+
+    append_records(spark, "workspace.instructor_ops.pipeline_runs", records)
+
+    assert spark.table_requests == ["workspace.instructor_ops.pipeline_runs"]
+    assert spark.created_records == records
+    assert spark.created_schema == "schema-from-table"

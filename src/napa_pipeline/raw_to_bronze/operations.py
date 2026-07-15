@@ -64,9 +64,10 @@ def append_records(spark: Any, table_fqn: str, records: list[dict[str, Any]]) ->
     """Append records to an operations table when records are present."""
     if not records:
         return
-    spark.createDataFrame(records).write.format("delta").mode("append").saveAsTable(
-        table_fqn
-    )
+    table_schema = spark.table(table_fqn).schema
+    spark.createDataFrame(records, schema=table_schema).write.format("delta").mode(
+        "append"
+    ).saveAsTable(table_fqn)
 
 
 def get_operations_table_fqn(context: PipelineContext, table_name: str) -> str:
