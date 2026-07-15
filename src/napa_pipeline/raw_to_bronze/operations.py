@@ -60,6 +60,20 @@ def ensure_operations_tables(spark: Any, context: PipelineContext) -> None:
         spark.sql(ddl)
 
 
+def append_records(spark: Any, table_fqn: str, records: list[dict[str, Any]]) -> None:
+    """Append records to an operations table when records are present."""
+    if not records:
+        return
+    spark.createDataFrame(records).write.format("delta").mode("append").saveAsTable(
+        table_fqn
+    )
+
+
+def get_operations_table_fqn(context: PipelineContext, table_name: str) -> str:
+    """Return the fully qualified name of an operations table."""
+    return f"{context.operations_schema_fqn}.{table_name}"
+
+
 def get_operations_table_ddls(operations_schema_fqn: str) -> list[str]:
     """Return the DDL statements for all operations tables."""
     return [
