@@ -9,6 +9,10 @@ from napa_pipeline.bronze_to_silver.athlete import (
     build_player_registrations,
     build_players,
 )
+from napa_pipeline.bronze_to_silver.athlete_sql import (
+    build_athlete_sql_plan,
+    supports_athlete_sql_transform,
+)
 from napa_pipeline.bronze_to_silver.competition import (
     build_match_games,
     build_match_team_players,
@@ -145,7 +149,10 @@ def execute_stage(
         )
 
         try:
-            if supports_reference_sql_transform(str(table_config["transform"])):
+            if (
+                supports_reference_sql_transform(str(table_config["transform"]))
+                or supports_athlete_sql_transform(str(table_config["transform"]))
+            ):
                 metrics = _execute_single_table_sql(
                     spark,
                     config,
@@ -232,13 +239,23 @@ def _execute_single_table_sql(
     source_table_fqn = get_bronze_source_table_fqn(environment, config.enabled_sources[source_name])
     target_fqn = get_silver_target_table_fqn(environment, table_config)
     reject_fqn = get_silver_reject_table_fqn(environment, table_config)
-
-    sql_plan = build_reference_sql_plan(
-        config,
-        context,
-        target_table=target_table,
-        source_table_fqn=source_table_fqn,
-    )
+    if supports_reference_sql_transform(str(table_config["transform"])):
+        sql_plan = build_reference_sql_plan(
+            config,
+            context,
+            target_table=target_table,
+            source_table_fqn=source_table_fqn,
+        )
+    elif supports_athlete_sql_transform(str(table_config["transform"])):
+        sql_plan = build_athlete_sql_plan(
+            config,
+            context,
+            target_table=target_table,
+            source_table_fqn=source_table_fqn,
+            silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+        )
+    else:
+        raise ValueError(f"No SQL execution plan is defined for target table '{target_table}'.")
     bronze_row_count = scalar_sql_value(spark, sql_plan.bronze_row_count_sql)
     exact_duplicate_count = scalar_sql_value(spark, sql_plan.exact_duplicate_count_sql)
     business_key_duplicate_count = scalar_sql_value(spark, sql_plan.business_key_duplicate_count_sql)
