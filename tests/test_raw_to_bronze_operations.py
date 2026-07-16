@@ -132,6 +132,45 @@ def test_build_table_run_end_record_calculates_row_difference() -> None:
     assert record["duration_seconds"] == 150.0
 
 
+def test_build_pipeline_run_end_record_accepts_naive_started_timestamp() -> None:
+    context = _context()
+    started = datetime(2026, 7, 15, 12, 0)
+    completed = datetime(2026, 7, 15, 12, 5, tzinfo=timezone.utc)
+
+    record = build_pipeline_run_end_record(
+        context,
+        started_ts=started,
+        completed_ts=completed,
+        status="SUCCEEDED",
+    )
+
+    assert record["started_ts"].tzinfo == timezone.utc
+    assert record["completed_ts"].tzinfo == timezone.utc
+    assert record["duration_seconds"] == 300.0
+
+
+def test_build_table_run_end_record_accepts_naive_started_timestamp() -> None:
+    context = _context()
+    started = datetime(2026, 7, 15, 13, 0)
+    completed = datetime(2026, 7, 15, 13, 2, 30, tzinfo=timezone.utc)
+
+    record = build_table_run_end_record(
+        context,
+        source_file_name="regions.parquet",
+        source_table="regions",
+        target_table="workspace.instructor_5k_bronze.regions",
+        started_ts=started,
+        completed_ts=completed,
+        status="SUCCEEDED",
+        source_row_count=10,
+        bronze_row_count=10,
+    )
+
+    assert record["started_ts"].tzinfo == timezone.utc
+    assert record["completed_ts"].tzinfo == timezone.utc
+    assert record["duration_seconds"] == 150.0
+
+
 def test_build_schema_snapshot_records_share_schema_hash() -> None:
     context = _context()
     fields = [

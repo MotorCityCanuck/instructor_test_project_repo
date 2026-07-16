@@ -24,6 +24,13 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def ensure_utc_datetime(value: datetime) -> datetime:
+    """Normalize naive or offset-aware datetimes to UTC-aware values."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 @dataclass(frozen=True)
 class PipelineContext:
     """Common context fields for Raw-to-Bronze operations records."""
@@ -205,7 +212,8 @@ def build_pipeline_run_end_record(
     triggered_by: str | None = None,
 ) -> dict[str, Any]:
     """Build the pipeline completion record."""
-    completed = completed_ts or utc_now()
+    started = ensure_utc_datetime(started_ts)
+    completed = ensure_utc_datetime(completed_ts or utc_now())
     return {
         "pipeline_run_id": context.pipeline_run_id,
         "pipeline_name": context.pipeline_name,
@@ -215,9 +223,9 @@ def build_pipeline_run_end_record(
         "configuration_hash": context.configuration_hash,
         "workflow_run_id": workflow_run_id,
         "status": status,
-        "started_ts": started_ts,
+        "started_ts": started,
         "completed_ts": completed,
-        "duration_seconds": (completed - started_ts).total_seconds(),
+        "duration_seconds": (completed - started).total_seconds(),
         "triggered_by": triggered_by,
         "error_class": error_class,
         "error_message": error_message,
@@ -270,7 +278,8 @@ def build_table_run_end_record(
     completed_ts: datetime | None = None,
 ) -> dict[str, Any]:
     """Build the table run completion record."""
-    completed = completed_ts or utc_now()
+    started = ensure_utc_datetime(started_ts)
+    completed = ensure_utc_datetime(completed_ts or utc_now())
     row_count_difference = None
     if source_row_count is not None and bronze_row_count is not None:
         row_count_difference = bronze_row_count - source_row_count
@@ -283,9 +292,9 @@ def build_table_run_end_record(
         "source_table": source_table,
         "target_table": target_table,
         "status": status,
-        "started_ts": started_ts,
+        "started_ts": started,
         "completed_ts": completed,
-        "duration_seconds": (completed - started_ts).total_seconds(),
+        "duration_seconds": (completed - started).total_seconds(),
         "source_file_size": source_file_size,
         "source_row_count": source_row_count,
         "bronze_row_count": bronze_row_count,
