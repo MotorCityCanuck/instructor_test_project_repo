@@ -1,0 +1,15 @@
+release:
+  release_name: napa_5k
+  expected_player_scale: 5000
+  role: development
+  final_decision_dataset: false
+
+schemas:
+  bronze: ${runtime.team_prefix}_5k_bronze
+  silver: ${runtime.team_prefix}_5k_silver
+  silver_reject: ${runtime.team_prefix}_5k_silver_reject
+  operations: ${objects.operations_schema}
+
+performance:
+  shuffle_partitions: 16
+  broadcast_row_threshold: 100000

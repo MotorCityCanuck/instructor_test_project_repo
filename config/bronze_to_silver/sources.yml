@@ -1,0 +1,91 @@
+sources:
+  monthly_batches:
+    enabled: true
+    source_file: monthly_batches.parquet
+    bronze_table: monthly_batches
+    grain: one processing or snapshot period
+    natural_key: [id]
+
+  regions:
+    enabled: true
+    source_file: regions.parquet
+    bronze_table: regions
+    grain: one geographic region
+    natural_key: [id]
+
+  clubs:
+    enabled: true
+    source_file: clubs.parquet
+    bronze_table: clubs
+    grain: one club or facility
+    natural_key: [id]
+
+  player_master:
+    enabled: true
+    source_file: player_master.parquet
+    bronze_table: player_master
+    grain: one current or snapshot player row
+    natural_key: [player_id]
+
+  teams:
+    enabled: true
+    source_file: teams.parquet
+    bronze_table: teams
+    grain: one doubles partnership or team
+    natural_key: [id]
+
+  player_registrations:
+    enabled: true
+    source_file: player_registrations.parquet
+    bronze_table: player_registrations
+    grain: one player registration event
+    natural_key: [id]
+
+  player_assessment_history:
+    enabled: true
+    source_file: player_assessment_history.parquet
+    bronze_table: player_assessment_history
+    grain: one athlete assessment observation
+    natural_key: [id]
+
+  club_memberships:
+    enabled: true
+    source_file: club_memberships.parquet
+    bronze_table: club_memberships
+    grain: one player-club membership period
+    natural_key: [id]
+
+  team_memberships:
+    enabled: true
+    source_file: team_memberships.parquet
+    bronze_table: team_memberships
+    grain: one player-team membership period
+    natural_key: [id]
+
+  matches:
+    enabled: true
+    source_file: matches.parquet
+    bronze_table: matches
+    grain: one match
+    natural_key: [id]
+
+  match_teams:
+    enabled: true
+    source_file: match_teams.parquet
+    bronze_table: match_teams
+    grain: one team or side in a match
+    natural_key: [id]
+
+  match_team_players:
+    enabled: true
+    source_file: match_team_players.parquet
+    bronze_table: match_team_players
+    grain: one player participating on a match side
+    natural_key: [id]
+
+  match_games:
+    enabled: true
+    source_file: match_games.parquet
+    bronze_table: match_games
+    grain: one game within a match
+    natural_key: [id]

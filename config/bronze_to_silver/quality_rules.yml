@@ -1,0 +1,66 @@
+quality_rules:
+  monthly_batches:
+    - id: BATCH_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  regions:
+    - id: REGION_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  clubs:
+    - id: CLUB_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  players:
+    - id: PLAYER_001
+      type: not_null
+      columns: [player_id]
+      severity: CRITICAL
+  teams:
+    - id: TEAM_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  player_registrations:
+    - id: REG_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  player_assessment_history:
+    - id: ASSESS_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  club_memberships:
+    - id: CLUB_MEMBERSHIP_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  team_memberships:
+    - id: TEAM_MEMBERSHIP_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  matches:
+    - id: MATCH_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  match_teams:
+    - id: MATCH_TEAM_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  match_team_players:
+    - id: MATCH_TEAM_PLAYER_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL
+  match_games:
+    - id: MATCH_GAME_001
+      type: not_null
+      columns: [id]
+      severity: CRITICAL

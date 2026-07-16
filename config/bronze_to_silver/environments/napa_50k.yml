@@ -1,0 +1,15 @@
+release:
+  release_name: napa_50k
+  expected_player_scale: 50000
+  role: validation
+  final_decision_dataset: false
+
+schemas:
+  bronze: ${runtime.team_prefix}_50k_bronze
+  silver: ${runtime.team_prefix}_50k_silver
+  silver_reject: ${runtime.team_prefix}_50k_silver_reject
+  operations: ${objects.operations_schema}
+
+performance:
+  shuffle_partitions: 64
+  broadcast_row_threshold: 250000

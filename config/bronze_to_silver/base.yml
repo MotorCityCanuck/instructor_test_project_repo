@@ -1,0 +1,48 @@
+project:
+  name: napa_olympic_analytics
+  pipeline_name: bronze_to_silver
+  pipeline_version: "1.0.0"
+  processing_mode: full_refresh
+
+runtime:
+  catalog: workspace
+  team_prefix: instructor
+  default_release: napa_5k
+  timezone: America/New_York
+
+objects:
+  operations_schema: ${runtime.team_prefix}_ops
+
+execution:
+  fail_fast: true
+  publish_only_after_validation: true
+  stop_dependents_on_failure: true
+  unexpected_column_policy: warn
+  missing_required_column_policy: fail
+  duplicate_strategy_default: keep_best
+  create_convenience_views: true
+
+publication:
+  format: delta
+  mode: overwrite
+  overwrite_schema: true
+  use_staging: true
+
+metadata:
+  add_pipeline_run_id: true
+  add_pipeline_version: true
+  add_source_dataset: true
+  add_source_table: true
+  add_load_timestamp: true
+  add_record_hash: true
+  add_quality_status: true
+
+thresholds:
+  close_game_margin: 2
+  score_share_tolerance: 0.0001
+  warning_quality_deduction: 5
+  expected_match_team_count: 2
+  expected_match_team_player_count: 2
+
+paths:
+  workflow_script_root: notebooks

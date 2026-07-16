@@ -1,0 +1,154 @@
+silver_tables:
+  monthly_batches:
+    enabled: true
+    source: monthly_batches
+    target: monthly_batches
+    stage: reference
+    build_order: 10
+    transform: build_monthly_batches
+    primary_key: [batch_id]
+    source_key_mapping:
+      id: batch_id
+    reject_table: monthly_batches_exceptions
+
+  regions:
+    enabled: true
+    source: regions
+    target: regions
+    stage: reference
+    build_order: 20
+    transform: build_regions
+    primary_key: [region_id]
+    source_key_mapping:
+      id: region_id
+    reject_table: regions_exceptions
+
+  players:
+    enabled: true
+    source: player_master
+    target: players
+    stage: athlete
+    build_order: 30
+    transform: build_players
+    primary_key: [player_id]
+    reject_table: players_exceptions
+
+  clubs:
+    enabled: true
+    source: clubs
+    target: clubs
+    stage: organization
+    build_order: 40
+    transform: build_clubs
+    primary_key: [club_id]
+    source_key_mapping:
+      id: club_id
+    reject_table: clubs_exceptions
+
+  teams:
+    enabled: true
+    source: teams
+    target: teams
+    stage: partnership
+    build_order: 50
+    transform: build_teams
+    primary_key: [team_id]
+    source_key_mapping:
+      id: team_id
+    reject_table: teams_exceptions
+
+  player_registrations:
+    enabled: true
+    source: player_registrations
+    target: player_registrations
+    stage: athlete
+    build_order: 60
+    transform: build_player_registrations
+    primary_key: [registration_id]
+    source_key_mapping:
+      id: registration_id
+    reject_table: player_registrations_exceptions
+
+  player_assessment_history:
+    enabled: true
+    source: player_assessment_history
+    target: player_assessment_history
+    stage: athlete
+    build_order: 70
+    transform: build_player_assessment_history
+    primary_key: [assessment_id]
+    source_key_mapping:
+      id: assessment_id
+    reject_table: player_assessment_history_exceptions
+
+  club_memberships:
+    enabled: true
+    source: club_memberships
+    target: club_memberships
+    stage: organization
+    build_order: 80
+    transform: build_club_memberships
+    primary_key: [club_membership_id]
+    source_key_mapping:
+      id: club_membership_id
+    reject_table: club_memberships_exceptions
+
+  team_memberships:
+    enabled: true
+    source: team_memberships
+    target: team_memberships
+    stage: partnership
+    build_order: 90
+    transform: build_team_memberships
+    primary_key: [team_membership_id]
+    source_key_mapping:
+      id: team_membership_id
+    reject_table: team_memberships_exceptions
+
+  matches:
+    enabled: true
+    source: matches
+    target: matches
+    stage: competition
+    build_order: 100
+    transform: build_matches
+    primary_key: [match_id]
+    source_key_mapping:
+      id: match_id
+    reject_table: matches_exceptions
+
+  match_teams:
+    enabled: true
+    source: match_teams
+    target: match_teams
+    stage: competition
+    build_order: 110
+    transform: build_match_teams
+    primary_key: [match_team_id]
+    source_key_mapping:
+      id: match_team_id
+    reject_table: match_teams_exceptions
+
+  match_team_players:
+    enabled: true
+    source: match_team_players
+    target: match_team_players
+    stage: competition
+    build_order: 120
+    transform: build_match_team_players
+    primary_key: [match_team_player_id]
+    source_key_mapping:
+      id: match_team_player_id
+    reject_table: match_team_players_exceptions
+
+  match_games:
+    enabled: true
+    source: match_games
+    target: match_games
+    stage: competition
+    build_order: 130
+    transform: build_match_games
+    primary_key: [match_game_id]
+    source_key_mapping:
+      id: match_game_id
+    reject_table: match_games_exceptions

@@ -1,0 +1,15 @@
+release:
+  release_name: napa_250k
+  expected_player_scale: 250000
+  role: production
+  final_decision_dataset: true
+
+schemas:
+  bronze: ${runtime.team_prefix}_250k_bronze
+  silver: ${runtime.team_prefix}_250k_silver
+  silver_reject: ${runtime.team_prefix}_250k_silver_reject
+  operations: ${objects.operations_schema}
+
+performance:
+  shuffle_partitions: auto
+  broadcast_row_threshold: 500000

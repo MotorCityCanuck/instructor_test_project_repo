@@ -1,0 +1,34 @@
+domains:
+  country_code:
+    allowed: [USA, CAN]
+    synonyms:
+      US: USA
+      UNITED STATES: USA
+      UNITED STATES OF AMERICA: USA
+      CA: CAN
+      CANADA: CAN
+
+  gender:
+    allowed: [M, F]
+    synonyms:
+      MALE: M
+      FEMALE: F
+
+  dominant_hand:
+    allowed: [LEFT, RIGHT, AMBIDEXTROUS]
+    synonyms:
+      L: LEFT
+      R: RIGHT
+      BOTH: AMBIDEXTROUS
+
+  player_status:
+    allowed: [ACTIVE, INACTIVE]
+
+  team_status:
+    allowed: [ACTIVE, INACTIVE, DISSOLVED]
+
+  team_type:
+    allowed: [MENS, WOMENS, MIXED]
+
+  player_position:
+    allowed: [LEFT, RIGHT]
