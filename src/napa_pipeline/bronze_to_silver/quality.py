@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
-from napa_pipeline.bronze_to_silver.metadata import build_source_record_json
+from napa_pipeline.bronze_to_silver.metadata import build_source_record_json, utc_now
 from napa_pipeline.bronze_to_silver.operations import PipelineContext
 
 
@@ -34,17 +35,25 @@ def build_reject_record(
     reject_reason_detail: str | None = None,
 ) -> dict[str, Any]:
     """Build a reject evidence record for one failed source row."""
+    source_record_json = build_source_record_json(source_record)
+    load_ts = utc_now()
+    record_hash = hashlib.sha256(source_record_json.encode("utf-8")).hexdigest()
     return {
         "source_table": source_table,
         "target_table": target_table,
         "source_business_key": source_business_key,
         "reject_reason": reject_reason,
+        "reject_reason_code": reject_reason,
         "reject_reason_detail": reject_reason_detail,
         "rule_id": rule_id,
         "rule_severity": rule_severity,
         "pipeline_run_id": context.pipeline_run_id,
-        "load_ts": context.pipeline_version,
-        "source_record_json": build_source_record_json(source_record),
+        "_pipeline_run_id": context.pipeline_run_id,
+        "_source_dataset": context.release_name,
+        "load_ts": load_ts,
+        "_load_ts": load_ts,
+        "source_record_json": source_record_json,
+        "_record_hash": record_hash,
     }
 
 

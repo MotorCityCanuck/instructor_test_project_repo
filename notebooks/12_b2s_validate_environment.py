@@ -1,4 +1,4 @@
-"""Validate the Bronze-to-Silver release environment."""
+"""Validate the Bronze-to-Silver release environment and start the pipeline run."""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ from napa_pipeline.bronze_to_silver.cli import (
 )
 from napa_pipeline.bronze_to_silver.config import load_bronze_to_silver_config
 from napa_pipeline.bronze_to_silver.environment import ensure_release_environment
+from napa_pipeline.bronze_to_silver.execute import initialize_pipeline_run
+from napa_pipeline.bronze_to_silver.operations import create_pipeline_context
 
 
 SCRIPT_VERSION = "2026.07.16.1"
@@ -42,6 +44,12 @@ def main() -> None:
         config_root=normalize_config_path(args.config_path),
     )
     environment_status = ensure_release_environment(spark, config, create_missing=True)
+    context = create_pipeline_context(
+        config,
+        environment_status.release_environment,
+        pipeline_run_id=args.run_id,
+    )
+    initialize_pipeline_run(spark, context)
 
     print(f"Script version: {SCRIPT_VERSION}")
     print(f"Release name: {args.release_name}")

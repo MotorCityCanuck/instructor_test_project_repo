@@ -74,15 +74,20 @@ databricks bundle deploy -t dev
 
 ## Current Execution Boundary
 
-This workflow resource and its script entrypoints are bundle-valid and ready for deployment.
-
-At the current repository step, the task scripts do the following:
+This workflow resource and its script entrypoints now perform actual stage execution against the current instructor reference modules:
 
 - resolve and validate Bronze-to-Silver configuration;
 - validate the target schemas;
 - validate the configured Bronze source-table inventory;
-- expose the configured table stages and convenience-view registrations.
+- execute the current reference, athlete, organization/partnership, and competition table builders;
+- publish accepted Silver tables and reject tables;
+- write table-run, reconciliation, quality, schema-snapshot, and run-message operations records;
+- run cross-table validation;
+- publish convenience SQL views;
+- finalize the durable pipeline run status.
 
-They do **not yet** publish Silver tables or Databricks SQL views end to end. The actual Databricks stage-execution and publication wiring remains a follow-up implementation step.
+One important constraint remains:
 
-That boundary is intentional in the current repository state. Do not treat a successful local bundle validation as proof that the Bronze-to-Silver Databricks execution path is complete.
+- the current execution path reuses the existing Python-reference builders, which materialize per-table row sets in Python before publication.
+
+That means the workflow is now execution-capable, but it does **not yet** satisfy the spec's final large-release performance bar that forbids driver-side collection for the 250K acceptance run. Treat the current implementation as functionally wired and locally testable, not as the final performance-complete Silver runtime.
