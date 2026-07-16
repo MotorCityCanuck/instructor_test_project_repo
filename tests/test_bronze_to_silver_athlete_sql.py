@@ -118,6 +118,56 @@ def test_build_athlete_sql_plan_for_player_registrations_contains_expected_rules
     assert "current_registration_flag" in plan.accepted_sql
 
 
+def test_build_athlete_sql_plan_for_player_registrations_uses_actual_bronze_columns() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_athlete_sql_plan(
+        config,
+        context,
+        target_table="player_registrations",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.player_registrations",
+        silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+        source_columns={
+            "id",
+            "player_id",
+            "batch_id",
+            "registration_month",
+            "registration_source",
+            "assigned_region_id",
+            "initial_rating_value",
+            "initial_confidence_score",
+            "_pipeline_run_id",
+            "_pipeline_name",
+            "_pipeline_version",
+            "_release_name",
+            "_source_file_name",
+            "_source_file_path",
+            "_source_file_size",
+            "_source_file_modification_ts",
+            "_ingested_ts",
+            "_source_record_hash",
+        },
+    )
+    combined_sql = "\n".join(
+        [
+            plan.accepted_sql,
+            plan.rejected_sql,
+            plan.exact_duplicate_count_sql,
+            plan.business_key_duplicate_count_sql,
+        ]
+    )
+
+    assert "COALESCE(registration_id, id)" not in combined_sql
+    assert "COALESCE(batch_id, monthly_batch_id)" not in combined_sql
+    assert "COALESCE(effective_start_date, start_date)" not in combined_sql
+    assert "COALESCE(effective_end_date, end_date)" not in combined_sql
+    assert "COALESCE(registration_status, status)" not in combined_sql
+    assert "CAST(id AS STRING)" in combined_sql
+    assert "CAST(batch_id AS STRING)" in combined_sql
+    assert "CAST(registration_month AS STRING)" in combined_sql
+    assert "CAST(registration_source AS STRING)" in combined_sql
+
+
 def test_build_athlete_sql_plan_for_player_assessment_history_contains_expected_rules() -> None:
     config, environment, context = _config_environment_context()
 
@@ -134,6 +184,55 @@ def test_build_athlete_sql_plan_for_player_assessment_history_contains_expected_
     assert "ASSESS_DUPLICATE" in plan.rejected_sql
     assert "assessment_confidence" in plan.accepted_sql
     assert "assessor_source" in plan.accepted_sql
+
+
+def test_build_athlete_sql_plan_for_player_assessment_history_uses_actual_bronze_columns() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_athlete_sql_plan(
+        config,
+        context,
+        target_table="player_assessment_history",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.player_assessment_history",
+        silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+        source_columns={
+            "id",
+            "player_id",
+            "batch_id",
+            "assessment_month",
+            "assessment_type",
+            "value",
+            "confidence",
+            "_pipeline_run_id",
+            "_pipeline_name",
+            "_pipeline_version",
+            "_release_name",
+            "_source_file_name",
+            "_source_file_path",
+            "_source_file_size",
+            "_source_file_modification_ts",
+            "_ingested_ts",
+            "_source_record_hash",
+        },
+    )
+    combined_sql = "\n".join(
+        [
+            plan.accepted_sql,
+            plan.rejected_sql,
+            plan.exact_duplicate_count_sql,
+            plan.business_key_duplicate_count_sql,
+        ]
+    )
+
+    assert "COALESCE(assessment_id, id)" not in combined_sql
+    assert "COALESCE(batch_id, monthly_batch_id)" not in combined_sql
+    assert "COALESCE(assessment_value, value)" not in combined_sql
+    assert "COALESCE(assessment_confidence, confidence)" not in combined_sql
+    assert "CAST(id AS STRING)" in combined_sql
+    assert "CAST(batch_id AS STRING)" in combined_sql
+    assert "CAST(assessment_month AS STRING)" in combined_sql
+    assert "CAST(value AS STRING)" in combined_sql
+    assert "CAST(confidence AS STRING)" in combined_sql
 
 
 def test_execute_single_table_sql_publishes_player_outputs(monkeypatch) -> None:

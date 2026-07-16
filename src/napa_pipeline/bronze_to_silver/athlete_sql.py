@@ -6,6 +6,7 @@ from napa_pipeline.bronze_to_silver.config import BronzeToSilverConfig
 from napa_pipeline.bronze_to_silver.operations import PipelineContext
 from napa_pipeline.bronze_to_silver.reference_sql import (
     SqlReferenceBuildPlan,
+    _first_existing_source_column,
     _normalize_source_columns,
     _source_nullif_string_expr,
     _source_string_expr,
@@ -37,9 +38,9 @@ def build_athlete_sql_plan(
     if target_table == "players":
         return _build_players_sql_plan(config, context, source_table_fqn, silver_schema_fqn, normalized_columns)
     if target_table == "player_registrations":
-        return _build_player_registrations_sql_plan(context, source_table_fqn, silver_schema_fqn)
+        return _build_player_registrations_sql_plan(context, source_table_fqn, silver_schema_fqn, normalized_columns)
     if target_table == "player_assessment_history":
-        return _build_player_assessment_history_sql_plan(context, source_table_fqn, silver_schema_fqn)
+        return _build_player_assessment_history_sql_plan(context, source_table_fqn, silver_schema_fqn, normalized_columns)
     raise ValueError(f"No SQL athlete plan is defined for target table '{target_table}'.")
 
 
@@ -542,9 +543,28 @@ def _build_player_registrations_sql_plan(
     context: PipelineContext,
     source_table_fqn: str,
     silver_schema_fqn: str,
+    source_columns: set[str] | None,
 ) -> SqlReferenceBuildPlan:
     players_fqn = f"{silver_schema_fqn}.players"
     monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
+    registration_id_expr = _source_nullif_string_expr(source_columns, ["registration_id", "id"])
+    player_id_expr = _source_nullif_string_expr(source_columns, ["player_id"])
+    batch_id_expr = _source_nullif_string_expr(source_columns, ["batch_id", "monthly_batch_id"])
+    registration_date_expr = _source_date_or_month_string_expr(
+        source_columns,
+        date_candidates=["registration_date"],
+        month_candidates=["registration_month"],
+    )
+    effective_start_date_expr = _source_string_expr(source_columns, ["effective_start_date", "start_date"])
+    effective_end_date_expr = _source_string_expr(source_columns, ["effective_end_date", "end_date"])
+    registration_type_expr = _source_upper_string_expr(
+        source_columns,
+        ["registration_type", "registration_source"],
+    )
+    registration_status_expr = _source_upper_string_expr(
+        source_columns,
+        ["registration_status", "status"],
+    )
     metadata_sql = _metadata_sql(
         context,
         source_table="player_registrations",
@@ -563,14 +583,14 @@ WITH release_context AS (
 ),
 normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(registration_id, id) AS STRING)), '') AS registration_id,
-        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(COALESCE(batch_id, monthly_batch_id) AS STRING)), '') AS batch_id,
-        TRIM(CAST(registration_date AS STRING)) AS registration_date_raw,
-        TRIM(CAST(COALESCE(effective_start_date, start_date) AS STRING)) AS effective_start_date_raw,
-        TRIM(CAST(COALESCE(effective_end_date, end_date) AS STRING)) AS effective_end_date_raw,
-        NULLIF(UPPER(TRIM(CAST(registration_type AS STRING))), '') AS registration_type,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(registration_status, status) AS STRING))), '') AS registration_status
+        {registration_id_expr} AS registration_id,
+        {player_id_expr} AS player_id,
+        {batch_id_expr} AS batch_id,
+        {registration_date_expr} AS registration_date_raw,
+        {effective_start_date_expr} AS effective_start_date_raw,
+        {effective_end_date_expr} AS effective_end_date_raw,
+        {registration_type_expr} AS registration_type,
+        {registration_status_expr} AS registration_status
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -839,14 +859,14 @@ WHERE duplicate_rank > 1
         exact_duplicate_count_sql=f"""
 WITH normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(registration_id, id) AS STRING)), '') AS registration_id,
-        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(COALESCE(batch_id, monthly_batch_id) AS STRING)), '') AS batch_id,
-        TRIM(CAST(registration_date AS STRING)) AS registration_date_raw,
-        TRIM(CAST(COALESCE(effective_start_date, start_date) AS STRING)) AS effective_start_date_raw,
-        TRIM(CAST(COALESCE(effective_end_date, end_date) AS STRING)) AS effective_end_date_raw,
-        NULLIF(UPPER(TRIM(CAST(registration_type AS STRING))), '') AS registration_type,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(registration_status, status) AS STRING))), '') AS registration_status
+        {registration_id_expr} AS registration_id,
+        {player_id_expr} AS player_id,
+        {batch_id_expr} AS batch_id,
+        {registration_date_expr} AS registration_date_raw,
+        {effective_start_date_expr} AS effective_start_date_raw,
+        {effective_end_date_expr} AS effective_end_date_raw,
+        {registration_type_expr} AS registration_type,
+        {registration_status_expr} AS registration_status
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -871,12 +891,12 @@ valid_rows AS (
         TO_DATE(source.effective_end_date_raw) AS effective_end_date
     FROM (
         SELECT
-            NULLIF(TRIM(CAST(COALESCE(registration_id, id) AS STRING)), '') AS registration_id,
-            NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-            NULLIF(TRIM(CAST(COALESCE(batch_id, monthly_batch_id) AS STRING)), '') AS batch_id,
-            TRIM(CAST(registration_date AS STRING)) AS registration_date_raw,
-            TRIM(CAST(COALESCE(effective_start_date, start_date) AS STRING)) AS effective_start_date_raw,
-            TRIM(CAST(COALESCE(effective_end_date, end_date) AS STRING)) AS effective_end_date_raw
+            {registration_id_expr} AS registration_id,
+            {player_id_expr} AS player_id,
+            {batch_id_expr} AS batch_id,
+            {registration_date_expr} AS registration_date_raw,
+            {effective_start_date_expr} AS effective_start_date_raw,
+            {effective_end_date_expr} AS effective_end_date_raw
         FROM {source_table_fqn}
     ) source
     CROSS JOIN release_context
@@ -934,9 +954,28 @@ def _build_player_assessment_history_sql_plan(
     context: PipelineContext,
     source_table_fqn: str,
     silver_schema_fqn: str,
+    source_columns: set[str] | None,
 ) -> SqlReferenceBuildPlan:
     players_fqn = f"{silver_schema_fqn}.players"
     monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
+    assessment_id_expr = _source_nullif_string_expr(source_columns, ["assessment_id", "id"])
+    player_id_expr = _source_nullif_string_expr(source_columns, ["player_id"])
+    batch_id_expr = _source_nullif_string_expr(source_columns, ["batch_id", "monthly_batch_id"])
+    assessment_date_expr = _source_date_or_month_string_expr(
+        source_columns,
+        date_candidates=["assessment_date"],
+        month_candidates=["assessment_month", "snapshot_month"],
+    )
+    assessment_type_expr = _source_upper_string_expr(source_columns, ["assessment_type"])
+    assessment_value_expr = _source_nullif_string_expr(
+        source_columns,
+        ["assessment_value", "value"],
+    )
+    assessment_confidence_expr = _source_nullif_string_expr(
+        source_columns,
+        ["assessment_confidence", "confidence"],
+    )
+    assessor_source_expr = _source_nullif_string_expr(source_columns, ["assessor_source"])
     metadata_sql = _metadata_sql(
         context,
         source_table="player_assessment_history",
@@ -955,14 +994,14 @@ WITH release_context AS (
 ),
 normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(assessment_id, id) AS STRING)), '') AS assessment_id,
-        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(COALESCE(batch_id, monthly_batch_id) AS STRING)), '') AS batch_id,
-        TRIM(CAST(assessment_date AS STRING)) AS assessment_date_raw,
-        NULLIF(UPPER(TRIM(CAST(assessment_type AS STRING))), '') AS assessment_type,
-        NULLIF(TRIM(CAST(COALESCE(assessment_value, value) AS STRING)), '') AS assessment_value_raw,
-        NULLIF(TRIM(CAST(COALESCE(assessment_confidence, confidence) AS STRING)), '') AS assessment_confidence_raw,
-        NULLIF(TRIM(CAST(assessor_source AS STRING)), '') AS assessor_source
+        {assessment_id_expr} AS assessment_id,
+        {player_id_expr} AS player_id,
+        {batch_id_expr} AS batch_id,
+        {assessment_date_expr} AS assessment_date_raw,
+        {assessment_type_expr} AS assessment_type,
+        {assessment_value_expr} AS assessment_value_raw,
+        {assessment_confidence_expr} AS assessment_confidence_raw,
+        {assessor_source_expr} AS assessor_source
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -1199,14 +1238,14 @@ WHERE duplicate_rank > 1
         exact_duplicate_count_sql=f"""
 WITH normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(assessment_id, id) AS STRING)), '') AS assessment_id,
-        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(COALESCE(batch_id, monthly_batch_id) AS STRING)), '') AS batch_id,
-        TRIM(CAST(assessment_date AS STRING)) AS assessment_date_raw,
-        NULLIF(UPPER(TRIM(CAST(assessment_type AS STRING))), '') AS assessment_type,
-        NULLIF(TRIM(CAST(COALESCE(assessment_value, value) AS STRING)), '') AS assessment_value_raw,
-        NULLIF(TRIM(CAST(COALESCE(assessment_confidence, confidence) AS STRING)), '') AS assessment_confidence_raw,
-        NULLIF(TRIM(CAST(assessor_source AS STRING)), '') AS assessor_source
+        {assessment_id_expr} AS assessment_id,
+        {player_id_expr} AS player_id,
+        {batch_id_expr} AS batch_id,
+        {assessment_date_expr} AS assessment_date_raw,
+        {assessment_type_expr} AS assessment_type,
+        {assessment_value_expr} AS assessment_value_raw,
+        {assessment_confidence_expr} AS assessment_confidence_raw,
+        {assessor_source_expr} AS assessor_source
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -1233,14 +1272,14 @@ valid_rows AS (
         source.assessor_source
     FROM (
         SELECT
-            NULLIF(TRIM(CAST(COALESCE(assessment_id, id) AS STRING)), '') AS assessment_id,
-            NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-            NULLIF(TRIM(CAST(COALESCE(batch_id, monthly_batch_id) AS STRING)), '') AS batch_id,
-            TRIM(CAST(assessment_date AS STRING)) AS assessment_date_raw,
-            NULLIF(UPPER(TRIM(CAST(assessment_type AS STRING))), '') AS assessment_type,
-            NULLIF(TRIM(CAST(COALESCE(assessment_value, value) AS STRING)), '') AS assessment_value_raw,
-            NULLIF(TRIM(CAST(COALESCE(assessment_confidence, confidence) AS STRING)), '') AS assessment_confidence_raw,
-            NULLIF(TRIM(CAST(assessor_source AS STRING)), '') AS assessor_source
+            {assessment_id_expr} AS assessment_id,
+            {player_id_expr} AS player_id,
+            {batch_id_expr} AS batch_id,
+            {assessment_date_expr} AS assessment_date_raw,
+            {assessment_type_expr} AS assessment_type,
+            {assessment_value_expr} AS assessment_value_raw,
+            {assessment_confidence_expr} AS assessment_confidence_raw,
+            {assessor_source_expr} AS assessor_source
         FROM {source_table_fqn}
     ) source
     CROSS JOIN release_context
@@ -1310,6 +1349,27 @@ def _metadata_sql(
 current_timestamp() AS _load_ts,
 {record_hash_expr} AS _record_hash,
 'ACCEPTED' AS _data_quality_status
+""".strip()
+
+
+def _source_date_or_month_string_expr(
+    source_columns: set[str] | None,
+    *,
+    date_candidates: list[str],
+    month_candidates: list[str],
+) -> str:
+    source_column = _first_existing_source_column(source_columns, date_candidates)
+    if source_column is not None:
+        return f"TRIM(CAST({source_column} AS STRING))"
+    source_column = _first_existing_source_column(source_columns, month_candidates)
+    if source_column is None:
+        return "CAST(NULL AS STRING)"
+    return f"""
+CASE
+    WHEN TRIM(CAST({source_column} AS STRING)) RLIKE '^[0-9]{{4}}-[0-9]{{2}}$'
+        THEN concat(TRIM(CAST({source_column} AS STRING)), '-01')
+    ELSE TRIM(CAST({source_column} AS STRING))
+END
 """.strip()
 
 
