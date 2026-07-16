@@ -76,6 +76,11 @@ if release_name not in ALLOWED_RELEASES:
         "dataset_release or release_name must be one of: "
         f"{', '.join(ALLOWED_RELEASES)}."
     )
+if not pipeline_run_id:
+    raise ValueError(
+        "pipeline_run_id is required for finalization. "
+        "Provide the same pipeline_run_id used by tasks 02-05."
+    )
 
 config = load_raw_to_bronze_config(release_name, config_root=config_root)
 environment = resolve_release_environment(config)
