@@ -103,6 +103,43 @@ TRANSFORM_BUILDERS = {
     "build_match_games": build_match_games,
 }
 
+COMPETITION_SOURCE_COLUMN_CANDIDATES = {
+    "match_id",
+    "id",
+    "batch_id",
+    "region_id",
+    "match_date",
+    "date",
+    "match_type",
+    "competition_category",
+    "category",
+    "match_status",
+    "status",
+    "winning_team_number",
+    "winner_team_number",
+    "match_team_id",
+    "team_id",
+    "team_number",
+    "side_number",
+    "pre_match_team_rating",
+    "team_rating_before",
+    "post_match_team_rating",
+    "team_rating_after",
+    "match_team_player_id",
+    "player_id",
+    "player_position",
+    "position",
+    "player_rating_at_match",
+    "rating_at_match",
+    "match_game_id",
+    "game_number",
+    "team_one_score",
+    "team_two_score",
+    "target_score",
+    "win_by",
+    "actual_team_one_score_share",
+}
+
 
 def initialize_pipeline_run(
     spark: Any,
@@ -274,13 +311,20 @@ def _execute_single_table_sql(
             target_table=target_table,
             source_table_fqn=source_table_fqn,
             silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+            source_columns=_get_table_column_names(spark, source_table_fqn),
         )
     elif supports_competition_sql_transform(str(table_config["transform"])):
+        source_columns = _get_table_column_names(spark, source_table_fqn)
+        source_table_sql = _source_table_with_missing_columns(
+            source_table_fqn,
+            source_columns,
+            COMPETITION_SOURCE_COLUMN_CANDIDATES,
+        )
         sql_plan = build_competition_sql_plan(
             config,
             context,
             target_table=target_table,
-            source_table_fqn=source_table_fqn,
+            source_table_fqn=source_table_sql,
             silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
         )
     else:
@@ -488,6 +532,28 @@ def _get_table_column_names(spark: Any, table_fqn: str) -> set[str] | None:
     if not hasattr(spark, "table"):
         return None
     return {str(field.name) for field in spark.table(table_fqn).schema.fields}
+
+
+def _source_table_with_missing_columns(
+    table_fqn: str,
+    source_columns: set[str] | None,
+    candidate_columns: set[str],
+) -> str:
+    if source_columns is None:
+        return table_fqn
+    normalized_columns = {column.lower() for column in source_columns}
+    missing_columns = sorted(
+        column
+        for column in candidate_columns
+        if column.lower() not in normalized_columns
+    )
+    if not missing_columns:
+        return table_fqn
+    null_projections = ",\n        ".join(
+        f"CAST(NULL AS STRING) AS {column}"
+        for column in missing_columns
+    )
+    return f"(SELECT *,\n        {null_projections}\n    FROM {table_fqn})"
 
 
 def _resolve_builder_kwargs(

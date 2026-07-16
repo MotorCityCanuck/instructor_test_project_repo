@@ -14,6 +14,20 @@ class DummySpark:
     pass
 
 
+def test_source_table_with_missing_columns_adds_null_aliases_for_competition() -> None:
+    source_sql = execute_module._source_table_with_missing_columns(
+        "workspace.instructor_5k_bronze.match_teams",
+        {"id", "match_id", "side_number"},
+        {"match_team_id", "id", "match_id", "team_number", "side_number"},
+    )
+
+    assert source_sql.startswith("(SELECT *,")
+    assert "CAST(NULL AS STRING) AS match_team_id" in source_sql
+    assert "CAST(NULL AS STRING) AS team_number" in source_sql
+    assert "CAST(NULL AS STRING) AS side_number" not in source_sql
+    assert "FROM workspace.instructor_5k_bronze.match_teams" in source_sql
+
+
 def _config_environment_context():
     config = load_bronze_to_silver_config("napa_5k")
     environment = resolve_release_environment(config)

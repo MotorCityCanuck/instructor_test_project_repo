@@ -47,6 +47,56 @@ def test_build_organization_sql_plan_for_clubs_contains_expected_rules() -> None
     assert "'CANADA'" in plan.accepted_sql
 
 
+def test_build_organization_sql_plan_for_clubs_uses_actual_bronze_columns() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_organization_sql_plan(
+        config,
+        context,
+        target_table="clubs",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.clubs",
+        silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+        source_columns={
+            "id",
+            "club_name",
+            "region_id",
+            "club_type",
+            "competitiveness_level",
+            "member_capacity",
+            "founding_date",
+            "indoor_court_count",
+            "outdoor_court_count",
+            "_pipeline_run_id",
+            "_pipeline_name",
+            "_pipeline_version",
+            "_release_name",
+            "_source_file_name",
+            "_source_file_path",
+            "_source_file_size",
+            "_source_file_modification_ts",
+            "_ingested_ts",
+            "_source_record_hash",
+        },
+    )
+    combined_sql = "\n".join(
+        [
+            plan.accepted_sql,
+            plan.rejected_sql,
+            plan.exact_duplicate_count_sql,
+            plan.business_key_duplicate_count_sql,
+        ]
+    )
+
+    assert "COALESCE(club_id, id)" not in combined_sql
+    assert "COALESCE(club_name, name)" not in combined_sql
+    assert "COALESCE(open_date, start_date, formation_date)" not in combined_sql
+    assert "COALESCE(active_flag, status)" not in combined_sql
+    assert "CAST(id AS STRING)" in combined_sql
+    assert "CAST(club_name AS STRING)" in combined_sql
+    assert "CAST(region_id AS STRING)" in combined_sql
+    assert "CAST(founding_date AS STRING)" in combined_sql
+
+
 def test_build_organization_sql_plan_for_teams_contains_expected_rules() -> None:
     config, environment, context = _config_environment_context()
 

@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from napa_pipeline.bronze_to_silver.config import BronzeToSilverConfig
 from napa_pipeline.bronze_to_silver.operations import PipelineContext
-from napa_pipeline.bronze_to_silver.reference_sql import SqlReferenceBuildPlan, sql_literal
+from napa_pipeline.bronze_to_silver.reference_sql import (
+    SqlReferenceBuildPlan,
+    _normalize_source_columns,
+    _source_nullif_string_expr,
+    _source_string_expr,
+    _source_upper_string_expr,
+    sql_literal,
+)
 
 
 def supports_organization_sql_transform(transform_name: str) -> bool:
@@ -24,16 +31,18 @@ def build_organization_sql_plan(
     target_table: str,
     source_table_fqn: str,
     silver_schema_fqn: str,
+    source_columns: set[str] | None = None,
 ) -> SqlReferenceBuildPlan:
     """Return the SQL execution plan for one supported organization table."""
+    normalized_columns = _normalize_source_columns(source_columns)
     if target_table == "clubs":
-        return _build_clubs_sql_plan(config, context, source_table_fqn, silver_schema_fqn)
+        return _build_clubs_sql_plan(config, context, source_table_fqn, silver_schema_fqn, normalized_columns)
     if target_table == "teams":
-        return _build_teams_sql_plan(config, context, source_table_fqn, silver_schema_fqn)
+        return _build_teams_sql_plan(config, context, source_table_fqn, silver_schema_fqn, normalized_columns)
     if target_table == "club_memberships":
-        return _build_club_memberships_sql_plan(context, source_table_fqn, silver_schema_fqn)
+        return _build_club_memberships_sql_plan(context, source_table_fqn, silver_schema_fqn, normalized_columns)
     if target_table == "team_memberships":
-        return _build_team_memberships_sql_plan(config, context, source_table_fqn, silver_schema_fqn)
+        return _build_team_memberships_sql_plan(config, context, source_table_fqn, silver_schema_fqn, normalized_columns)
     raise ValueError(f"No SQL organization plan is defined for target table '{target_table}'.")
 
 
@@ -42,8 +51,16 @@ def _build_clubs_sql_plan(
     context: PipelineContext,
     source_table_fqn: str,
     silver_schema_fqn: str,
+    source_columns: set[str] | None,
 ) -> SqlReferenceBuildPlan:
     regions_fqn = f"{silver_schema_fqn}.regions"
+    club_id_expr = _source_nullif_string_expr(source_columns, ["club_id", "id"])
+    club_name_expr = _source_nullif_string_expr(source_columns, ["club_name", "name"])
+    region_id_expr = _source_nullif_string_expr(source_columns, ["region_id"])
+    country_input_expr = _source_upper_string_expr(source_columns, ["country_code", "country"])
+    open_date_expr = _source_string_expr(source_columns, ["open_date", "start_date", "formation_date", "founding_date"])
+    close_date_expr = _source_string_expr(source_columns, ["close_date", "end_date", "dissolution_date"])
+    status_input_expr = _source_upper_string_expr(source_columns, ["active_flag", "status"])
     country_expr = _domain_case_expression("country_input", config.data["domains"]["country_code"])
     metadata_sql = _metadata_sql(
         context,
@@ -57,13 +74,13 @@ def _build_clubs_sql_plan(
     base_ctes = f"""
 WITH normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(club_id, id) AS STRING)), '') AS club_id,
-        NULLIF(TRIM(CAST(COALESCE(club_name, name) AS STRING)), '') AS club_name,
-        NULLIF(TRIM(CAST(region_id AS STRING)), '') AS region_id,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(country_code, country) AS STRING))), '') AS country_input,
-        TRIM(CAST(COALESCE(open_date, start_date, formation_date) AS STRING)) AS open_date_raw,
-        TRIM(CAST(COALESCE(close_date, end_date, dissolution_date) AS STRING)) AS close_date_raw,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(active_flag, status) AS STRING))), '') AS status_input
+        {club_id_expr} AS club_id,
+        {club_name_expr} AS club_name,
+        {region_id_expr} AS region_id,
+        {country_input_expr} AS country_input,
+        {open_date_expr} AS open_date_raw,
+        {close_date_expr} AS close_date_raw,
+        {status_input_expr} AS status_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -284,59 +301,17 @@ WHERE duplicate_rank > 1
         exact_duplicate_count_sql=_exact_duplicate_count_sql(
             source_table_fqn,
             [
-                "NULLIF(TRIM(CAST(COALESCE(club_id, id) AS STRING)), '') AS club_id",
-                "NULLIF(TRIM(CAST(COALESCE(club_name, name) AS STRING)), '') AS club_name",
-                "NULLIF(TRIM(CAST(region_id AS STRING)), '') AS region_id",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(country_code, country) AS STRING))), '') AS country_input",
-                "TRIM(CAST(COALESCE(open_date, start_date, formation_date) AS STRING)) AS open_date_raw",
-                "TRIM(CAST(COALESCE(close_date, end_date, dissolution_date) AS STRING)) AS close_date_raw",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(active_flag, status) AS STRING))), '') AS status_input",
+                f"{club_id_expr} AS club_id",
+                f"{club_name_expr} AS club_name",
+                f"{region_id_expr} AS region_id",
+                f"{country_input_expr} AS country_input",
+                f"{open_date_expr} AS open_date_raw",
+                f"{close_date_expr} AS close_date_raw",
+                f"{status_input_expr} AS status_input",
             ],
         ),
         business_key_duplicate_count_sql=f"""
-WITH valid_rows AS (
-    SELECT DISTINCT
-        NULLIF(TRIM(CAST(COALESCE(club_id, id) AS STRING)), '') AS club_id,
-        NULLIF(TRIM(CAST(COALESCE(club_name, name) AS STRING)), '') AS club_name,
-        NULLIF(TRIM(CAST(region_id AS STRING)), '') AS region_id,
-        {country_expr} AS country_code,
-        TO_DATE(TRIM(CAST(COALESCE(open_date, start_date, formation_date) AS STRING))) AS open_date,
-        TO_DATE(TRIM(CAST(COALESCE(close_date, end_date, dissolution_date) AS STRING))) AS close_date
-    FROM {source_table_fqn} source
-    LEFT JOIN {regions_fqn} region
-        ON NULLIF(TRIM(CAST(source.region_id AS STRING)), '') = region.region_id
-    WHERE NULLIF(TRIM(CAST(COALESCE(club_id, id) AS STRING)), '') IS NOT NULL
-      AND NULLIF(TRIM(CAST(COALESCE(club_name, name) AS STRING)), '') IS NOT NULL
-      AND NULLIF(TRIM(CAST(source.region_id AS STRING)), '') IS NOT NULL
-      AND region.region_sk IS NOT NULL
-),
-ranked_rows AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            PARTITION BY club_id
-            ORDER BY
-                (
-                    CASE WHEN club_name IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN region_id IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN country_code IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN open_date IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN close_date IS NOT NULL THEN 1 ELSE 0 END
-                ) DESC,
-                sha2(
-                    concat_ws('|',
-                        coalesce(club_id, '<NULL>'),
-                        coalesce(club_name, '<NULL>'),
-                        coalesce(region_id, '<NULL>'),
-                        coalesce(country_code, '<NULL>'),
-                        coalesce(cast(open_date as string), '<NULL>'),
-                        coalesce(cast(close_date as string), '<NULL>')
-                    ),
-                    256
-                ) ASC
-        ) AS duplicate_rank
-    FROM valid_rows
-)
+{base_ctes}
 SELECT COUNT(*) AS value
 FROM ranked_rows
 WHERE duplicate_rank > 1
@@ -349,8 +324,17 @@ def _build_teams_sql_plan(
     context: PipelineContext,
     source_table_fqn: str,
     silver_schema_fqn: str,
+    source_columns: set[str] | None,
 ) -> SqlReferenceBuildPlan:
     monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
+    team_id_expr = _source_nullif_string_expr(source_columns, ["team_id", "id"])
+    team_name_expr = _source_nullif_string_expr(source_columns, ["team_name", "name"])
+    team_category_input_expr = _source_upper_string_expr(source_columns, ["team_category", "category", "team_type"])
+    team_status_input_expr = _source_upper_string_expr(source_columns, ["team_status", "status"])
+    country_input_expr = _source_upper_string_expr(source_columns, ["country_code", "country"])
+    formation_date_expr = _source_string_expr(source_columns, ["formation_date", "start_date"])
+    dissolution_date_expr = _source_string_expr(source_columns, ["dissolution_date", "end_date"])
+    status_input_expr = _source_upper_string_expr(source_columns, ["active_flag", "status"])
     team_category_expr = _domain_case_expression("team_category_input", config.data["domains"]["team_type"])
     team_status_expr = _domain_case_expression("team_status_input", config.data["domains"]["team_status"])
     country_expr = _domain_case_expression("country_input", config.data["domains"]["country_code"])
@@ -370,14 +354,14 @@ WITH release_context AS (
 ),
 normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(team_id, id) AS STRING)), '') AS team_id,
-        NULLIF(TRIM(CAST(COALESCE(team_name, name) AS STRING)), '') AS team_name,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(team_category, category, team_type) AS STRING))), '') AS team_category_input,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(team_status, status) AS STRING))), '') AS team_status_input,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(country_code, country) AS STRING))), '') AS country_input,
-        TRIM(CAST(COALESCE(formation_date, start_date) AS STRING)) AS formation_date_raw,
-        TRIM(CAST(COALESCE(dissolution_date, end_date) AS STRING)) AS dissolution_date_raw,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(active_flag, status) AS STRING))), '') AS status_input
+        {team_id_expr} AS team_id,
+        {team_name_expr} AS team_name,
+        {team_category_input_expr} AS team_category_input,
+        {team_status_input_expr} AS team_status_input,
+        {country_input_expr} AS country_input,
+        {formation_date_expr} AS formation_date_raw,
+        {dissolution_date_expr} AS dissolution_date_raw,
+        {status_input_expr} AS status_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -609,66 +593,18 @@ WHERE duplicate_rank > 1
         exact_duplicate_count_sql=_exact_duplicate_count_sql(
             source_table_fqn,
             [
-                "NULLIF(TRIM(CAST(COALESCE(team_id, id) AS STRING)), '') AS team_id",
-                "NULLIF(TRIM(CAST(COALESCE(team_name, name) AS STRING)), '') AS team_name",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(team_category, category, team_type) AS STRING))), '') AS team_category_input",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(team_status, status) AS STRING))), '') AS team_status_input",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(country_code, country) AS STRING))), '') AS country_input",
-                "TRIM(CAST(COALESCE(formation_date, start_date) AS STRING)) AS formation_date_raw",
-                "TRIM(CAST(COALESCE(dissolution_date, end_date) AS STRING)) AS dissolution_date_raw",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(active_flag, status) AS STRING))), '') AS status_input",
+                f"{team_id_expr} AS team_id",
+                f"{team_name_expr} AS team_name",
+                f"{team_category_input_expr} AS team_category_input",
+                f"{team_status_input_expr} AS team_status_input",
+                f"{country_input_expr} AS country_input",
+                f"{formation_date_expr} AS formation_date_raw",
+                f"{dissolution_date_expr} AS dissolution_date_raw",
+                f"{status_input_expr} AS status_input",
             ],
         ),
         business_key_duplicate_count_sql=f"""
-WITH release_context AS (
-    SELECT MAX(batch_date) AS as_of_date
-    FROM {monthly_batches_fqn}
-),
-valid_rows AS (
-    SELECT DISTINCT
-        NULLIF(TRIM(CAST(COALESCE(team_id, id) AS STRING)), '') AS team_id,
-        NULLIF(TRIM(CAST(COALESCE(team_name, name) AS STRING)), '') AS team_name,
-        {team_category_expr} AS team_category,
-        {country_expr} AS country_code,
-        {team_status_expr} AS team_status,
-        TO_DATE(TRIM(CAST(COALESCE(formation_date, start_date) AS STRING))) AS formation_date,
-        TO_DATE(TRIM(CAST(COALESCE(dissolution_date, end_date) AS STRING))) AS dissolution_date
-    FROM {source_table_fqn}
-    CROSS JOIN release_context
-),
-ranked_rows AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            PARTITION BY team_id
-            ORDER BY
-                (
-                    CASE WHEN team_name IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN team_category IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN country_code IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN team_status IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN formation_date IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN dissolution_date IS NOT NULL THEN 1 ELSE 0 END
-                ) DESC,
-                sha2(
-                    concat_ws('|',
-                        coalesce(team_id, '<NULL>'),
-                        coalesce(team_name, '<NULL>'),
-                        coalesce(team_category, '<NULL>'),
-                        coalesce(country_code, '<NULL>'),
-                        coalesce(team_status, '<NULL>'),
-                        coalesce(cast(formation_date as string), '<NULL>'),
-                        coalesce(cast(dissolution_date as string), '<NULL>')
-                    ),
-                    256
-                ) ASC
-        ) AS duplicate_rank
-    FROM valid_rows
-    WHERE team_id IS NOT NULL
-      AND NOT (
-          (formation_date IS NOT NULL AND dissolution_date IS NOT NULL AND dissolution_date < formation_date)
-      )
-)
+{base_ctes}
 SELECT COUNT(*) AS value
 FROM ranked_rows
 WHERE duplicate_rank > 1
@@ -680,10 +616,16 @@ def _build_club_memberships_sql_plan(
     context: PipelineContext,
     source_table_fqn: str,
     silver_schema_fqn: str,
+    source_columns: set[str] | None,
 ) -> SqlReferenceBuildPlan:
     players_fqn = f"{silver_schema_fqn}.players"
     clubs_fqn = f"{silver_schema_fqn}.clubs"
     monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
+    club_membership_id_expr = _source_nullif_string_expr(source_columns, ["club_membership_id", "id"])
+    player_id_expr = _source_nullif_string_expr(source_columns, ["player_id"])
+    club_id_expr = _source_nullif_string_expr(source_columns, ["club_id"])
+    membership_start_date_expr = _source_string_expr(source_columns, ["membership_start_date", "start_date"])
+    membership_end_date_expr = _source_string_expr(source_columns, ["membership_end_date", "end_date"])
     metadata_sql = _metadata_sql(
         context,
         source_table="club_memberships",
@@ -701,11 +643,11 @@ WITH release_context AS (
 ),
 normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(club_membership_id, id) AS STRING)), '') AS club_membership_id,
-        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(club_id AS STRING)), '') AS club_id,
-        TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING)) AS membership_start_date_raw,
-        TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING)) AS membership_end_date_raw
+        {club_membership_id_expr} AS club_membership_id,
+        {player_id_expr} AS player_id,
+        {club_id_expr} AS club_id,
+        {membership_start_date_expr} AS membership_start_date_raw,
+        {membership_end_date_expr} AS membership_end_date_raw
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -970,57 +912,15 @@ WHERE duplicate_rank > 1
         exact_duplicate_count_sql=_exact_duplicate_count_sql(
             source_table_fqn,
             [
-                "NULLIF(TRIM(CAST(COALESCE(club_membership_id, id) AS STRING)), '') AS club_membership_id",
-                "NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id",
-                "NULLIF(TRIM(CAST(club_id AS STRING)), '') AS club_id",
-                "TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING)) AS membership_start_date_raw",
-                "TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING)) AS membership_end_date_raw",
+                f"{club_membership_id_expr} AS club_membership_id",
+                f"{player_id_expr} AS player_id",
+                f"{club_id_expr} AS club_id",
+                f"{membership_start_date_expr} AS membership_start_date_raw",
+                f"{membership_end_date_expr} AS membership_end_date_raw",
             ],
         ),
         business_key_duplicate_count_sql=f"""
-WITH valid_rows AS (
-    SELECT DISTINCT
-        NULLIF(TRIM(CAST(COALESCE(club_membership_id, id) AS STRING)), '') AS club_membership_id,
-        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(club_id AS STRING)), '') AS club_id,
-        TO_DATE(TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING))) AS membership_start_date,
-        TO_DATE(TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING))) AS membership_end_date
-    FROM {source_table_fqn} source
-    LEFT JOIN {players_fqn} player
-        ON NULLIF(TRIM(CAST(source.player_id AS STRING)), '') = player.player_id
-    LEFT JOIN {clubs_fqn} club
-        ON NULLIF(TRIM(CAST(source.club_id AS STRING)), '') = club.club_id
-    WHERE NULLIF(TRIM(CAST(COALESCE(club_membership_id, id) AS STRING)), '') IS NOT NULL
-      AND NULLIF(TRIM(CAST(source.player_id AS STRING)), '') IS NOT NULL
-      AND player.player_sk IS NOT NULL
-      AND NULLIF(TRIM(CAST(source.club_id AS STRING)), '') IS NOT NULL
-      AND club.club_sk IS NOT NULL
-),
-ranked_rows AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            PARTITION BY club_membership_id
-            ORDER BY
-                (
-                    CASE WHEN player_id IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN club_id IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN membership_start_date IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN membership_end_date IS NOT NULL THEN 1 ELSE 0 END
-                ) DESC,
-                sha2(
-                    concat_ws('|',
-                        coalesce(club_membership_id, '<NULL>'),
-                        coalesce(player_id, '<NULL>'),
-                        coalesce(club_id, '<NULL>'),
-                        coalesce(cast(membership_start_date as string), '<NULL>'),
-                        coalesce(cast(membership_end_date as string), '<NULL>')
-                    ),
-                    256
-                ) ASC
-        ) AS duplicate_rank
-    FROM valid_rows
-)
+{base_ctes}
 SELECT COUNT(*) AS value
 FROM ranked_rows
 WHERE duplicate_rank > 1
@@ -1038,10 +938,18 @@ def _build_team_memberships_sql_plan(
     context: PipelineContext,
     source_table_fqn: str,
     silver_schema_fqn: str,
+    source_columns: set[str] | None,
 ) -> SqlReferenceBuildPlan:
     players_fqn = f"{silver_schema_fqn}.players"
     teams_fqn = f"{silver_schema_fqn}.teams"
     monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
+    team_membership_id_expr = _source_nullif_string_expr(source_columns, ["team_membership_id", "id"])
+    player_id_expr = _source_nullif_string_expr(source_columns, ["player_id"])
+    team_id_expr = _source_nullif_string_expr(source_columns, ["team_id"])
+    membership_start_date_expr = _source_string_expr(source_columns, ["membership_start_date", "start_date"])
+    membership_end_date_expr = _source_string_expr(source_columns, ["membership_end_date", "end_date"])
+    player_role_expr = _source_upper_string_expr(source_columns, ["player_role", "role"])
+    position_input_expr = _source_upper_string_expr(source_columns, ["player_position", "preferred_side", "position"])
     position_expr = _domain_case_expression("position_input", config.data["domains"]["player_position"])
     metadata_sql = _metadata_sql(
         context,
@@ -1060,13 +968,13 @@ WITH release_context AS (
 ),
 normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(team_membership_id, id) AS STRING)), '') AS team_membership_id,
-        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
-        TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING)) AS membership_start_date_raw,
-        TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING)) AS membership_end_date_raw,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(player_role, role) AS STRING))), '') AS player_role,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(player_position, preferred_side, position) AS STRING))), '') AS position_input
+        {team_membership_id_expr} AS team_membership_id,
+        {player_id_expr} AS player_id,
+        {team_id_expr} AS team_id,
+        {membership_start_date_expr} AS membership_start_date_raw,
+        {membership_end_date_expr} AS membership_end_date_raw,
+        {player_role_expr} AS player_role,
+        {position_input_expr} AS position_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -1351,62 +1259,17 @@ WHERE duplicate_rank > 1
         exact_duplicate_count_sql=_exact_duplicate_count_sql(
             source_table_fqn,
             [
-                "NULLIF(TRIM(CAST(COALESCE(team_membership_id, id) AS STRING)), '') AS team_membership_id",
-                "NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id",
-                "NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id",
-                "TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING)) AS membership_start_date_raw",
-                "TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING)) AS membership_end_date_raw",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(player_role, role) AS STRING))), '') AS player_role",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(player_position, preferred_side, position) AS STRING))), '') AS position_input",
+                f"{team_membership_id_expr} AS team_membership_id",
+                f"{player_id_expr} AS player_id",
+                f"{team_id_expr} AS team_id",
+                f"{membership_start_date_expr} AS membership_start_date_raw",
+                f"{membership_end_date_expr} AS membership_end_date_raw",
+                f"{player_role_expr} AS player_role",
+                f"{position_input_expr} AS position_input",
             ],
         ),
         business_key_duplicate_count_sql=f"""
-WITH valid_rows AS (
-    SELECT DISTINCT
-        NULLIF(TRIM(CAST(COALESCE(team_membership_id, id) AS STRING)), '') AS team_membership_id,
-        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
-        TO_DATE(TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING))) AS membership_start_date,
-        TO_DATE(TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING))) AS membership_end_date,
-        {position_expr} AS player_position
-    FROM {source_table_fqn} source
-    LEFT JOIN {players_fqn} player
-        ON NULLIF(TRIM(CAST(source.player_id AS STRING)), '') = player.player_id
-    LEFT JOIN {teams_fqn} team
-        ON NULLIF(TRIM(CAST(source.team_id AS STRING)), '') = team.team_id
-    WHERE NULLIF(TRIM(CAST(COALESCE(team_membership_id, id) AS STRING)), '') IS NOT NULL
-      AND NULLIF(TRIM(CAST(source.player_id AS STRING)), '') IS NOT NULL
-      AND player.player_sk IS NOT NULL
-      AND NULLIF(TRIM(CAST(source.team_id AS STRING)), '') IS NOT NULL
-      AND team.team_sk IS NOT NULL
-),
-ranked_rows AS (
-    SELECT
-        *,
-        ROW_NUMBER() OVER (
-            PARTITION BY team_membership_id
-            ORDER BY
-                (
-                    CASE WHEN team_id IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN player_id IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN membership_start_date IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN membership_end_date IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN player_position IS NOT NULL THEN 1 ELSE 0 END
-                ) DESC,
-                sha2(
-                    concat_ws('|',
-                        coalesce(team_membership_id, '<NULL>'),
-                        coalesce(team_id, '<NULL>'),
-                        coalesce(player_id, '<NULL>'),
-                        coalesce(cast(membership_start_date as string), '<NULL>'),
-                        coalesce(cast(membership_end_date as string), '<NULL>'),
-                        coalesce(player_position, '<NULL>')
-                    ),
-                    256
-                ) ASC
-        ) AS duplicate_rank
-    FROM valid_rows
-)
+{base_ctes}
 SELECT COUNT(*) AS value
 FROM ranked_rows
 WHERE duplicate_rank > 1
