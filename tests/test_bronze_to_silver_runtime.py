@@ -148,6 +148,32 @@ def test_append_quality_results_for_rejects_groups_by_rule() -> None:
     grouped = {record["rule_id"]: record for record in quality_records}
     assert grouped["RULE_1"]["failed_row_count"] == 2
     assert grouped["RULE_2"]["failed_row_count"] == 1
+    assert grouped["RULE_1"]["sample_business_keys"] == ["a", "b"]
+    assert grouped["RULE_2"]["sample_business_keys"] == ["c"]
+
+
+def test_append_quality_results_for_rejects_ignores_null_sample_business_keys() -> None:
+    context = _context()
+    table_fqn = f"{context.operations_schema_fqn}.quality_results"
+    spark = FakeSparkSession(
+        tables={table_fqn: FakeTable(schema="schema-from-table")},
+        existing_tables={table_fqn},
+    )
+    rejected_rows = [
+        {"rule_id": "RULE_1", "rule_severity": "ERROR", "source_business_key": None},
+        {"rule_id": "RULE_1", "rule_severity": "ERROR", "source_business_key": "player-1"},
+    ]
+
+    quality_records = append_quality_results_for_rejects(
+        spark,
+        context,
+        target_table="players",
+        evaluated_row_count=5,
+        rejected_rows=rejected_rows,
+    )
+
+    assert len(quality_records) == 1
+    assert quality_records[0]["sample_business_keys"] == ["player-1"]
 
 
 def test_publish_records_to_view_emits_create_or_replace_view_sql() -> None:

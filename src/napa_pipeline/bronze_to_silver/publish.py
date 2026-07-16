@@ -146,7 +146,9 @@ def append_quality_results_for_rejects(
                 evaluated_row_count=evaluated_row_count,
                 failed_row_count=failed_row_count,
                 failure_pct=failure_pct,
-                sample_business_keys=[str(row["source_business_key"]) for row in rows[:10]],
+                sample_business_keys=_normalize_sample_business_keys(
+                    [row.get("source_business_key") for row in rows[:10]]
+                ),
                 evaluated_ts=utc_now(),
             )
         )
@@ -200,7 +202,9 @@ GROUP BY rule_id, rule_severity
                 evaluated_row_count=evaluated_row_count,
                 failed_row_count=failed_row_count,
                 failure_pct=failure_pct,
-                sample_business_keys=list(mapping.get("sample_business_keys") or []),
+                sample_business_keys=_normalize_sample_business_keys(
+                    mapping.get("sample_business_keys") or []
+                ),
                 evaluated_ts=utc_now(),
             )
         )
@@ -287,3 +291,16 @@ def scalar_sql_value(spark: Any, query: str) -> int:
     else:
         value = row[0]
     return int(value)
+
+
+def _normalize_sample_business_keys(values: list[Any]) -> list[str]:
+    """Coerce sample business keys to a Spark-safe list of non-null strings."""
+    normalized: list[str] = []
+    for value in values:
+        if value is None:
+            continue
+        string_value = str(value)
+        if string_value == "":
+            continue
+        normalized.append(string_value)
+    return normalized
