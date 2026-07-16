@@ -8,7 +8,7 @@
 # Summarize table-level and reconciliation outcomes, update the durable
 # pipeline_runs record, and emit a single final run message for the workflow.
 
-NOTEBOOK_VERSION = "2026.07.15.1"
+NOTEBOOK_VERSION = "2026.07.15.2"
 
 print(f"Notebook version: {NOTEBOOK_VERSION}")
 
