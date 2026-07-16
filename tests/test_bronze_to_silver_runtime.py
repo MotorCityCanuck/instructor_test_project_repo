@@ -256,7 +256,7 @@ def test_summarize_pipeline_run_detects_critical_quality_failures() -> None:
                     FakeRow(
                         {
                             "pipeline_run_id": "run-123",
-                            "severity": "ERROR",
+                            "severity": "CRITICAL",
                             "failed_row_count": 1,
                         }
                     )
@@ -270,6 +270,69 @@ def test_summarize_pipeline_run_detects_critical_quality_failures() -> None:
 
     assert summary.final_status == "FAILED"
     assert summary.critical_quality_failure_count == 1
+
+
+def test_summarize_pipeline_run_allows_error_quality_rejects() -> None:
+    context = _context()
+    pipeline_runs_fqn = f"{context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}"
+    table_runs_fqn = f"{context.operations_schema_fqn}.{TABLE_RUNS_TABLE}"
+    reconciliation_fqn = f"{context.operations_schema_fqn}.{RECONCILIATION_RESULTS_TABLE}"
+    quality_fqn = f"{context.operations_schema_fqn}.{QUALITY_RESULTS_TABLE}"
+    run_messages_fqn = f"{context.operations_schema_fqn}.{RUN_MESSAGES_TABLE}"
+
+    spark = FakeSparkSession(
+        tables={
+            pipeline_runs_fqn: FakeTable(
+                rows=[
+                    FakeRow(
+                        {
+                            "pipeline_run_id": "run-123",
+                            "started_ts": datetime(2026, 7, 16, 12, 0, tzinfo=timezone.utc),
+                            "completed_ts": None,
+                        }
+                    )
+                ]
+            ),
+            table_runs_fqn: FakeTable(
+                rows=[
+                    FakeRow(
+                        {
+                            "pipeline_run_id": "run-123",
+                            "status": "SUCCEEDED",
+                            "completed_ts": datetime(2026, 7, 16, 12, 5, tzinfo=timezone.utc),
+                        }
+                    )
+                ]
+            ),
+            reconciliation_fqn: FakeTable(
+                rows=[
+                    FakeRow(
+                        {
+                            "pipeline_run_id": "run-123",
+                            "status": "PASSED",
+                        }
+                    )
+                ]
+            ),
+            quality_fqn: FakeTable(
+                rows=[
+                    FakeRow(
+                        {
+                            "pipeline_run_id": "run-123",
+                            "severity": "ERROR",
+                            "failed_row_count": 112,
+                        }
+                    )
+                ]
+            ),
+            run_messages_fqn: FakeTable(rows=[]),
+        }
+    )
+
+    summary = summarize_pipeline_run(spark, context, expected_table_count=1)
+
+    assert summary.final_status == "SUCCEEDED"
+    assert summary.critical_quality_failure_count == 0
 
 
 def test_summarize_pipeline_run_reports_failed_and_incomplete_tables() -> None:

@@ -96,7 +96,7 @@ def summarize_pipeline_run(
     critical_quality_failure_count = sum(
         1
         for row in quality_rows
-        if row.get("severity") in {"CRITICAL", "ERROR"} and (row.get("failed_row_count") or 0) > 0
+        if row.get("severity") == "CRITICAL" and (row.get("failed_row_count") or 0) > 0
     )
 
     if not table_run_rows and not reconciliation_rows and not pipeline_run_rows:
@@ -196,7 +196,7 @@ def _build_summary_text(
     critical_quality_details = [
         f"{row.get('target_table')}:{row.get('rule_id')} failed_row_count={row.get('failed_row_count')}"
         for row in quality_rows
-        if row.get("severity") in {"CRITICAL", "ERROR"} and (row.get("failed_row_count") or 0) > 0
+        if row.get("severity") == "CRITICAL" and (row.get("failed_row_count") or 0) > 0
     ]
     if critical_quality_details:
         details.append("Critical quality failures: " + "; ".join(critical_quality_details[:10]) + ".")
