@@ -19,6 +19,10 @@ from napa_pipeline.bronze_to_silver.competition import (
     build_match_teams,
     build_matches,
 )
+from napa_pipeline.bronze_to_silver.competition_sql import (
+    build_competition_sql_plan,
+    supports_competition_sql_transform,
+)
 from napa_pipeline.bronze_to_silver.config import BronzeToSilverConfig
 from napa_pipeline.bronze_to_silver.cross_table import run_cross_table_validations_sql
 from napa_pipeline.bronze_to_silver.environment import ReleaseEnvironment
@@ -157,6 +161,7 @@ def execute_stage(
                 supports_reference_sql_transform(str(table_config["transform"]))
                 or supports_athlete_sql_transform(str(table_config["transform"]))
                 or supports_organization_sql_transform(str(table_config["transform"]))
+                or supports_competition_sql_transform(str(table_config["transform"]))
             ):
                 metrics = _execute_single_table_sql(
                     spark,
@@ -261,6 +266,14 @@ def _execute_single_table_sql(
         )
     elif supports_organization_sql_transform(str(table_config["transform"])):
         sql_plan = build_organization_sql_plan(
+            config,
+            context,
+            target_table=target_table,
+            source_table_fqn=source_table_fqn,
+            silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+        )
+    elif supports_competition_sql_transform(str(table_config["transform"])):
+        sql_plan = build_competition_sql_plan(
             config,
             context,
             target_table=target_table,
