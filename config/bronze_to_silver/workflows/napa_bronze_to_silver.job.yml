@@ -1,0 +1,156 @@
+resources:
+  jobs:
+    napa_bronze_to_silver:
+      name: NAPA Bronze to Silver
+      description: >
+        Databricks job template for the instructor Bronze-to-Silver pipeline.
+        Start the job with release_name set to one of: napa_5k, napa_50k, napa_250k.
+      max_concurrent_runs: 1
+      performance_target: STANDARD
+      environments:
+        - environment_key: napa_serverless_python
+          spec:
+            environment_version: "4"
+            dependencies:
+              - pyyaml
+      parameters:
+        - name: release_name
+          default: napa_5k
+      tags:
+        pipeline_name: bronze_to_silver
+        owner: instructor
+      tasks:
+        - task_key: resolve_configuration
+          environment_key: napa_serverless_python
+          timeout_seconds: 900
+          spark_python_task:
+            python_file: ${var.script_root}/11_b2s_resolve_configuration.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+
+        - task_key: validate_environment
+          environment_key: napa_serverless_python
+          timeout_seconds: 1200
+          depends_on:
+            - task_key: resolve_configuration
+          spark_python_task:
+            python_file: ${var.script_root}/12_b2s_validate_environment.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+
+        - task_key: validate_bronze_sources
+          environment_key: napa_serverless_python
+          timeout_seconds: 1800
+          depends_on:
+            - task_key: validate_environment
+          spark_python_task:
+            python_file: ${var.script_root}/13_b2s_validate_bronze_sources.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+
+        - task_key: build_reference
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          depends_on:
+            - task_key: validate_bronze_sources
+          spark_python_task:
+            python_file: ${var.script_root}/14_b2s_build_reference.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+
+        - task_key: build_athlete
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          depends_on:
+            - task_key: build_reference
+          spark_python_task:
+            python_file: ${var.script_root}/15_b2s_build_athlete.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+
+        - task_key: build_organization_partnership
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          depends_on:
+            - task_key: build_athlete
+          spark_python_task:
+            python_file: ${var.script_root}/16_b2s_build_organization_partnership.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+
+        - task_key: build_competition
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          depends_on:
+            - task_key: build_organization_partnership
+          spark_python_task:
+            python_file: ${var.script_root}/17_b2s_build_competition.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+
+        - task_key: run_cross_table_validation
+          environment_key: napa_serverless_python
+          timeout_seconds: 1800
+          depends_on:
+            - task_key: build_competition
+          spark_python_task:
+            python_file: ${var.script_root}/18_b2s_run_cross_table_validation.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+
+        - task_key: publish_convenience_views
+          environment_key: napa_serverless_python
+          timeout_seconds: 1800
+          depends_on:
+            - task_key: run_cross_table_validation
+          spark_python_task:
+            python_file: ${var.script_root}/19_b2s_publish_convenience_views.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+
+        - task_key: finalize_pipeline_summary
+          environment_key: napa_serverless_python
+          timeout_seconds: 1200
+          run_if: ALL_DONE
+          depends_on:
+            - task_key: resolve_configuration
+            - task_key: validate_environment
+            - task_key: validate_bronze_sources
+            - task_key: build_reference
+            - task_key: build_athlete
+            - task_key: build_organization_partnership
+            - task_key: build_competition
+            - task_key: run_cross_table_validation
+            - task_key: publish_convenience_views
+          spark_python_task:
+            python_file: ${var.script_root}/20_b2s_finalize_pipeline_summary.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
