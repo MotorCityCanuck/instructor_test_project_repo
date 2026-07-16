@@ -23,7 +23,9 @@ def _config_environment_context():
 
 def test_supports_athlete_sql_transform_only_for_players() -> None:
     assert supports_athlete_sql_transform("build_players") is True
-    assert supports_athlete_sql_transform("build_player_registrations") is False
+    assert supports_athlete_sql_transform("build_player_registrations") is True
+    assert supports_athlete_sql_transform("build_player_assessment_history") is True
+    assert supports_athlete_sql_transform("build_teams") is False
 
 
 def test_build_athlete_sql_plan_for_players_contains_expected_rules() -> None:
@@ -43,6 +45,42 @@ def test_build_athlete_sql_plan_for_players_contains_expected_rules() -> None:
     assert "home_region_sk" in plan.accepted_sql
     assert "rating_confidence" in plan.accepted_sql
     assert "'CANADA'" in plan.accepted_sql
+
+
+def test_build_athlete_sql_plan_for_player_registrations_contains_expected_rules() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_athlete_sql_plan(
+        config,
+        context,
+        target_table="player_registrations",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.player_registrations",
+        silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+    )
+
+    assert "REG_001" in plan.rejected_sql
+    assert "REG_007" in plan.rejected_sql
+    assert "REG_DUPLICATE" in plan.rejected_sql
+    assert "registration_sequence" in plan.accepted_sql
+    assert "current_registration_flag" in plan.accepted_sql
+
+
+def test_build_athlete_sql_plan_for_player_assessment_history_contains_expected_rules() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_athlete_sql_plan(
+        config,
+        context,
+        target_table="player_assessment_history",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.player_assessment_history",
+        silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+    )
+
+    assert "ASSESS_001" in plan.rejected_sql
+    assert "ASSESS_006" in plan.rejected_sql
+    assert "ASSESS_DUPLICATE" in plan.rejected_sql
+    assert "assessment_confidence" in plan.accepted_sql
+    assert "assessor_source" in plan.accepted_sql
 
 
 def test_execute_single_table_sql_publishes_player_outputs(monkeypatch) -> None:
@@ -115,3 +153,65 @@ def test_execute_single_table_sql_publishes_player_outputs(monkeypatch) -> None:
     assert captured["published"][1][0].endswith(".players_exceptions")
     assert captured["quality"][0][0] == "players"
     assert any(table_fqn.endswith(".reconciliation_results") for table_fqn, _ in captured["append_tables"])
+
+
+def test_execute_single_table_sql_publishes_registration_outputs(monkeypatch) -> None:
+    config, environment, context = _config_environment_context()
+    spark = DummySpark()
+    captured = {
+        "published": [],
+        "quality": [],
+        "schema": [],
+        "append_tables": [],
+    }
+
+    scalar_values = iter([6, 0, 1])
+
+    def fake_scalar_sql_value(_spark, _query):
+        return next(scalar_values)
+
+    def fake_publish_sql_table(_spark, table_fqn, select_sql):
+        captured["published"].append((table_fqn, select_sql))
+        return 4 if table_fqn.endswith(".player_registrations") else 1
+
+    def fake_append_quality_results_for_reject_table(
+        _spark,
+        _context,
+        *,
+        target_table,
+        evaluated_row_count,
+        reject_table_fqn,
+    ):
+        captured["quality"].append((target_table, evaluated_row_count, reject_table_fqn))
+        return []
+
+    monkeypatch.setattr(execute_module, "scalar_sql_value", fake_scalar_sql_value)
+    monkeypatch.setattr(execute_module, "publish_sql_table", fake_publish_sql_table)
+    monkeypatch.setattr(
+        execute_module,
+        "append_quality_results_for_reject_table",
+        fake_append_quality_results_for_reject_table,
+    )
+    monkeypatch.setattr(
+        execute_module,
+        "append_schema_snapshot_for_table",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(execute_module, "append_records", lambda *args, **kwargs: captured["append_tables"].append(args[1:]))
+    monkeypatch.setattr(execute_module, "append_warning_message", lambda *args, **kwargs: None)
+
+    metrics = execute_module._execute_single_table_sql(
+        spark,
+        config,
+        environment,
+        context,
+        table_config=config.data["silver_tables"]["player_registrations"],
+    )
+
+    assert metrics["source_row_count"] == 6
+    assert metrics["exact_duplicate_count"] == 0
+    assert metrics["business_key_duplicate_count"] == 1
+    assert metrics["accepted_row_count"] == 4
+    assert metrics["rejected_row_count"] == 1
+    assert metrics["warning_count"] == 0
+    assert captured["quality"][0][0] == "player_registrations"
