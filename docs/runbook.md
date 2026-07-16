@@ -37,6 +37,25 @@
 
 The instructor Raw-to-Bronze pipeline is operated as a Databricks Workflow with one user-supplied parameter, `release_type`.
 
+Bundle commands:
+
+```bash
+databricks bundle validate -t dev
+databricks bundle deploy -t dev
+databricks bundle run -t dev napa_raw_to_bronze --params release_type=5k
+databricks bundle run -t dev napa_raw_to_bronze --params release_type=50k
+databricks bundle run -t dev napa_raw_to_bronze --params release_type=250k
+```
+
+UI run path:
+
+1. Deploy the bundle with `databricks bundle deploy -t dev`.
+2. Open **Workflows** in the Databricks workspace UI.
+3. Open `NAPA Raw to Bronze`.
+4. Click **Run now**.
+5. Enter `release_type` as `5k`, `50k`, or `250k`.
+6. Start the run.
+
 Use [`raw_to_bronze_workflow.md`](raw_to_bronze_workflow.md) for deployment, execution, failure inspection, and rerun procedures.
 
 ## Review Outputs

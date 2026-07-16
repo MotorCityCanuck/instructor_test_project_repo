@@ -1,0 +1,24 @@
+bundle:
+  name: instructor_test_project_repo
+
+include:
+  - config/raw_to_bronze/workflows/*.yml
+
+sync:
+  include:
+    - config/raw_to_bronze/**
+    - notebooks/**
+    - src/**
+    - requirements.txt
+
+variables:
+  script_root:
+    description: Workspace path for the bundled Databricks Python script tasks.
+    default: ${workspace.file_path}/notebooks
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      host: https://dbc-c8d0ab5a-2296.cloud.databricks.com

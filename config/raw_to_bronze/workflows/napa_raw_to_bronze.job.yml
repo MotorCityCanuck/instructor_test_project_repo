@@ -6,6 +6,13 @@ resources:
         Databricks job template for the instructor Raw-to-Bronze pipeline.
         Start the job with release_type set to one of: 5k, 50k, 250k.
       max_concurrent_runs: 1
+      performance_target: STANDARD
+      environments:
+        - environment_key: napa_serverless_python
+          spec:
+            environment_version: "4"
+            dependencies:
+              - pyyaml
       parameters:
         - name: release_type
           default: 5k
@@ -14,7 +21,7 @@ resources:
         owner: instructor
       tasks:
         - task_key: resolve_configuration
-          existing_cluster_id: ${var.existing_cluster_id}
+          environment_key: napa_serverless_python
           timeout_seconds: 900
           spark_python_task:
             python_file: ${var.script_root}/01_resolve_configuration.py
@@ -23,7 +30,7 @@ resources:
               - "{{job.parameters.release_type}}"
 
         - task_key: validate_release_environment
-          existing_cluster_id: ${var.existing_cluster_id}
+          environment_key: napa_serverless_python
           timeout_seconds: 1200
           depends_on:
             - task_key: resolve_configuration
@@ -36,7 +43,7 @@ resources:
               - "{{tasks.resolve_configuration.values.run_id}}"
 
         - task_key: validate_raw_inventory
-          existing_cluster_id: ${var.existing_cluster_id}
+          environment_key: napa_serverless_python
           timeout_seconds: 1800
           depends_on:
             - task_key: validate_release_environment
@@ -49,7 +56,7 @@ resources:
               - "{{tasks.resolve_configuration.values.run_id}}"
 
         - task_key: build_bronze_tables
-          existing_cluster_id: ${var.existing_cluster_id}
+          environment_key: napa_serverless_python
           timeout_seconds: 7200
           depends_on:
             - task_key: validate_raw_inventory
@@ -62,7 +69,7 @@ resources:
               - "{{tasks.resolve_configuration.values.run_id}}"
 
         - task_key: validate_bronze_reconciliation
-          existing_cluster_id: ${var.existing_cluster_id}
+          environment_key: napa_serverless_python
           timeout_seconds: 3600
           depends_on:
             - task_key: build_bronze_tables
@@ -75,7 +82,7 @@ resources:
               - "{{tasks.resolve_configuration.values.run_id}}"
 
         - task_key: finalize_pipeline_run
-          existing_cluster_id: ${var.existing_cluster_id}
+          environment_key: napa_serverless_python
           timeout_seconds: 1200
           run_if: ALL_DONE
           depends_on:

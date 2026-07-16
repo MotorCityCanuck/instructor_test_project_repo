@@ -79,40 +79,63 @@ The `validate_release_environment` task creates the operations tables if needed 
 
 ## Deployment
 
-The workflow YAML is written in Databricks Asset Bundle resource format. Add or include it from the workspace bundle configuration, then deploy with the Databricks CLI.
+The workflow YAML is written in Databricks Asset Bundle resource format. The repository root now contains `databricks.yml`, which includes `config/raw_to_bronze/workflows/*.yml` and syncs the pipeline source files required by the job tasks.
 
 Required bundle variables:
 
 ```text
-script_root          Workspace path to the synced repository notebooks directory
-existing_cluster_id  Cluster ID that can run the Python script tasks
+script_root  Workspace path to the synced repository notebooks directory
 ```
 
-Example commands:
+For Databricks Free Edition, the deployed job uses serverless compute. The workflow defines:
+
+```text
+performance_target = STANDARD
+environment_key    = napa_serverless_python
+environment_version = 4
+```
+
+Each Python script task references that job-level serverless environment with `environment_key`.
+
+Exact CLI commands:
 
 ```bash
-databricks bundle validate
-databricks bundle deploy
+databricks bundle validate -t dev
+databricks bundle deploy -t dev
 ```
 
-If this repository is not yet wrapped by a root `databricks.yml`, create one that includes `config/raw_to_bronze/workflows/napa_raw_to_bronze.job.yml` and defines the two variables above. In the Databricks UI, use the same task order, script paths, parameters, and dynamic value references from the workflow YAML.
+The root bundle sync includes:
+
+- `notebooks/**`
+- `src/**`
+- `config/raw_to_bronze/**`
+- `requirements.txt`
+
+That keeps the Databricks Python script tasks deployable without any local Windows paths.
 
 ## Running the Workflow
 
 From the Databricks UI:
 
-1. Open Jobs & Pipelines.
-2. Open `NAPA Raw to Bronze`.
-3. Click Run now.
-4. Set `release_type` to one of `5k`, `50k`, or `250k`.
-5. Start the run.
+1. Run `databricks bundle deploy -t dev`.
+2. In the Databricks workspace UI, open **Workflows**.
+3. Open the deployed `NAPA Raw to Bronze` job.
+4. Click **Run now**.
+5. Set `release_type` to one of `5k`, `50k`, or `250k`.
+6. Start the run.
+
+UI notes:
+
+- `release_type` is a Databricks job parameter.
+- The workflow runs the bundled Python script tasks, not notebooks.
+- Redeploying the bundle updates the same job definition in the UI.
 
 CLI examples after deployment:
 
 ```bash
-databricks jobs run-now --job-id <job-id> --job-parameters '{"release_type":"5k"}'
-databricks jobs run-now --job-id <job-id> --job-parameters '{"release_type":"50k"}'
-databricks jobs run-now --job-id <job-id> --job-parameters '{"release_type":"250k"}'
+databricks bundle run -t dev napa_raw_to_bronze --params release_type=5k
+databricks bundle run -t dev napa_raw_to_bronze --params release_type=50k
+databricks bundle run -t dev napa_raw_to_bronze --params release_type=250k
 ```
 
 ## Inspecting a Failed Run
