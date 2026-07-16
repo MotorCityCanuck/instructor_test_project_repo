@@ -1,48 +1,22 @@
-"""Databricks task notebook for validating Raw-to-Bronze release environment."""
+"""Validate or create the Raw-to-Bronze release environment."""
 
-# Databricks notebook source
+from __future__ import annotations
 
-# COMMAND ----------
-# Title: 02 Validate Release Environment
-# Purpose:
-# Resolve Raw-to-Bronze configuration for one release and validate or create the
-# required catalog, schemas, and raw volume in Databricks.
+import argparse
 
-NOTEBOOK_VERSION = "2026.07.15.1"
+from _bootstrap_napa_pipeline import bootstrap_napa_pipeline_imports
 
-print(f"Notebook version: {NOTEBOOK_VERSION}")
-
-from pathlib import Path
-
-
-def _load_bootstrap_helper() -> None:
-    """Load the shared notebook bootstrap helper."""
-    search_roots = []
-
-    if "__file__" in globals():
-        search_roots.append(Path(__file__).resolve().parent)
-
-    current_dir = Path.cwd().resolve()
-    search_roots.extend([current_dir, *current_dir.parents])
-
-    for root in search_roots:
-        for candidate in (
-            root / "_bootstrap_napa_pipeline.py",
-            root / "notebooks" / "_bootstrap_napa_pipeline.py",
-        ):
-            if candidate.exists():
-                exec(candidate.read_text(), globals())
-                return
-
-    raise FileNotFoundError(
-        "Could not locate '_bootstrap_napa_pipeline.py'. "
-        "Run this notebook from the repository workspace."
-    )
-
-
-_load_bootstrap_helper()
 bootstrap_napa_pipeline_imports()
 
+from napa_pipeline.raw_to_bronze.cli import (
+    add_config_path_argument,
+    add_release_type_argument,
+    add_run_id_argument,
+    get_databricks_global,
+    normalize_config_path,
+    release_type_to_release_name,
+    set_task_value,
+)
 from napa_pipeline.raw_to_bronze.config import load_raw_to_bronze_config
 from napa_pipeline.raw_to_bronze.environment import ensure_release_environment
 from napa_pipeline.raw_to_bronze.operations import (
@@ -56,102 +30,86 @@ from napa_pipeline.raw_to_bronze.operations import (
     utc_now,
 )
 
-# COMMAND ----------
-ALLOWED_RELEASES = ["napa_5k", "napa_50k", "napa_250k"]
 
-dbutils.widgets.dropdown("release_name", "napa_5k", ["napa_5k", "napa_50k", "napa_250k"])
-dbutils.widgets.text("dataset_release", "")
-dbutils.widgets.text("config_root", "")
-dbutils.widgets.dropdown("create_missing", "true", ["true", "false"])
-dbutils.widgets.text("pipeline_run_id", "")
+SCRIPT_VERSION = "2026.07.16.1"
 
-dataset_release = dbutils.widgets.get("dataset_release").strip()
-release_name = dataset_release or dbutils.widgets.get("release_name").strip()
-config_root = dbutils.widgets.get("config_root").strip() or None
-create_missing = dbutils.widgets.get("create_missing").strip().lower() == "true"
-pipeline_run_id = dbutils.widgets.get("pipeline_run_id").strip() or None
 
-if release_name not in ALLOWED_RELEASES:
-    raise ValueError(
-        "dataset_release or release_name must be one of: "
-        f"{', '.join(ALLOWED_RELEASES)}."
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments for environment validation."""
+    parser = argparse.ArgumentParser(
+        description="Validate the Raw-to-Bronze Databricks environment."
     )
+    add_release_type_argument(parser)
+    add_run_id_argument(parser)
+    add_config_path_argument(parser)
+    return parser.parse_args()
 
-pipeline_started_ts = utc_now()
-config = load_raw_to_bronze_config(release_name, config_root=config_root)
-status = ensure_release_environment(spark, config, create_missing=create_missing)
-context = create_pipeline_context(
-    config,
-    status.release_environment,
-    pipeline_run_id=pipeline_run_id,
-)
-ensure_operations_tables(spark, context)
-append_records(
-    spark,
-    f"{context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}",
-    [build_pipeline_run_start_record(context, started_ts=pipeline_started_ts)],
-)
-append_records(
-    spark,
-    f"{context.operations_schema_fqn}.{RUN_MESSAGES_TABLE}",
-    [
-        build_run_message_record(
-            context,
-            message_level="INFO",
-            message_code="CONFIG_LOADED",
-            message_text=(
-                f"Resolved configuration hash {config.config_hash} for release "
-                f"{config.release_name}."
-            ),
-        ),
-        build_run_message_record(
-            context,
-            message_level="INFO",
-            message_code="ENVIRONMENT_VALIDATED",
-            message_text="Release environment validation completed successfully.",
-        )
-    ],
-)
 
-# COMMAND ----------
-print(f"Release name: {config.release_name}")
-print(f"Dataset release parameter: {dataset_release or '<not provided>'}")
-print(f"Catalog: {status.release_environment.catalog}")
-print(f"Raw schema: {status.release_environment.raw_schema}")
-print(f"Bronze schema: {status.release_environment.bronze_schema}")
-print(f"Operations schema: {status.release_environment.operations_schema}")
-print(f"Raw volume: {status.release_environment.raw_volume_fqn}")
-print(f"Raw volume path: {status.release_environment.raw_volume_path}")
+def main() -> None:
+    """Validate the selected release environment and create the run record."""
+    args = parse_args()
+    spark = get_databricks_global("spark")
+    dbutils = get_databricks_global("dbutils")
 
-for schema_status in status.schema_statuses:
-    state = "already existed" if schema_status.existed else "created"
-    print(f"Schema {state}: {schema_status.object_name}")
+    release_name = release_type_to_release_name(args.release_type)
+    pipeline_started_ts = utc_now()
+    config = load_raw_to_bronze_config(
+        release_name,
+        config_root=normalize_config_path(args.config_path),
+    )
+    status = ensure_release_environment(spark, config, create_missing=True)
+    environment = status.release_environment
+    context = create_pipeline_context(config, environment, pipeline_run_id=args.run_id)
 
-volume_state = "already existed" if status.volume_status.existed else "created"
-print(f"Volume {volume_state}: {status.volume_status.object_name}")
-
-try:
-    dbutils.jobs.taskValues.set(key="pipeline_run_id", value=context.pipeline_run_id)
-    dbutils.jobs.taskValues.set(key="operations_schema_fqn", value=context.operations_schema_fqn)
-except Exception:
-    pass
-
-display(
-    spark.createDataFrame(
+    ensure_operations_tables(spark, context)
+    append_records(
+        spark,
+        f"{context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}",
+        [build_pipeline_run_start_record(context, started_ts=pipeline_started_ts)],
+    )
+    append_records(
+        spark,
+        f"{context.operations_schema_fqn}.{RUN_MESSAGES_TABLE}",
         [
-            {
-                "object_type": schema_status.object_type,
-                "object_name": schema_status.object_name,
-                "existed": schema_status.existed,
-            }
-            for schema_status in status.schema_statuses
-        ]
-        + [
-            {
-                "object_type": status.volume_status.object_type,
-                "object_name": status.volume_status.object_name,
-                "existed": status.volume_status.existed,
-            }
-        ]
+            build_run_message_record(
+                context,
+                message_level="INFO",
+                message_code="CONFIG_LOADED",
+                message_text=(
+                    f"Resolved configuration hash {config.config_hash} for release "
+                    f"{config.release_name}."
+                ),
+            ),
+            build_run_message_record(
+                context,
+                message_level="INFO",
+                message_code="ENVIRONMENT_VALIDATED",
+                message_text="Release environment validation completed successfully.",
+            ),
+        ],
     )
-)
+
+    print(f"Script version: {SCRIPT_VERSION}")
+    print(f"Release type: {args.release_type}")
+    print(f"Release name: {context.release_name}")
+    print(f"Run ID: {context.pipeline_run_id}")
+    print(f"Catalog: {environment.catalog}")
+    print(f"Raw schema: {environment.raw_schema}")
+    print(f"Bronze schema: {environment.bronze_schema}")
+    print(f"Operations schema: {environment.operations_schema}")
+    print(f"Raw volume: {environment.raw_volume_fqn}")
+    print(f"Raw volume path: {environment.raw_volume_path}")
+
+    for schema_status in status.schema_statuses:
+        state = "already existed" if schema_status.existed else "created"
+        print(f"Schema {state}: {schema_status.object_name}")
+
+    volume_state = "already existed" if status.volume_status.existed else "created"
+    print(f"Volume {volume_state}: {status.volume_status.object_name}")
+
+    set_task_value(dbutils, "run_id", context.pipeline_run_id)
+    set_task_value(dbutils, "operations_schema_fqn", context.operations_schema_fqn)
+
+
+if __name__ == "__main__":
+    main()

@@ -33,6 +33,12 @@
 - Document the intended notebook execution order.
 - Record prerequisites, expected outputs, and checkpoints for each notebook.
 
+## Raw-to-Bronze Workflow
+
+The instructor Raw-to-Bronze pipeline is operated as a Databricks Workflow with one user-supplied parameter, `release_type`.
+
+Use [`raw_to_bronze_workflow.md`](raw_to_bronze_workflow.md) for deployment, execution, failure inspection, and rerun procedures.
+
 ## Review Outputs
 
 - Describe which outputs should be reviewed after each run.

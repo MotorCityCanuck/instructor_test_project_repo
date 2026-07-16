@@ -9,6 +9,7 @@ from uuid import uuid4
 from napa_pipeline.raw_to_bronze.operations import (
     PIPELINE_RUNS_TABLE,
     RECONCILIATION_RESULTS_TABLE,
+    RUN_MESSAGES_TABLE,
     TABLE_RUNS_TABLE,
     PipelineContext,
     append_records,
@@ -41,6 +42,22 @@ def summarize_pipeline_run(
     expected_source_count: int,
 ) -> PipelineRunSummary:
     """Summarize table-run and reconciliation outcomes for one pipeline run."""
+    pipeline_run_rows = [
+        row
+        for row in _collect_table_rows(
+            spark,
+            get_operations_table_fqn(context, PIPELINE_RUNS_TABLE),
+        )
+        if row.get("pipeline_run_id") == context.pipeline_run_id
+    ]
+    run_message_rows = [
+        row
+        for row in _collect_table_rows(
+            spark,
+            get_operations_table_fqn(context, RUN_MESSAGES_TABLE),
+        )
+        if row.get("pipeline_run_id") == context.pipeline_run_id
+    ]
     table_run_rows = [
         row
         for row in _collect_table_rows(
@@ -66,9 +83,9 @@ def summarize_pipeline_run(
         1 for row in reconciliation_rows if row.get("status") != "MATCHED"
     )
 
-    if not table_run_rows and not reconciliation_rows:
+    if not table_run_rows and not reconciliation_rows and not pipeline_run_rows:
         raise PipelineFinalizationError(
-            "No table_runs or reconciliation_results were found for "
+            "No pipeline_runs, table_runs, or reconciliation_results were found for "
             f"pipeline_run_id {context.pipeline_run_id}. "
             "Run this finalization task with the same pipeline_run_id used by "
             "tasks 02-05."
@@ -91,7 +108,8 @@ def summarize_pipeline_run(
             f"completed_table_runs={len(table_run_rows)}/{expected_source_count}, "
             f"failed_table_runs={failed_table_run_count}, "
             f"reconciliation_results={len(reconciliation_rows)}/{expected_source_count}, "
-            f"mismatched_reconciliations={mismatched_reconciliation_count}."
+            f"mismatched_reconciliations={mismatched_reconciliation_count}, "
+            f"run_messages={len(run_message_rows)}."
         )
     )
 

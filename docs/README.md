@@ -16,3 +16,4 @@
 | analytical_methodology.md | Explain team-designed evaluation, ranking, and recommendation methods. | Before presenting analytical outputs and after refinements. |
 | ai_usage_summary.md | Document AI-assisted work and human review evidence. | Whenever AI-assisted development materially contributes to work. |
 | runbook.md | Provide reproducible setup and execution instructions. | As setup steps or environment assumptions change. |
+| raw_to_bronze_workflow.md | Deploy, run, inspect, and rerun the Raw-to-Bronze Databricks Workflow. | When workflow task wiring, parameters, deployment, or audit behavior changes. |

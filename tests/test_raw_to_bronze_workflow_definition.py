@@ -22,7 +22,7 @@ def test_workflow_uses_single_release_parameter() -> None:
     job = definition["resources"]["jobs"]["napa_raw_to_bronze"]
 
     assert job["name"] == "NAPA Raw to Bronze"
-    assert job["parameters"] == [{"name": "dataset_release", "default": "napa_5k"}]
+    assert job["parameters"] == [{"name": "release_type", "default": "5k"}]
 
 
 def test_workflow_tasks_form_linear_raw_to_bronze_graph() -> None:
@@ -64,8 +64,37 @@ def test_all_tasks_receive_shared_dataset_release_parameter() -> None:
     tasks = definition["resources"]["jobs"]["napa_raw_to_bronze"]["tasks"]
 
     for task in tasks:
-        base_parameters = task["notebook_task"]["base_parameters"]
-        assert (
-            base_parameters["dataset_release"]
-            == "{{job.parameters.dataset_release}}"
-        )
+        parameters = task["spark_python_task"]["parameters"]
+        assert parameters[0:2] == [
+            "--release-type",
+            "{{job.parameters.release_type}}",
+        ]
+
+
+def test_workflow_uses_python_script_tasks() -> None:
+    definition = _load_workflow_definition()
+    tasks = definition["resources"]["jobs"]["napa_raw_to_bronze"]["tasks"]
+
+    expected_files = [
+        "01_resolve_configuration.py",
+        "02_validate_release_environment.py",
+        "03_validate_raw_inventory.py",
+        "04_build_bronze_tables.py",
+        "05_validate_bronze_reconciliation.py",
+        "06_finalize_pipeline_run.py",
+    ]
+
+    for task, expected_file in zip(tasks, expected_files, strict=True):
+        assert "notebook_task" not in task
+        assert task["spark_python_task"]["python_file"].endswith(expected_file)
+
+
+def test_downstream_tasks_receive_run_id_from_resolve_configuration() -> None:
+    definition = _load_workflow_definition()
+    tasks = definition["resources"]["jobs"]["napa_raw_to_bronze"]["tasks"]
+
+    for task in tasks[1:]:
+        parameters = task["spark_python_task"]["parameters"]
+        assert "--run-id" in parameters
+        run_id_index = parameters.index("--run-id") + 1
+        assert parameters[run_id_index] == "{{tasks.resolve_configuration.values.run_id}}"

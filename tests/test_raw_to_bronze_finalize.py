@@ -87,6 +87,10 @@ def _context():
 def test_summarize_pipeline_run_reports_success_when_counts_match() -> None:
     context = _context()
     tables = {
+        f"{context.operations_schema_fqn}.pipeline_runs": FakeTableData(
+            [{"pipeline_run_id": "run-123", "completed_ts": None}]
+        ),
+        f"{context.operations_schema_fqn}.run_messages": FakeTableData([]),
         f"{context.operations_schema_fqn}.table_runs": FakeTableData(
             [
                 {
@@ -119,6 +123,10 @@ def test_summarize_pipeline_run_reports_success_when_counts_match() -> None:
 def test_summarize_pipeline_run_reports_failure_when_counts_do_not_match() -> None:
     context = _context()
     tables = {
+        f"{context.operations_schema_fqn}.pipeline_runs": FakeTableData(
+            [{"pipeline_run_id": "run-123", "completed_ts": None}]
+        ),
+        f"{context.operations_schema_fqn}.run_messages": FakeTableData([]),
         f"{context.operations_schema_fqn}.table_runs": FakeTableData(
             [
                 {
@@ -144,15 +152,37 @@ def test_summarize_pipeline_run_reports_failure_when_counts_do_not_match() -> No
 def test_summarize_pipeline_run_raises_clear_error_when_run_id_has_no_records() -> None:
     context = _context()
     tables = {
+        f"{context.operations_schema_fqn}.pipeline_runs": FakeTableData([]),
+        f"{context.operations_schema_fqn}.run_messages": FakeTableData([]),
         f"{context.operations_schema_fqn}.table_runs": FakeTableData([]),
         f"{context.operations_schema_fqn}.reconciliation_results": FakeTableData([]),
     }
 
     with pytest.raises(
         PipelineFinalizationError,
-        match="No table_runs or reconciliation_results were found",
+        match="No pipeline_runs, table_runs, or reconciliation_results were found",
     ):
         summarize_pipeline_run(FakeSparkSession(tables), context, 13)
+
+
+def test_summarize_pipeline_run_marks_started_run_failed_without_table_records() -> None:
+    context = _context()
+    tables = {
+        f"{context.operations_schema_fqn}.pipeline_runs": FakeTableData(
+            [{"pipeline_run_id": "run-123", "completed_ts": None}]
+        ),
+        f"{context.operations_schema_fqn}.run_messages": FakeTableData(
+            [{"pipeline_run_id": "run-123", "message_code": "CONFIG_LOADED"}]
+        ),
+        f"{context.operations_schema_fqn}.table_runs": FakeTableData([]),
+        f"{context.operations_schema_fqn}.reconciliation_results": FakeTableData([]),
+    }
+
+    summary = summarize_pipeline_run(FakeSparkSession(tables), context, 13)
+
+    assert summary.final_status == "FAILED"
+    assert "completed_table_runs=0/13" in summary.summary_text
+    assert "run_messages=1" in summary.summary_text
 
 
 def test_finalize_pipeline_run_merges_completion_into_open_record() -> None:
@@ -183,6 +213,10 @@ def test_finalize_pipeline_run_merges_completion_into_open_record() -> None:
     summary = summarize_pipeline_run(
         FakeSparkSession(
             {
+                f"{context.operations_schema_fqn}.pipeline_runs": FakeTableData(
+                    [{"pipeline_run_id": "run-123", "completed_ts": None}]
+                ),
+                f"{context.operations_schema_fqn}.run_messages": FakeTableData([]),
                 f"{context.operations_schema_fqn}.table_runs": FakeTableData(
                     [
                         {
