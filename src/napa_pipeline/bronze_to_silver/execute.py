@@ -47,16 +47,23 @@ from napa_pipeline.bronze_to_silver.organization import (
 )
 from napa_pipeline.bronze_to_silver.publish import (
     append_quality_results_for_rejects,
+    append_quality_results_for_reject_table,
     append_schema_snapshot_for_table,
     append_warning_message,
     collect_table_rows,
     publish_records_to_table,
     publish_sql_view,
+    publish_sql_table,
+    scalar_sql_value,
 )
 from napa_pipeline.bronze_to_silver.reference import (
     SilverBuildResult,
     build_monthly_batches,
     build_regions,
+)
+from napa_pipeline.bronze_to_silver.reference_sql import (
+    build_reference_sql_plan,
+    supports_reference_sql_transform,
 )
 from napa_pipeline.bronze_to_silver.views import (
     build_vw_current_team_memberships_sql,
@@ -138,18 +145,36 @@ def execute_stage(
         )
 
         try:
-            source_rows = collect_table_rows(
-                spark,
-                get_bronze_source_table_fqn(environment, config.enabled_sources[source_name]),
-            )
-            build_result = _execute_single_table(
-                spark,
-                config,
-                environment,
-                context,
-                table_config=table_config,
-                source_rows=source_rows,
-            )
+            if supports_reference_sql_transform(str(table_config["transform"])):
+                metrics = _execute_single_table_sql(
+                    spark,
+                    config,
+                    environment,
+                    context,
+                    table_config=table_config,
+                )
+            else:
+                source_rows = collect_table_rows(
+                    spark,
+                    get_bronze_source_table_fqn(environment, config.enabled_sources[source_name]),
+                )
+                build_result = _execute_single_table(
+                    spark,
+                    config,
+                    environment,
+                    context,
+                    table_config=table_config,
+                    source_rows=source_rows,
+                )
+                metrics = {
+                    "source_row_count": len(source_rows),
+                    "exact_duplicate_count": build_result.exact_duplicate_count,
+                    "business_key_duplicate_count": build_result.business_key_duplicate_count,
+                    "accepted_row_count": len(build_result.accepted_rows),
+                    "rejected_row_count": len(build_result.rejected_rows),
+                    "warning_count": build_result.warning_count,
+                    "published_row_count": len(build_result.accepted_rows),
+                }
             end_record = build_table_run_end_record(
                 context,
                 source_table=source_table,
@@ -158,13 +183,13 @@ def execute_stage(
                 build_order=int(table_config["build_order"]),
                 started_ts=started_ts,
                 status="SUCCEEDED",
-                source_row_count=len(source_rows),
-                exact_duplicate_count=build_result.exact_duplicate_count,
-                business_key_duplicate_count=build_result.business_key_duplicate_count,
-                accepted_row_count=len(build_result.accepted_rows),
-                rejected_row_count=len(build_result.rejected_rows),
-                warning_count=build_result.warning_count,
-                published_row_count=len(build_result.accepted_rows),
+                source_row_count=int(metrics["source_row_count"]),
+                exact_duplicate_count=int(metrics["exact_duplicate_count"]),
+                business_key_duplicate_count=int(metrics["business_key_duplicate_count"]),
+                accepted_row_count=int(metrics["accepted_row_count"]),
+                rejected_row_count=int(metrics["rejected_row_count"]),
+                warning_count=int(metrics["warning_count"]),
+                published_row_count=int(metrics["published_row_count"]),
             )
         except Exception as exc:
             end_record = build_table_run_end_record(
@@ -192,6 +217,86 @@ def execute_stage(
         completed_records.append(end_record)
 
     return completed_records
+
+
+def _execute_single_table_sql(
+    spark: Any,
+    config: BronzeToSilverConfig,
+    environment: ReleaseEnvironment,
+    context: PipelineContext,
+    *,
+    table_config: dict[str, Any],
+) -> dict[str, int]:
+    target_table = str(table_config["target"])
+    source_name = str(table_config["source"])
+    source_table_fqn = get_bronze_source_table_fqn(environment, config.enabled_sources[source_name])
+    target_fqn = get_silver_target_table_fqn(environment, table_config)
+    reject_fqn = get_silver_reject_table_fqn(environment, table_config)
+
+    sql_plan = build_reference_sql_plan(
+        config,
+        context,
+        target_table=target_table,
+        source_table_fqn=source_table_fqn,
+    )
+    bronze_row_count = scalar_sql_value(spark, sql_plan.bronze_row_count_sql)
+    exact_duplicate_count = scalar_sql_value(spark, sql_plan.exact_duplicate_count_sql)
+    business_key_duplicate_count = scalar_sql_value(spark, sql_plan.business_key_duplicate_count_sql)
+    accepted_row_count = publish_sql_table(spark, target_fqn, sql_plan.accepted_sql)
+    rejected_row_count = publish_sql_table(spark, reject_fqn, sql_plan.rejected_sql)
+
+    append_records(
+        spark,
+        f"{context.operations_schema_fqn}.{RECONCILIATION_RESULTS_TABLE}",
+        [
+            build_reconciliation_record(
+                context,
+                source_table=str(config.enabled_sources[source_name]["bronze_table"]),
+                target_table=target_table,
+                bronze_row_count=bronze_row_count,
+                exact_duplicate_count=exact_duplicate_count,
+                business_key_loser_count=business_key_duplicate_count,
+                rejected_row_count=rejected_row_count,
+                accepted_row_count=accepted_row_count,
+            )
+        ],
+    )
+    quality_records = append_quality_results_for_reject_table(
+        spark,
+        context,
+        target_table=target_table,
+        evaluated_row_count=bronze_row_count,
+        reject_table_fqn=reject_fqn,
+    )
+    append_schema_snapshot_for_table(
+        spark,
+        context,
+        layer_name="silver",
+        table_name=target_table,
+        table_fqn=target_fqn,
+    )
+    warning_count = sum(
+        int(record["failed_row_count"] or 0)
+        for record in quality_records
+        if str(record["severity"]).upper() == "WARNING"
+    )
+    if warning_count:
+        append_warning_message(
+            spark,
+            context,
+            target_table=target_table,
+            message_code="TABLE_WARNING_COUNT",
+            message_text=f"{target_table} completed with {warning_count} warning findings.",
+        )
+    return {
+        "source_row_count": bronze_row_count,
+        "exact_duplicate_count": exact_duplicate_count,
+        "business_key_duplicate_count": business_key_duplicate_count,
+        "accepted_row_count": accepted_row_count,
+        "rejected_row_count": rejected_row_count,
+        "warning_count": warning_count,
+        "published_row_count": accepted_row_count,
+    }
 
 
 def run_cross_table_validation_task(
@@ -403,4 +508,3 @@ def _maybe_collect_silver_table(
     if not spark.catalog.tableExists(table_fqn):
         return []
     return collect_table_rows(spark, table_fqn)
-

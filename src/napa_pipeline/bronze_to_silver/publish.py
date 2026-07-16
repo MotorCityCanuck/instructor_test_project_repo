@@ -54,6 +54,22 @@ def publish_records_to_table(
     return len(materialized)
 
 
+def publish_sql_table(
+    spark: Any,
+    table_fqn: str,
+    select_sql: str,
+) -> int:
+    """Publish a table directly from SQL and return its row count when available."""
+    try:
+        spark.sql(f"CREATE OR REPLACE TABLE {table_fqn} USING DELTA AS {select_sql}")
+        try:
+            return int(spark.table(table_fqn).count())
+        except Exception:
+            return 0
+    except Exception as exc:
+        raise PublicationError(f"Could not publish table {table_fqn}.") from exc
+
+
 def publish_records_to_view(
     spark: Any,
     view_fqn: str,
@@ -143,6 +159,60 @@ def append_quality_results_for_rejects(
     return quality_records
 
 
+def append_quality_results_for_reject_table(
+    spark: Any,
+    context: PipelineContext,
+    *,
+    target_table: str,
+    evaluated_row_count: int,
+    reject_table_fqn: str,
+) -> list[dict[str, Any]]:
+    """Aggregate a reject table into quality-results records and append them."""
+    grouped_rows = spark.sql(
+        f"""
+SELECT
+    rule_id,
+    rule_severity,
+    COUNT(*) AS failed_row_count,
+    SLICE(SORT_ARRAY(COLLECT_LIST(CAST(source_business_key AS STRING))), 1, 10) AS sample_business_keys
+FROM {reject_table_fqn}
+GROUP BY rule_id, rule_severity
+"""
+    ).collect()
+
+    quality_records: list[dict[str, Any]] = []
+    for row in grouped_rows:
+        mapping = row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
+        failed_row_count = int(mapping["failed_row_count"])
+        failure_pct = (
+            (failed_row_count / evaluated_row_count) * 100.0
+            if evaluated_row_count
+            else None
+        )
+        quality_records.append(
+            build_quality_result_record(
+                context,
+                target_table=target_table,
+                rule_id=str(mapping["rule_id"]),
+                rule_type="rejects",
+                severity=str(mapping["rule_severity"]),
+                status="FAILED",
+                evaluated_row_count=evaluated_row_count,
+                failed_row_count=failed_row_count,
+                failure_pct=failure_pct,
+                sample_business_keys=list(mapping.get("sample_business_keys") or []),
+                evaluated_ts=utc_now(),
+            )
+        )
+
+    append_records(
+        spark,
+        f"{context.operations_schema_fqn}.{QUALITY_RESULTS_TABLE}",
+        quality_records,
+    )
+    return quality_records
+
+
 def append_schema_snapshot_for_table(
     spark: Any,
     context: PipelineContext,
@@ -205,3 +275,15 @@ def _view_exists(spark: Any, view_fqn: str) -> bool:
         return True
     except Exception:
         return False
+
+
+def scalar_sql_value(spark: Any, query: str) -> int:
+    """Run a scalar SQL query and coerce the first column to int."""
+    row = spark.sql(query).collect()[0]
+    if hasattr(row, "asDict"):
+        value = next(iter(row.asDict(recursive=True).values()))
+    elif isinstance(row, dict):
+        value = next(iter(row.values()))
+    else:
+        value = row[0]
+    return int(value)
