@@ -24,8 +24,8 @@ def _config_environment_context():
 def test_supports_competition_sql_transform_for_parent_tables_only() -> None:
     assert supports_competition_sql_transform("build_matches") is True
     assert supports_competition_sql_transform("build_match_teams") is True
-    assert supports_competition_sql_transform("build_match_team_players") is False
-    assert supports_competition_sql_transform("build_match_games") is False
+    assert supports_competition_sql_transform("build_match_team_players") is True
+    assert supports_competition_sql_transform("build_match_games") is True
 
 
 def test_build_competition_sql_plan_for_matches_contains_expected_rules() -> None:
@@ -141,3 +141,117 @@ def test_execute_single_table_sql_publishes_match_team_outputs(monkeypatch) -> N
     assert metrics["rejected_row_count"] == 1
     assert metrics["warning_count"] == 1
     assert captured["quality"][0][0] == "match_teams"
+
+
+def test_build_competition_sql_plan_for_match_team_players_contains_expected_rules() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_competition_sql_plan(
+        config,
+        context,
+        target_table="match_team_players",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.match_team_players",
+        silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+    )
+
+    assert "MATCH_TEAM_PLAYER_001" in plan.rejected_sql
+    assert "MATCH_TEAM_PLAYER_007" in plan.rejected_sql
+    assert "MATCH_TEAM_PLAYER_DUPLICATE" in plan.rejected_sql
+    assert "membership_history_warning_flag" in plan.accepted_sql
+    assert plan.warning_count_sql is not None
+
+
+def test_build_competition_sql_plan_for_match_games_contains_expected_rules() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_competition_sql_plan(
+        config,
+        context,
+        target_table="match_games",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.match_games",
+        silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+    )
+
+    assert "MATCH_GAME_001" in plan.rejected_sql
+    assert "MATCH_GAME_011" in plan.rejected_sql
+    assert "MATCH_GAME_DUPLICATE" in plan.rejected_sql
+    assert "score_margin" in plan.accepted_sql
+    assert "extended_game_flag" in plan.accepted_sql
+
+
+def test_execute_single_table_sql_publishes_match_team_player_outputs(monkeypatch) -> None:
+    config, environment, context = _config_environment_context()
+    spark = DummySpark()
+    captured = {"published": [], "quality": []}
+
+    scalar_values = iter([10, 1, 2, 2])
+
+    monkeypatch.setattr(execute_module, "scalar_sql_value", lambda *_args, **_kwargs: next(scalar_values))
+    monkeypatch.setattr(
+        execute_module,
+        "publish_sql_table",
+        lambda _spark, table_fqn, select_sql: captured["published"].append((table_fqn, select_sql)) or (6 if table_fqn.endswith(".match_team_players") else 3),
+    )
+    monkeypatch.setattr(
+        execute_module,
+        "append_quality_results_for_reject_table",
+        lambda _spark, _context, *, target_table, evaluated_row_count, reject_table_fqn: captured["quality"].append((target_table, evaluated_row_count, reject_table_fqn)) or [],
+    )
+    monkeypatch.setattr(execute_module, "append_schema_snapshot_for_table", lambda *args, **kwargs: None)
+    monkeypatch.setattr(execute_module, "append_records", lambda *args, **kwargs: None)
+    monkeypatch.setattr(execute_module, "append_warning_message", lambda *args, **kwargs: None)
+
+    metrics = execute_module._execute_single_table_sql(
+        spark,
+        config,
+        environment,
+        context,
+        table_config=config.data["silver_tables"]["match_team_players"],
+    )
+
+    assert metrics["source_row_count"] == 10
+    assert metrics["exact_duplicate_count"] == 1
+    assert metrics["business_key_duplicate_count"] == 2
+    assert metrics["accepted_row_count"] == 6
+    assert metrics["rejected_row_count"] == 3
+    assert metrics["warning_count"] == 2
+    assert captured["quality"][0][0] == "match_team_players"
+
+
+def test_execute_single_table_sql_publishes_match_game_outputs(monkeypatch) -> None:
+    config, environment, context = _config_environment_context()
+    spark = DummySpark()
+    captured = {"published": [], "quality": []}
+
+    scalar_values = iter([9, 0, 1])
+
+    monkeypatch.setattr(execute_module, "scalar_sql_value", lambda *_args, **_kwargs: next(scalar_values))
+    monkeypatch.setattr(
+        execute_module,
+        "publish_sql_table",
+        lambda _spark, table_fqn, select_sql: captured["published"].append((table_fqn, select_sql)) or (7 if table_fqn.endswith(".match_games") else 1),
+    )
+    monkeypatch.setattr(
+        execute_module,
+        "append_quality_results_for_reject_table",
+        lambda _spark, _context, *, target_table, evaluated_row_count, reject_table_fqn: captured["quality"].append((target_table, evaluated_row_count, reject_table_fqn)) or [],
+    )
+    monkeypatch.setattr(execute_module, "append_schema_snapshot_for_table", lambda *args, **kwargs: None)
+    monkeypatch.setattr(execute_module, "append_records", lambda *args, **kwargs: None)
+    monkeypatch.setattr(execute_module, "append_warning_message", lambda *args, **kwargs: None)
+
+    metrics = execute_module._execute_single_table_sql(
+        spark,
+        config,
+        environment,
+        context,
+        table_config=config.data["silver_tables"]["match_games"],
+    )
+
+    assert metrics["source_row_count"] == 9
+    assert metrics["exact_duplicate_count"] == 0
+    assert metrics["business_key_duplicate_count"] == 1
+    assert metrics["accepted_row_count"] == 7
+    assert metrics["rejected_row_count"] == 1
+    assert metrics["warning_count"] == 0
+    assert captured["quality"][0][0] == "match_games"

@@ -88,8 +88,7 @@ This workflow resource and its script entrypoints now perform actual stage execu
 
 One important constraint remains:
 
-- the reference, athlete, organization/partnership, `matches`, and `match_teams` stage builds now publish through Spark SQL;
-- `match_team_players` and `match_games` still reuse the existing Python builders and still materialize per-table row sets on the driver before publication;
+- the reference, athlete, organization/partnership, and competition stage builds now publish through Spark SQL;
 - cross-table validation and convenience-view publication run through Spark SQL against published Silver tables, so those later workflow tasks no longer collect full Silver row sets back to the driver.
 
-That means the workflow is now execution-capable, but it does **not yet** satisfy the spec's final large-release performance bar that forbids driver-side collection for the 250K acceptance run. Treat the current implementation as functionally wired and locally testable, not as the final performance-complete Silver runtime.
+That means the workflow is now execution-capable and the Bronze-to-Silver stage-build path no longer depends on per-table Python row materialization for the configured Silver tables. Treat the current implementation as functionally wired and locally testable; deployment and workspace-scale validation still need to be run in Databricks.
