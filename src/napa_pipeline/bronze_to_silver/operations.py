@@ -73,7 +73,13 @@ def append_records(spark: Any, table_fqn: str, records: list[dict[str, Any]]) ->
     if not records:
         return
     table_schema = spark.table(table_fqn).schema
-    spark.createDataFrame(records, schema=table_schema).write.format("delta").mode(
+    materialized_records = records
+    if hasattr(table_schema, "fields"):
+        materialized_records = [
+            _normalize_record_for_schema(table_fqn, table_schema, record)
+            for record in records
+        ]
+    spark.createDataFrame(materialized_records, schema=table_schema).write.format("delta").mode(
         "append"
     ).saveAsTable(table_fqn)
 
@@ -448,3 +454,21 @@ def calculate_schema_hash(schema_fields: list[dict[str, Any]]) -> str:
         for field in schema_fields
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _normalize_record_for_schema(
+    table_fqn: str,
+    table_schema: Any,
+    record: dict[str, Any],
+) -> dict[str, Any]:
+    """Align one record to the live table schema and fail clearly on missing required fields."""
+    normalized: dict[str, Any] = {}
+    for field in table_schema.fields:
+        value = record.get(field.name)
+        if value is None and not field.nullable:
+            raise ValueError(
+                f"Cannot append to {table_fqn}: required field '{field.name}' is null or missing. "
+                f"Record keys: {sorted(record.keys())}"
+            )
+        normalized[field.name] = value
+    return normalized

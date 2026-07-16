@@ -24,6 +24,7 @@ from napa_pipeline.bronze_to_silver.operations import (
     create_pipeline_context,
     ensure_operations_tables,
 )
+import pytest
 
 
 class FakeSparkSession:
@@ -73,6 +74,17 @@ class FakeWriteDataFrame:
 
     def __init__(self):
         self.write = FakeWriteBuilder()
+
+
+class FakeField:
+    def __init__(self, name: str, nullable: bool):
+        self.name = name
+        self.nullable = nullable
+
+
+class FakeSchema:
+    def __init__(self, fields):
+        self.fields = fields
 
 
 def _context():
@@ -246,3 +258,34 @@ def test_append_records_uses_existing_table_schema() -> None:
     assert spark.table_requests == ["workspace.instructor_ops.run_messages"]
     assert spark.created_records == records
     assert spark.created_schema == "schema-from-table"
+
+
+def test_append_records_raises_clear_error_for_missing_required_field() -> None:
+    class StrictFakeSparkSession(FakeSparkSession):
+        def table(self, table_name: str):
+            self.table_requests.append(table_name)
+            return type(
+                "FakeTable",
+                (),
+                {
+                    "schema": FakeSchema(
+                        [
+                            FakeField("pipeline_run_id", False),
+                            FakeField("release_name", False),
+                            FakeField("target_table", False),
+                        ]
+                    )
+                },
+            )()
+
+    spark = StrictFakeSparkSession()
+    records = [
+        {
+            "pipeline_run_id": "run-123",
+            "release_name": None,
+            "target_table": "players",
+        }
+    ]
+
+    with pytest.raises(ValueError, match="required field 'release_name' is null or missing"):
+        append_records(spark, "workspace.instructor_ops.run_messages", records)
