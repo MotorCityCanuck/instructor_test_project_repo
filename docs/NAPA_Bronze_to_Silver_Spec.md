@@ -5,7 +5,7 @@
 **Document Version:** 1.0  
 **Status:** Instructor Reference Implementation  
 **Audience:** Instructor, Solution Architect, Data Engineering Lead, AI Coding Assistant (Codex)  
-**Platform:** Databricks Free Edition, Unity Catalog, Delta Lake, PySpark  
+**Platform:** Databricks Free Edition (serverless compute only), Unity Catalog, Delta Lake, PySpark  
 **Pipeline Type:** Configuration-Driven Full Refresh
 
 ---
@@ -93,6 +93,8 @@
 This document defines the engineering specification for constructing the Silver layer of the NAPA Olympic Analytics Platform.
 
 It is intended to serve as the authoritative technical design for the instructor reference implementation. The specification describes the required architecture, transformation standards, data quality framework, configuration model, and table-level design that collectively transform the Bronze layer into a trusted enterprise data foundation.
+
+Because the target workspace is Databricks Free Edition, the orchestration design in this document assumes serverless compute only. Workflow tasks must be implemented as serverless job tasks rather than cluster-based tasks.
 
 This document is **not** intended to describe analytical models, feature engineering, or Olympic roster selection logic. Those capabilities belong exclusively within the Gold layer.
 
@@ -3196,6 +3198,8 @@ The Databricks Workflow controls:
 - run history;
 - manual or scheduled triggering.
 
+For Databricks Free Edition, this Workflow must run on serverless compute only. The implementation must not require `existing_cluster_id`, job clusters, or any other classic-compute configuration.
+
 The configuration files control:
 
 - active release;
@@ -3232,6 +3236,8 @@ team_prefix
 config_root
 pipeline_version
 ```
+
+For Python script tasks on Databricks Free Edition, each task should reference a job-level serverless environment definition rather than a cluster definition.
 
 ## 62.3 Recommended Workflow Tasks
 
@@ -3799,7 +3805,7 @@ Although the dataset is synthetic, apply professional controls:
 - all thirteen Parquet files uploaded for the selected release;
 - Bronze tables created and validated;
 - YAML files committed;
-- Workflow configured;
+- Workflow configured for serverless compute only;
 - reusable Python modules import successfully.
 
 ## 69.2 Run a Single Release
@@ -3847,6 +3853,7 @@ The Bronze-to-Silver reference implementation is complete when all of the follow
 
 - one shared codebase processes all three releases;
 - one reusable Workflow definition is used;
+- the Workflow is deployable on Databricks Free Edition serverless compute without cluster IDs or job-cluster settings;
 - release selection is parameterized;
 - separate Silver and reject schemas exist for each release;
 - one shared operations schema captures all runs;
@@ -3972,6 +3979,8 @@ napa_250k
 ```
 
 Do not build a separate maintained code branch or separate transformation implementation for each release.
+
+Assume Databricks Free Edition is serverless-only when defining the Workflow or bundle. Do not propose classic compute, all-purpose clusters, or job-cluster-based execution for this repository.
 
 ## 71.5 Prohibited Implementation
 

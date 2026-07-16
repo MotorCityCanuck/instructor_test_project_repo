@@ -4,7 +4,7 @@
 **Document Version:** 1.0  
 **Status:** Instructor Reference Implementation  
 **Audience:** Instructor, Data Engineering Lead, Solution Architect, AI Coding Assistant  
-**Platform:** Databricks Free Edition, Unity Catalog, Delta Lake, PySpark  
+**Platform:** Databricks Free Edition (serverless compute only), Unity Catalog, Delta Lake, PySpark  
 **Pipeline Type:** Configuration-Driven Full Refresh  
 **Release Instances:** `napa_5k`, `napa_50k`, `napa_250k`
 
@@ -75,6 +75,8 @@ All three environments shall use:
 The Raw-to-Bronze pipeline shall be deterministic, idempotent, full-refresh, and configuration-driven.
 
 The pipeline shall preserve source data as delivered while adding operational metadata and converting each Parquet file into a managed Delta table.
+
+Because Databricks Free Edition supports serverless compute only, the workflow and bundle design for this repository shall use serverless job-task configuration. The implementation shall not depend on existing clusters, job clusters, or cluster IDs.
 
 ---
 
@@ -859,6 +861,8 @@ A source table shall not be published if its Raw source fails validation.
 ---
 
 # 15. Databricks Workflow Design
+
+For Databricks Free Edition, the Workflow must run on serverless compute only. Task definitions shall not rely on `existing_cluster_id`, job clusters, or any other classic-compute-only setting.
 
 ## 15.1 Workflow Name
 
@@ -1896,6 +1900,8 @@ The Raw-to-Bronze implementation is complete when:
 Act as a Senior Databricks Data Engineer.
 
 Implement the NAPA Raw-to-Bronze architecture described in this specification using Databricks-compatible PySpark, Delta Lake, Unity Catalog, YAML configuration, and Databricks Workflows.
+
+Assume Databricks Free Edition is serverless-only when defining the Workflow or bundle. Do not propose classic compute or cluster-based task execution for this repository.
 
 The implementation is an instructor reference build. It must be deterministic, configuration-driven, full-refresh, testable, and maintainable.
 

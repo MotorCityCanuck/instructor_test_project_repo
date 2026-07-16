@@ -3,7 +3,7 @@
 **Purpose:** This document converts `docs/NAPA_Raw_to_Bronze_Spec.md` into a staged construction plan for rebuilding the Raw-to-Bronze Databricks pipeline from scratch using the defined architecture.
 
 **Source specification:** `docs/NAPA_Raw_to_Bronze_Spec.md`  
-**Target platform:** Databricks Free Edition, Unity Catalog, Delta Lake, PySpark  
+**Target platform:** Databricks Free Edition (serverless compute only), Unity Catalog, Delta Lake, PySpark  
 **Pipeline mode:** Configuration-driven full refresh  
 **Primary output:** Release-specific Bronze Delta tables, source metadata, schema snapshots, reconciliation evidence, and operations records
 
@@ -22,6 +22,8 @@ Because development is restarting from scratch, the new implementation should tr
 ## 2. Target Architecture
 
 The pipeline will create and operate three separately materialized release instances with one shared codebase and one shared Databricks pipeline workflow.
+
+Because the target workspace is Databricks Free Edition, the workflow must be designed for serverless compute only. Do not plan around existing clusters, job clusters, or cluster IDs.
 
 | Release | Raw Schema | Raw Volume | Bronze Schema |
 |---|---|---|---|
@@ -301,6 +303,7 @@ Build the pipeline in stages so each stage can be reviewed and tested before mov
 - Pass `release_name` from the job parameter into the configuration resolver.
 - Use task values, run parameters, or operations records to pass `pipeline_run_id`, resolved config path, and configuration hash between tasks.
 - Configure task dependencies so Bronze build cannot run before environment and Raw inventory validation.
+- Configure the workflow as serverless job tasks because Databricks Free Edition does not support classic compute.
 - Configure retries only for transient infrastructure failures.
 - Ensure deterministic data or schema failures are not retried as if they were transient.
 - Store the workflow definition in source control if export as YAML, JSON, or bundle configuration is available.
@@ -430,7 +433,7 @@ Build the pipeline in stages so each stage can be reviewed and tested before mov
 | Unexpected files may appear in Raw Volumes | Fail by default unless instructor changes policy through configuration |
 | Full-refresh overwrite can replace valid data if staging is skipped | Use staging and publish final tables only after validation |
 | Large releases may expose driver-side processing | Avoid pandas, full `collect()`, and full-data driver operations |
-| Workflow definition may be manual in Free Edition | Store enough workflow definition or runbook detail to recreate the pipeline reliably |
+| Free Edition is serverless-only | Store the workflow as bundle or declarative source and avoid any dependency on cluster IDs or classic compute settings |
 
 ---
 

@@ -3,7 +3,7 @@
 **Purpose:** This document converts `docs/NAPA_Bronze_to_Silver_Spec.md` into a staged construction plan for building the Databricks Bronze-to-Silver pipeline. It is intended for instructor reference implementation planning and does not implement analytical Gold-layer decisions.
 
 **Source specification:** `docs/NAPA_Bronze_to_Silver_Spec.md`  
-**Target platform:** Databricks Free Edition, Unity Catalog, Delta Lake, PySpark  
+**Target platform:** Databricks Free Edition (serverless compute only), Unity Catalog, Delta Lake, PySpark  
 **Pipeline mode:** Configuration-driven full refresh  
 **Primary output:** Validated Silver Delta tables, rejects, operational metrics, and approved Silver convenience views
 
@@ -14,6 +14,8 @@
 The Silver pipeline will standardize, validate, reconcile, and publish trusted business entities from Bronze Delta tables. It will not calculate player rankings, chemistry, fatigue, roster recommendations, model features, dashboards, explainability outputs, or other Gold-layer products.
 
 The plan assumes the Bronze layer already contains one Delta table per delivered Parquet source file. The plan also assumes the existing repo is a scaffold and will need new configuration files, reusable PySpark modules, Databricks workflow notebooks, tests, and operational table definitions before the Silver implementation is complete.
+
+Because the target workspace is Databricks Free Edition, the workflow plan must assume serverless compute only. Do not plan around existing clusters, job clusters, or cluster IDs.
 
 ---
 
@@ -294,6 +296,7 @@ The Silver implementation should be deployed as a Databricks job/workflow-style 
 - Use task dependencies to enforce the spec's build order instead of relying on manual notebook execution.
 - Use task values, run parameters, or a persisted operations record to pass `pipeline_run_id`, resolved config location, and configuration hash between tasks.
 - Assign deterministic task names that match the spec and operations records.
+- Configure the Workflow as serverless job tasks compatible with Databricks Free Edition.
 - Configure retries only for transient infrastructure failures, not deterministic quality or source-contract failures.
 - Ensure the final summary task records success or failure status in operations tables.
 - Store the pipeline/workflow definition in source control if the Databricks environment supports export as YAML, JSON, or another declarative format.

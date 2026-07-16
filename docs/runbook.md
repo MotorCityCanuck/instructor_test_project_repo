@@ -26,7 +26,8 @@
 ## Databricks Setup Notes
 
 - Record workspace assumptions, catalog/schema setup, and storage decisions.
-- Note any differences between Databricks Free Edition and other environments.
+- Databricks Free Edition is serverless-only. Do not document or depend on existing clusters, job clusters, or cluster IDs for this repository's workflows.
+- Note any other differences between Databricks Free Edition and other environments.
 
 ## Run Notebook Sequence
 
