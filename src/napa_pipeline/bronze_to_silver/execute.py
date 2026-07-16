@@ -256,6 +256,7 @@ def _execute_single_table_sql(
             context,
             target_table=target_table,
             source_table_fqn=source_table_fqn,
+            source_columns=_get_table_column_names(spark, source_table_fqn),
         )
     elif supports_athlete_sql_transform(str(table_config["transform"])):
         sql_plan = build_athlete_sql_plan(
@@ -480,6 +481,12 @@ def _execute_single_table(
             message_text=f"{target_table} completed with {build_result.warning_count} warning findings.",
         )
     return build_result
+
+
+def _get_table_column_names(spark: Any, table_fqn: str) -> set[str] | None:
+    if not hasattr(spark, "table"):
+        return None
+    return {str(field.name) for field in spark.table(table_fqn).schema.fields}
 
 
 def _resolve_builder_kwargs(

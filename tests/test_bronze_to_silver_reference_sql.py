@@ -47,6 +47,31 @@ def test_build_reference_sql_plan_for_monthly_batches_contains_expected_rules() 
     assert "CREATE OR REPLACE" not in plan.accepted_sql
 
 
+def test_build_reference_sql_plan_for_monthly_batches_uses_actual_bronze_columns() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_reference_sql_plan(
+        config,
+        context,
+        target_table="monthly_batches",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.monthly_batches",
+        source_columns={"id", "batch_month", "batch_sequence", "batch_type", "_ingested_ts"},
+    )
+    combined_sql = "\n".join(
+        [
+            plan.accepted_sql,
+            plan.rejected_sql,
+            plan.exact_duplicate_count_sql,
+            plan.business_key_duplicate_count_sql,
+        ]
+    )
+
+    assert "CAST(batch_month AS STRING)" in combined_sql
+    assert "release_date" not in combined_sql
+    assert "COALESCE(batch_date" not in combined_sql
+    assert "COALESCE(batch_status" not in combined_sql
+
+
 def test_build_reference_sql_plan_for_regions_contains_country_normalization() -> None:
     config, environment, context = _config_environment_context()
 

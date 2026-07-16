@@ -31,19 +31,27 @@ def build_reference_sql_plan(
     *,
     target_table: str,
     source_table_fqn: str,
+    source_columns: set[str] | None = None,
 ) -> SqlReferenceBuildPlan:
     """Return the SQL execution plan for one supported reference table."""
+    normalized_columns = _normalize_source_columns(source_columns)
     if target_table == "monthly_batches":
-        return _build_monthly_batches_sql_plan(context, source_table_fqn)
+        return _build_monthly_batches_sql_plan(context, source_table_fqn, normalized_columns)
     if target_table == "regions":
-        return _build_regions_sql_plan(config, context, source_table_fqn)
+        return _build_regions_sql_plan(config, context, source_table_fqn, normalized_columns)
     raise ValueError(f"No SQL reference plan is defined for target table '{target_table}'.")
 
 
 def _build_monthly_batches_sql_plan(
     context: PipelineContext,
     source_table_fqn: str,
+    source_columns: set[str] | None,
 ) -> SqlReferenceBuildPlan:
+    batch_id_expr = _source_string_expr(source_columns, ["id", "batch_id"])
+    batch_date_expr = _batch_date_raw_expr(source_columns)
+    batch_sequence_expr = _source_string_expr(source_columns, ["batch_sequence", "sequence"])
+    batch_type_expr = _source_upper_string_expr(source_columns, ["batch_type"])
+    batch_status_expr = _source_upper_string_expr(source_columns, ["batch_status", "status"])
     metadata_sql = _metadata_sql(
         context,
         source_table="monthly_batches",
@@ -56,11 +64,11 @@ def _build_monthly_batches_sql_plan(
     base_ctes = f"""
 WITH normalized_source AS (
     SELECT
-        TRIM(CAST(id AS STRING)) AS batch_id,
-        TRIM(CAST(COALESCE(batch_date, release_date, date) AS STRING)) AS batch_date_raw,
-        TRIM(CAST(COALESCE(batch_sequence, sequence) AS STRING)) AS batch_sequence_raw,
-        UPPER(NULLIF(TRIM(CAST(batch_type AS STRING)), '')) AS batch_type,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(batch_status, status) AS STRING)), '')) AS batch_status
+        {batch_id_expr} AS batch_id,
+        {batch_date_expr} AS batch_date_raw,
+        {batch_sequence_expr} AS batch_sequence_raw,
+        {batch_type_expr} AS batch_type,
+        {batch_status_expr} AS batch_status
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -267,11 +275,11 @@ WHERE duplicate_rank > 1
         exact_duplicate_count_sql=f"""
 WITH normalized_source AS (
     SELECT
-        TRIM(CAST(id AS STRING)) AS batch_id,
-        TRIM(CAST(COALESCE(batch_date, release_date, date) AS STRING)) AS batch_date_raw,
-        TRIM(CAST(COALESCE(batch_sequence, sequence) AS STRING)) AS batch_sequence_raw,
-        UPPER(NULLIF(TRIM(CAST(batch_type AS STRING)), '')) AS batch_type,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(batch_status, status) AS STRING)), '')) AS batch_status
+        {batch_id_expr} AS batch_id,
+        {batch_date_expr} AS batch_date_raw,
+        {batch_sequence_expr} AS batch_sequence_raw,
+        {batch_type_expr} AS batch_type,
+        {batch_status_expr} AS batch_status
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -289,14 +297,14 @@ SELECT
         business_key_duplicate_count_sql=f"""
 WITH valid_rows AS (
     SELECT
-        TRIM(CAST(id AS STRING)) AS batch_id,
-        CAST(TRIM(CAST(COALESCE(batch_sequence, sequence) AS STRING)) AS INT) AS batch_sequence,
-        TO_DATE(TRIM(CAST(COALESCE(batch_date, release_date, date) AS STRING))) AS batch_date,
-        UPPER(NULLIF(TRIM(CAST(batch_type AS STRING)), '')) AS batch_type,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(batch_status, status) AS STRING)), '')) AS batch_status
+        {batch_id_expr} AS batch_id,
+        CAST({batch_sequence_expr} AS INT) AS batch_sequence,
+        TO_DATE({batch_date_expr}) AS batch_date,
+        {batch_type_expr} AS batch_type,
+        {batch_status_expr} AS batch_status
     FROM {source_table_fqn}
-    WHERE TRIM(CAST(id AS STRING)) IS NOT NULL
-      AND TRIM(CAST(id AS STRING)) <> ''
+    WHERE {batch_id_expr} IS NOT NULL
+      AND {batch_id_expr} <> ''
 ),
 ranked_rows AS (
     SELECT
@@ -336,7 +344,13 @@ def _build_regions_sql_plan(
     config: BronzeToSilverConfig,
     context: PipelineContext,
     source_table_fqn: str,
+    source_columns: set[str] | None,
 ) -> SqlReferenceBuildPlan:
+    region_id_expr = _source_string_expr(source_columns, ["id", "region_id"])
+    region_name_expr = _source_nullif_string_expr(source_columns, ["region_name", "name"])
+    country_input_expr = _source_upper_string_expr(source_columns, ["country_code", "country", "country_name"])
+    province_state_expr = _source_upper_string_expr(source_columns, ["province_state", "province", "state"])
+    status_input_expr = _source_upper_string_expr(source_columns, ["active_flag", "status"])
     country_expr = _domain_case_expression(
         "country_input",
         config.data["domains"]["country_code"],
@@ -352,11 +366,11 @@ def _build_regions_sql_plan(
     base_ctes = f"""
 WITH normalized_source AS (
     SELECT
-        TRIM(CAST(id AS STRING)) AS region_id,
-        NULLIF(TRIM(CAST(COALESCE(region_name, name) AS STRING)), '') AS region_name,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(country_code, country, country_name) AS STRING)), '')) AS country_input,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(province_state, province, state) AS STRING)), '')) AS province_state,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(active_flag, status) AS STRING)), '')) AS status_input
+        {region_id_expr} AS region_id,
+        {region_name_expr} AS region_name,
+        {country_input_expr} AS country_input,
+        {province_state_expr} AS province_state,
+        {status_input_expr} AS status_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -570,11 +584,11 @@ WHERE duplicate_rank > 1
         exact_duplicate_count_sql=f"""
 WITH normalized_source AS (
     SELECT
-        TRIM(CAST(id AS STRING)) AS region_id,
-        NULLIF(TRIM(CAST(COALESCE(region_name, name) AS STRING)), '') AS region_name,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(country_code, country, country_name) AS STRING)), '')) AS country_input,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(province_state, province, state) AS STRING)), '')) AS province_state,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(active_flag, status) AS STRING)), '')) AS status_input
+        {region_id_expr} AS region_id,
+        {region_name_expr} AS region_name,
+        {country_input_expr} AS country_input,
+        {province_state_expr} AS province_state,
+        {status_input_expr} AS status_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -592,11 +606,11 @@ SELECT
         business_key_duplicate_count_sql=f"""
 WITH normalized_source AS (
     SELECT
-        TRIM(CAST(id AS STRING)) AS region_id,
-        NULLIF(TRIM(CAST(COALESCE(region_name, name) AS STRING)), '') AS region_name,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(country_code, country, country_name) AS STRING)), '')) AS country_input,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(province_state, province, state) AS STRING)), '')) AS province_state,
-        UPPER(NULLIF(TRIM(CAST(COALESCE(active_flag, status) AS STRING)), '')) AS status_input
+        {region_id_expr} AS region_id,
+        {region_name_expr} AS region_name,
+        {country_input_expr} AS country_input,
+        {province_state_expr} AS province_state,
+        {status_input_expr} AS status_input
     FROM {source_table_fqn}
 ),
 valid_rows AS (
@@ -646,6 +660,73 @@ FROM ranked_rows
 WHERE duplicate_rank > 1
 """.strip(),
     )
+
+
+def _normalize_source_columns(source_columns: set[str] | None) -> set[str] | None:
+    if source_columns is None:
+        return None
+    return {str(column).lower() for column in source_columns}
+
+
+def _has_source_column(source_columns: set[str] | None, column_name: str) -> bool:
+    return source_columns is None or column_name.lower() in source_columns
+
+
+def _first_existing_source_column(source_columns: set[str] | None, candidates: list[str]) -> str | None:
+    for candidate in candidates:
+        if _has_source_column(source_columns, candidate):
+            return candidate
+    return None
+
+
+def _source_string_expr(source_columns: set[str] | None, candidates: list[str]) -> str:
+    if source_columns is None:
+        return f"TRIM(CAST({_coalesce_source_expr(candidates)} AS STRING))"
+    source_column = _first_existing_source_column(source_columns, candidates)
+    if source_column is None:
+        return "CAST(NULL AS STRING)"
+    return f"TRIM(CAST({source_column} AS STRING))"
+
+
+def _source_nullif_string_expr(source_columns: set[str] | None, candidates: list[str]) -> str:
+    if source_columns is None:
+        return f"NULLIF(TRIM(CAST({_coalesce_source_expr(candidates)} AS STRING)), '')"
+    source_column = _first_existing_source_column(source_columns, candidates)
+    if source_column is None:
+        return "CAST(NULL AS STRING)"
+    return f"NULLIF(TRIM(CAST({source_column} AS STRING)), '')"
+
+
+def _source_upper_string_expr(source_columns: set[str] | None, candidates: list[str]) -> str:
+    if source_columns is None:
+        return f"UPPER(NULLIF(TRIM(CAST({_coalesce_source_expr(candidates)} AS STRING)), ''))"
+    source_column = _first_existing_source_column(source_columns, candidates)
+    if source_column is None:
+        return "CAST(NULL AS STRING)"
+    return f"UPPER(NULLIF(TRIM(CAST({source_column} AS STRING)), ''))"
+
+
+def _batch_date_raw_expr(source_columns: set[str] | None) -> str:
+    if source_columns is None:
+        return "TRIM(CAST(COALESCE(batch_date, release_date, date) AS STRING))"
+    date_column = _first_existing_source_column(source_columns, ["batch_date", "release_date", "date"])
+    if date_column is not None:
+        return f"TRIM(CAST({date_column} AS STRING))"
+    if _has_source_column(source_columns, "batch_month"):
+        return """
+CASE
+    WHEN TRIM(CAST(batch_month AS STRING)) RLIKE '^[0-9]{4}-[0-9]{2}$'
+        THEN concat(TRIM(CAST(batch_month AS STRING)), '-01')
+    ELSE TRIM(CAST(batch_month AS STRING))
+END
+""".strip()
+    return "CAST(NULL AS STRING)"
+
+
+def _coalesce_source_expr(candidates: list[str]) -> str:
+    if len(candidates) == 1:
+        return candidates[0]
+    return f"COALESCE({', '.join(candidates)})"
 
 
 def _metadata_sql(
