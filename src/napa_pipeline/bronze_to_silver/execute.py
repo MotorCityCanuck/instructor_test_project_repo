@@ -298,17 +298,19 @@ def _execute_single_table_sql(
         evaluated_row_count=bronze_row_count,
         reject_table_fqn=reject_fqn,
     )
+    warning_count = sum(
+        int(record["failed_row_count"] or 0)
+        for record in quality_records
+        if str(record["severity"]).upper() == "WARNING"
+    )
+    if sql_plan.warning_count_sql:
+        warning_count += scalar_sql_value(spark, sql_plan.warning_count_sql)
     append_schema_snapshot_for_table(
         spark,
         context,
         layer_name="silver",
         table_name=target_table,
         table_fqn=target_fqn,
-    )
-    warning_count = sum(
-        int(record["failed_row_count"] or 0)
-        for record in quality_records
-        if str(record["severity"]).upper() == "WARNING"
     )
     if warning_count:
         append_warning_message(

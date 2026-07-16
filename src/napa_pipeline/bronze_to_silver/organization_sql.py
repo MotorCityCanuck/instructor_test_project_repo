@@ -9,7 +9,12 @@ from napa_pipeline.bronze_to_silver.reference_sql import SqlReferenceBuildPlan, 
 
 def supports_organization_sql_transform(transform_name: str) -> bool:
     """Return whether an organization transform has a Spark SQL execution plan."""
-    return transform_name in {"build_clubs", "build_teams"}
+    return transform_name in {
+        "build_clubs",
+        "build_teams",
+        "build_club_memberships",
+        "build_team_memberships",
+    }
 
 
 def build_organization_sql_plan(
@@ -25,6 +30,10 @@ def build_organization_sql_plan(
         return _build_clubs_sql_plan(config, context, source_table_fqn, silver_schema_fqn)
     if target_table == "teams":
         return _build_teams_sql_plan(config, context, source_table_fqn, silver_schema_fqn)
+    if target_table == "club_memberships":
+        return _build_club_memberships_sql_plan(context, source_table_fqn, silver_schema_fqn)
+    if target_table == "team_memberships":
+        return _build_team_memberships_sql_plan(config, context, source_table_fqn, silver_schema_fqn)
     raise ValueError(f"No SQL organization plan is defined for target table '{target_table}'.")
 
 
@@ -664,6 +673,749 @@ SELECT COUNT(*) AS value
 FROM ranked_rows
 WHERE duplicate_rank > 1
 """.strip(),
+    )
+
+
+def _build_club_memberships_sql_plan(
+    context: PipelineContext,
+    source_table_fqn: str,
+    silver_schema_fqn: str,
+) -> SqlReferenceBuildPlan:
+    players_fqn = f"{silver_schema_fqn}.players"
+    clubs_fqn = f"{silver_schema_fqn}.clubs"
+    monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
+    metadata_sql = _metadata_sql(
+        context,
+        source_table="club_memberships",
+        record_hash_expr=(
+            "sha2(concat_ws('|', coalesce(club_membership_id, '<NULL>'), "
+            "coalesce(player_id, '<NULL>'), coalesce(club_id, '<NULL>'), "
+            "coalesce(cast(membership_start_date as string), '<NULL>'), "
+            "coalesce(cast(membership_end_date as string), '<NULL>')), 256)"
+        ),
+    )
+    base_ctes = f"""
+WITH release_context AS (
+    SELECT MAX(batch_date) AS as_of_date
+    FROM {monthly_batches_fqn}
+),
+normalized_source AS (
+    SELECT
+        NULLIF(TRIM(CAST(COALESCE(club_membership_id, id) AS STRING)), '') AS club_membership_id,
+        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
+        NULLIF(TRIM(CAST(club_id AS STRING)), '') AS club_id,
+        TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING)) AS membership_start_date_raw,
+        TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING)) AS membership_end_date_raw
+    FROM {source_table_fqn}
+),
+deduped_source AS (
+    SELECT DISTINCT * FROM normalized_source
+),
+typed_source AS (
+    SELECT
+        source.*,
+        TO_DATE(source.membership_start_date_raw) AS membership_start_date,
+        TO_DATE(source.membership_end_date_raw) AS membership_end_date
+    FROM deduped_source source
+),
+validated_source AS (
+    SELECT
+        source.*,
+        player.player_sk,
+        club.club_sk,
+        release_context.as_of_date
+    FROM typed_source source
+    CROSS JOIN release_context
+    LEFT JOIN {players_fqn} player
+        ON source.player_id = player.player_id
+    LEFT JOIN {clubs_fqn} club
+        ON source.club_id = club.club_id
+),
+invalid_rows AS (
+    SELECT
+        'club_memberships' AS source_table,
+        'club_memberships' AS target_table,
+        COALESCE(club_membership_id, '<NULL>') AS source_business_key,
+        CASE
+            WHEN club_membership_id IS NULL THEN 'MISSING_PRIMARY_KEY'
+            WHEN player_id IS NULL OR player_sk IS NULL THEN 'ORPHAN_FOREIGN_KEY'
+            WHEN club_id IS NULL OR club_sk IS NULL THEN 'ORPHAN_FOREIGN_KEY'
+            WHEN membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL THEN 'INVALID_DATE'
+            WHEN membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL THEN 'INVALID_DATE'
+            WHEN membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date THEN 'INVALID_DATE_RANGE'
+        END AS reject_reason,
+        CASE
+            WHEN club_membership_id IS NULL THEN 'CLUB_MEMBERSHIP_001'
+            WHEN player_id IS NULL OR player_sk IS NULL THEN 'CLUB_MEMBERSHIP_002'
+            WHEN club_id IS NULL OR club_sk IS NULL THEN 'CLUB_MEMBERSHIP_003'
+            WHEN membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL THEN 'CLUB_MEMBERSHIP_004'
+            WHEN membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL THEN 'CLUB_MEMBERSHIP_005'
+            WHEN membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date THEN 'CLUB_MEMBERSHIP_006'
+        END AS rule_id,
+        CASE
+            WHEN club_membership_id IS NULL THEN 'CRITICAL'
+            ELSE 'ERROR'
+        END AS rule_severity,
+        CASE
+            WHEN club_membership_id IS NULL THEN 'club_membership_id could not be resolved.'
+            WHEN player_id IS NULL OR player_sk IS NULL THEN concat('player_id ''', player_id, ''' was not found in accepted players.')
+            WHEN club_id IS NULL OR club_sk IS NULL THEN concat('club_id ''', club_id, ''' was not found in accepted clubs.')
+            WHEN membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL THEN concat('Invalid membership_start_date value ''', membership_start_date_raw, '''.')
+            WHEN membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL THEN concat('Invalid membership_end_date value ''', membership_end_date_raw, '''.')
+            WHEN membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date THEN 'membership_end_date cannot be before membership_start_date.'
+        END AS reject_reason_detail,
+        {sql_literal(context.pipeline_run_id)} AS pipeline_run_id,
+        {sql_literal(context.pipeline_run_id)} AS _pipeline_run_id,
+        {sql_literal(context.release_name)} AS _source_dataset,
+        current_timestamp() AS load_ts,
+        current_timestamp() AS _load_ts,
+        TO_JSON(
+            NAMED_STRUCT(
+                'club_membership_id', club_membership_id,
+                'player_id', player_id,
+                'club_id', club_id,
+                'membership_start_date_raw', membership_start_date_raw,
+                'membership_end_date_raw', membership_end_date_raw
+            )
+        ) AS source_record_json
+    FROM validated_source
+    WHERE club_membership_id IS NULL
+       OR player_id IS NULL
+       OR player_sk IS NULL
+       OR club_id IS NULL
+       OR club_sk IS NULL
+       OR (membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL)
+       OR (membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL)
+       OR (membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date)
+),
+valid_rows AS (
+    SELECT
+        club_membership_id,
+        player_id,
+        player_sk,
+        club_id,
+        club_sk,
+        membership_start_date,
+        membership_end_date,
+        CASE
+            WHEN membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL
+                THEN DATEDIFF(membership_end_date, membership_start_date)
+            ELSE NULL
+        END AS membership_duration_days,
+        CASE
+            WHEN COALESCE(as_of_date, membership_start_date) IS NULL THEN NULL
+            WHEN membership_start_date IS NOT NULL AND membership_start_date > COALESCE(as_of_date, membership_start_date) THEN false
+            WHEN membership_end_date IS NOT NULL AND membership_end_date < COALESCE(as_of_date, membership_start_date) THEN false
+            ELSE true
+        END AS current_membership_flag
+    FROM validated_source
+    WHERE club_membership_id IS NOT NULL
+      AND player_id IS NOT NULL
+      AND player_sk IS NOT NULL
+      AND club_id IS NOT NULL
+      AND club_sk IS NOT NULL
+      AND NOT (
+          (membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL)
+          OR (membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL)
+          OR (membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date)
+      )
+),
+ranked_rows AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY club_membership_id
+            ORDER BY
+                (
+                    CASE WHEN player_id IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN club_id IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN membership_start_date IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN membership_end_date IS NOT NULL THEN 1 ELSE 0 END
+                ) DESC,
+                sha2(
+                    concat_ws('|',
+                        coalesce(club_membership_id, '<NULL>'),
+                        coalesce(player_id, '<NULL>'),
+                        coalesce(club_id, '<NULL>'),
+                        coalesce(cast(membership_start_date as string), '<NULL>'),
+                        coalesce(cast(membership_end_date as string), '<NULL>')
+                    ),
+                    256
+                ) ASC
+        ) AS duplicate_rank
+    FROM valid_rows
+),
+accepted_rows AS (
+    SELECT
+        club_membership_id,
+        sha2(coalesce(club_membership_id, '<NULL>'), 256) AS club_membership_sk,
+        player_id,
+        player_sk,
+        club_id,
+        club_sk,
+        membership_start_date,
+        membership_end_date,
+        membership_duration_days,
+        current_membership_flag,
+        CASE
+            WHEN LAG(
+                CASE
+                    WHEN membership_end_date IS NOT NULL THEN membership_end_date
+                    ELSE DATE '9999-12-31'
+                END
+            ) OVER (
+                PARTITION BY player_id, club_id
+                ORDER BY membership_start_date ASC NULLS FIRST,
+                         membership_end_date ASC NULLS LAST,
+                         club_membership_id ASC
+            ) IS NOT NULL
+             AND membership_start_date IS NOT NULL
+             AND membership_start_date <= LAG(
+                CASE
+                    WHEN membership_end_date IS NOT NULL THEN membership_end_date
+                    ELSE DATE '9999-12-31'
+                END
+            ) OVER (
+                PARTITION BY player_id, club_id
+                ORDER BY membership_start_date ASC NULLS FIRST,
+                         membership_end_date ASC NULLS LAST,
+                         club_membership_id ASC
+            )
+                THEN true
+            ELSE false
+        END AS membership_overlap_flag
+    FROM ranked_rows
+    WHERE duplicate_rank = 1
+)
+""".strip()
+    accepted_sql = f"""
+{base_ctes}
+SELECT
+    club_membership_id,
+    club_membership_sk,
+    player_id,
+    player_sk,
+    club_id,
+    club_sk,
+    membership_start_date,
+    membership_end_date,
+    membership_duration_days,
+    current_membership_flag,
+    membership_overlap_flag,
+    {metadata_sql}
+FROM accepted_rows
+""".strip()
+    rejected_sql = f"""
+{base_ctes}
+SELECT
+    source_table,
+    target_table,
+    source_business_key,
+    reject_reason,
+    reject_reason AS reject_reason_code,
+    reject_reason_detail,
+    rule_id,
+    rule_severity,
+    pipeline_run_id,
+    _pipeline_run_id,
+    _source_dataset,
+    load_ts,
+    _load_ts,
+    source_record_json,
+    sha2(source_record_json, 256) AS _record_hash
+FROM invalid_rows
+UNION ALL
+SELECT
+    'club_memberships' AS source_table,
+    'club_memberships' AS target_table,
+    club_membership_id AS source_business_key,
+    'DUPLICATE_BUSINESS_KEY' AS reject_reason,
+    'DUPLICATE_BUSINESS_KEY' AS reject_reason_code,
+    'Duplicate business key lost deterministic tie-break.' AS reject_reason_detail,
+    'CLUB_MEMBERSHIP_DUPLICATE' AS rule_id,
+    'ERROR' AS rule_severity,
+    {sql_literal(context.pipeline_run_id)} AS pipeline_run_id,
+    {sql_literal(context.pipeline_run_id)} AS _pipeline_run_id,
+    {sql_literal(context.release_name)} AS _source_dataset,
+    current_timestamp() AS load_ts,
+    current_timestamp() AS _load_ts,
+    TO_JSON(
+        NAMED_STRUCT(
+            'club_membership_id', club_membership_id,
+            'player_id', player_id,
+            'club_id', club_id,
+            'membership_start_date', membership_start_date,
+            'membership_end_date', membership_end_date
+        )
+    ) AS source_record_json,
+    sha2(
+        TO_JSON(
+            NAMED_STRUCT(
+                'club_membership_id', club_membership_id,
+                'player_id', player_id,
+                'club_id', club_id,
+                'membership_start_date', membership_start_date,
+                'membership_end_date', membership_end_date
+            )
+        ),
+        256
+    ) AS _record_hash
+FROM ranked_rows
+WHERE duplicate_rank > 1
+""".strip()
+    return SqlReferenceBuildPlan(
+        accepted_sql=accepted_sql,
+        rejected_sql=rejected_sql,
+        bronze_row_count_sql=f"SELECT COUNT(*) AS value FROM {source_table_fqn}",
+        exact_duplicate_count_sql=_exact_duplicate_count_sql(
+            source_table_fqn,
+            [
+                "NULLIF(TRIM(CAST(COALESCE(club_membership_id, id) AS STRING)), '') AS club_membership_id",
+                "NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id",
+                "NULLIF(TRIM(CAST(club_id AS STRING)), '') AS club_id",
+                "TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING)) AS membership_start_date_raw",
+                "TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING)) AS membership_end_date_raw",
+            ],
+        ),
+        business_key_duplicate_count_sql=f"""
+WITH valid_rows AS (
+    SELECT DISTINCT
+        NULLIF(TRIM(CAST(COALESCE(club_membership_id, id) AS STRING)), '') AS club_membership_id,
+        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
+        NULLIF(TRIM(CAST(club_id AS STRING)), '') AS club_id,
+        TO_DATE(TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING))) AS membership_start_date,
+        TO_DATE(TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING))) AS membership_end_date
+    FROM {source_table_fqn} source
+    LEFT JOIN {players_fqn} player
+        ON NULLIF(TRIM(CAST(source.player_id AS STRING)), '') = player.player_id
+    LEFT JOIN {clubs_fqn} club
+        ON NULLIF(TRIM(CAST(source.club_id AS STRING)), '') = club.club_id
+    WHERE NULLIF(TRIM(CAST(COALESCE(club_membership_id, id) AS STRING)), '') IS NOT NULL
+      AND NULLIF(TRIM(CAST(source.player_id AS STRING)), '') IS NOT NULL
+      AND player.player_sk IS NOT NULL
+      AND NULLIF(TRIM(CAST(source.club_id AS STRING)), '') IS NOT NULL
+      AND club.club_sk IS NOT NULL
+),
+ranked_rows AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY club_membership_id
+            ORDER BY
+                (
+                    CASE WHEN player_id IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN club_id IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN membership_start_date IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN membership_end_date IS NOT NULL THEN 1 ELSE 0 END
+                ) DESC,
+                sha2(
+                    concat_ws('|',
+                        coalesce(club_membership_id, '<NULL>'),
+                        coalesce(player_id, '<NULL>'),
+                        coalesce(club_id, '<NULL>'),
+                        coalesce(cast(membership_start_date as string), '<NULL>'),
+                        coalesce(cast(membership_end_date as string), '<NULL>')
+                    ),
+                    256
+                ) ASC
+        ) AS duplicate_rank
+    FROM valid_rows
+)
+SELECT COUNT(*) AS value
+FROM ranked_rows
+WHERE duplicate_rank > 1
+""".strip(),
+        warning_count_sql="""
+SELECT COUNT(*) AS value
+FROM {silver_schema_fqn}.club_memberships
+WHERE membership_overlap_flag = true
+""".strip().format(silver_schema_fqn=silver_schema_fqn),
+    )
+
+
+def _build_team_memberships_sql_plan(
+    config: BronzeToSilverConfig,
+    context: PipelineContext,
+    source_table_fqn: str,
+    silver_schema_fqn: str,
+) -> SqlReferenceBuildPlan:
+    players_fqn = f"{silver_schema_fqn}.players"
+    teams_fqn = f"{silver_schema_fqn}.teams"
+    monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
+    position_expr = _domain_case_expression("position_input", config.data["domains"]["player_position"])
+    metadata_sql = _metadata_sql(
+        context,
+        source_table="team_memberships",
+        record_hash_expr=(
+            "sha2(concat_ws('|', coalesce(team_membership_id, '<NULL>'), "
+            "coalesce(team_id, '<NULL>'), coalesce(player_id, '<NULL>'), "
+            "coalesce(cast(membership_start_date as string), '<NULL>'), "
+            "coalesce(cast(membership_end_date as string), '<NULL>')), 256)"
+        ),
+    )
+    base_ctes = f"""
+WITH release_context AS (
+    SELECT MAX(batch_date) AS as_of_date
+    FROM {monthly_batches_fqn}
+),
+normalized_source AS (
+    SELECT
+        NULLIF(TRIM(CAST(COALESCE(team_membership_id, id) AS STRING)), '') AS team_membership_id,
+        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
+        NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
+        TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING)) AS membership_start_date_raw,
+        TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING)) AS membership_end_date_raw,
+        NULLIF(UPPER(TRIM(CAST(COALESCE(player_role, role) AS STRING))), '') AS player_role,
+        NULLIF(UPPER(TRIM(CAST(COALESCE(player_position, preferred_side, position) AS STRING))), '') AS position_input
+    FROM {source_table_fqn}
+),
+deduped_source AS (
+    SELECT DISTINCT * FROM normalized_source
+),
+typed_source AS (
+    SELECT
+        source.*,
+        TO_DATE(source.membership_start_date_raw) AS membership_start_date,
+        TO_DATE(source.membership_end_date_raw) AS membership_end_date,
+        {position_expr} AS player_position
+    FROM deduped_source source
+),
+validated_source AS (
+    SELECT
+        source.*,
+        player.player_sk,
+        team.team_sk,
+        release_context.as_of_date
+    FROM typed_source source
+    CROSS JOIN release_context
+    LEFT JOIN {players_fqn} player
+        ON source.player_id = player.player_id
+    LEFT JOIN {teams_fqn} team
+        ON source.team_id = team.team_id
+),
+invalid_rows AS (
+    SELECT
+        'team_memberships' AS source_table,
+        'team_memberships' AS target_table,
+        COALESCE(team_membership_id, '<NULL>') AS source_business_key,
+        CASE
+            WHEN team_membership_id IS NULL THEN 'MISSING_PRIMARY_KEY'
+            WHEN player_id IS NULL OR player_sk IS NULL THEN 'ORPHAN_FOREIGN_KEY'
+            WHEN team_id IS NULL OR team_sk IS NULL THEN 'ORPHAN_FOREIGN_KEY'
+            WHEN membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL THEN 'INVALID_DATE'
+            WHEN membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL THEN 'INVALID_DATE'
+            WHEN membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date THEN 'INVALID_DATE_RANGE'
+            WHEN position_input IS NOT NULL AND player_position IS NULL THEN 'INVALID_DOMAIN_VALUE'
+        END AS reject_reason,
+        CASE
+            WHEN team_membership_id IS NULL THEN 'TEAM_MEMBERSHIP_001'
+            WHEN player_id IS NULL OR player_sk IS NULL THEN 'TEAM_MEMBERSHIP_002'
+            WHEN team_id IS NULL OR team_sk IS NULL THEN 'TEAM_MEMBERSHIP_003'
+            WHEN membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL THEN 'TEAM_MEMBERSHIP_004'
+            WHEN membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL THEN 'TEAM_MEMBERSHIP_005'
+            WHEN membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date THEN 'TEAM_MEMBERSHIP_006'
+            WHEN position_input IS NOT NULL AND player_position IS NULL THEN 'TEAM_MEMBERSHIP_007'
+        END AS rule_id,
+        CASE
+            WHEN team_membership_id IS NULL THEN 'CRITICAL'
+            ELSE 'ERROR'
+        END AS rule_severity,
+        CASE
+            WHEN team_membership_id IS NULL THEN 'team_membership_id could not be resolved.'
+            WHEN player_id IS NULL OR player_sk IS NULL THEN concat('player_id ''', player_id, ''' was not found in accepted players.')
+            WHEN team_id IS NULL OR team_sk IS NULL THEN concat('team_id ''', team_id, ''' was not found in accepted teams.')
+            WHEN membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL THEN concat('Invalid membership_start_date value ''', membership_start_date_raw, '''.')
+            WHEN membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL THEN concat('Invalid membership_end_date value ''', membership_end_date_raw, '''.')
+            WHEN membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date THEN 'membership_end_date cannot be before membership_start_date.'
+            WHEN position_input IS NOT NULL AND player_position IS NULL THEN concat('Invalid player_position value ''', position_input, '''.')
+        END AS reject_reason_detail,
+        {sql_literal(context.pipeline_run_id)} AS pipeline_run_id,
+        {sql_literal(context.pipeline_run_id)} AS _pipeline_run_id,
+        {sql_literal(context.release_name)} AS _source_dataset,
+        current_timestamp() AS load_ts,
+        current_timestamp() AS _load_ts,
+        TO_JSON(
+            NAMED_STRUCT(
+                'team_membership_id', team_membership_id,
+                'player_id', player_id,
+                'team_id', team_id,
+                'membership_start_date_raw', membership_start_date_raw,
+                'membership_end_date_raw', membership_end_date_raw,
+                'player_role', player_role,
+                'position_input', position_input
+            )
+        ) AS source_record_json
+    FROM validated_source
+    WHERE team_membership_id IS NULL
+       OR player_id IS NULL
+       OR player_sk IS NULL
+       OR team_id IS NULL
+       OR team_sk IS NULL
+       OR (membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL)
+       OR (membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL)
+       OR (membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date)
+       OR (position_input IS NOT NULL AND player_position IS NULL)
+),
+valid_rows AS (
+    SELECT
+        team_membership_id,
+        team_id,
+        team_sk,
+        player_id,
+        player_sk,
+        membership_start_date,
+        membership_end_date,
+        player_role,
+        player_position,
+        CASE
+            WHEN membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL
+                THEN DATEDIFF(membership_end_date, membership_start_date)
+            ELSE NULL
+        END AS membership_duration_days,
+        CASE
+            WHEN COALESCE(as_of_date, membership_start_date) IS NULL THEN NULL
+            WHEN membership_start_date IS NOT NULL AND membership_start_date > COALESCE(as_of_date, membership_start_date) THEN false
+            WHEN membership_end_date IS NOT NULL AND membership_end_date < COALESCE(as_of_date, membership_start_date) THEN false
+            ELSE true
+        END AS current_membership_flag
+    FROM validated_source
+    WHERE team_membership_id IS NOT NULL
+      AND team_id IS NOT NULL
+      AND team_sk IS NOT NULL
+      AND player_id IS NOT NULL
+      AND player_sk IS NOT NULL
+      AND NOT (
+          (membership_start_date_raw IS NOT NULL AND membership_start_date_raw <> '' AND membership_start_date IS NULL)
+          OR (membership_end_date_raw IS NOT NULL AND membership_end_date_raw <> '' AND membership_end_date IS NULL)
+          OR (membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL AND membership_end_date < membership_start_date)
+          OR (position_input IS NOT NULL AND player_position IS NULL)
+      )
+),
+ranked_rows AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY team_membership_id
+            ORDER BY
+                (
+                    CASE WHEN team_id IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN player_id IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN membership_start_date IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN membership_end_date IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN player_position IS NOT NULL THEN 1 ELSE 0 END
+                ) DESC,
+                sha2(
+                    concat_ws('|',
+                        coalesce(team_membership_id, '<NULL>'),
+                        coalesce(team_id, '<NULL>'),
+                        coalesce(player_id, '<NULL>'),
+                        coalesce(cast(membership_start_date as string), '<NULL>'),
+                        coalesce(cast(membership_end_date as string), '<NULL>'),
+                        coalesce(player_position, '<NULL>')
+                    ),
+                    256
+                ) ASC
+        ) AS duplicate_rank
+    FROM valid_rows
+),
+accepted_rows AS (
+    SELECT
+        team_membership_id,
+        sha2(coalesce(team_membership_id, '<NULL>'), 256) AS team_membership_sk,
+        team_id,
+        team_sk,
+        player_id,
+        player_sk,
+        membership_start_date,
+        membership_end_date,
+        player_role,
+        player_position,
+        membership_duration_days,
+        current_membership_flag,
+        CASE
+            WHEN LAG(
+                CASE
+                    WHEN membership_end_date IS NOT NULL THEN membership_end_date
+                    ELSE DATE '9999-12-31'
+                END
+            ) OVER (
+                PARTITION BY player_id, team_id
+                ORDER BY membership_start_date ASC NULLS FIRST,
+                         membership_end_date ASC NULLS LAST,
+                         team_membership_id ASC
+            ) IS NOT NULL
+             AND membership_start_date IS NOT NULL
+             AND membership_start_date <= LAG(
+                CASE
+                    WHEN membership_end_date IS NOT NULL THEN membership_end_date
+                    ELSE DATE '9999-12-31'
+                END
+            ) OVER (
+                PARTITION BY player_id, team_id
+                ORDER BY membership_start_date ASC NULLS FIRST,
+                         membership_end_date ASC NULLS LAST,
+                         team_membership_id ASC
+            )
+                THEN true
+            ELSE false
+        END AS membership_overlap_flag
+    FROM ranked_rows
+    WHERE duplicate_rank = 1
+)
+""".strip()
+    accepted_sql = f"""
+{base_ctes}
+SELECT
+    team_membership_id,
+    team_membership_sk,
+    team_id,
+    team_sk,
+    player_id,
+    player_sk,
+    membership_start_date,
+    membership_end_date,
+    player_role,
+    player_position,
+    membership_duration_days,
+    current_membership_flag,
+    membership_overlap_flag,
+    {metadata_sql}
+FROM accepted_rows
+""".strip()
+    rejected_sql = f"""
+{base_ctes}
+SELECT
+    source_table,
+    target_table,
+    source_business_key,
+    reject_reason,
+    reject_reason AS reject_reason_code,
+    reject_reason_detail,
+    rule_id,
+    rule_severity,
+    pipeline_run_id,
+    _pipeline_run_id,
+    _source_dataset,
+    load_ts,
+    _load_ts,
+    source_record_json,
+    sha2(source_record_json, 256) AS _record_hash
+FROM invalid_rows
+UNION ALL
+SELECT
+    'team_memberships' AS source_table,
+    'team_memberships' AS target_table,
+    team_membership_id AS source_business_key,
+    'DUPLICATE_BUSINESS_KEY' AS reject_reason,
+    'DUPLICATE_BUSINESS_KEY' AS reject_reason_code,
+    'Duplicate business key lost deterministic tie-break.' AS reject_reason_detail,
+    'TEAM_MEMBERSHIP_DUPLICATE' AS rule_id,
+    'ERROR' AS rule_severity,
+    {sql_literal(context.pipeline_run_id)} AS pipeline_run_id,
+    {sql_literal(context.pipeline_run_id)} AS _pipeline_run_id,
+    {sql_literal(context.release_name)} AS _source_dataset,
+    current_timestamp() AS load_ts,
+    current_timestamp() AS _load_ts,
+    TO_JSON(
+        NAMED_STRUCT(
+            'team_membership_id', team_membership_id,
+            'team_id', team_id,
+            'player_id', player_id,
+            'membership_start_date', membership_start_date,
+            'membership_end_date', membership_end_date,
+            'player_role', player_role,
+            'player_position', player_position
+        )
+    ) AS source_record_json,
+    sha2(
+        TO_JSON(
+            NAMED_STRUCT(
+                'team_membership_id', team_membership_id,
+                'team_id', team_id,
+                'player_id', player_id,
+                'membership_start_date', membership_start_date,
+                'membership_end_date', membership_end_date,
+                'player_role', player_role,
+                'player_position', player_position
+            )
+        ),
+        256
+    ) AS _record_hash
+FROM ranked_rows
+WHERE duplicate_rank > 1
+""".strip()
+    return SqlReferenceBuildPlan(
+        accepted_sql=accepted_sql,
+        rejected_sql=rejected_sql,
+        bronze_row_count_sql=f"SELECT COUNT(*) AS value FROM {source_table_fqn}",
+        exact_duplicate_count_sql=_exact_duplicate_count_sql(
+            source_table_fqn,
+            [
+                "NULLIF(TRIM(CAST(COALESCE(team_membership_id, id) AS STRING)), '') AS team_membership_id",
+                "NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id",
+                "NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id",
+                "TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING)) AS membership_start_date_raw",
+                "TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING)) AS membership_end_date_raw",
+                "NULLIF(UPPER(TRIM(CAST(COALESCE(player_role, role) AS STRING))), '') AS player_role",
+                "NULLIF(UPPER(TRIM(CAST(COALESCE(player_position, preferred_side, position) AS STRING))), '') AS position_input",
+            ],
+        ),
+        business_key_duplicate_count_sql=f"""
+WITH valid_rows AS (
+    SELECT DISTINCT
+        NULLIF(TRIM(CAST(COALESCE(team_membership_id, id) AS STRING)), '') AS team_membership_id,
+        NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
+        NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
+        TO_DATE(TRIM(CAST(COALESCE(membership_start_date, start_date) AS STRING))) AS membership_start_date,
+        TO_DATE(TRIM(CAST(COALESCE(membership_end_date, end_date) AS STRING))) AS membership_end_date,
+        {position_expr} AS player_position
+    FROM {source_table_fqn} source
+    LEFT JOIN {players_fqn} player
+        ON NULLIF(TRIM(CAST(source.player_id AS STRING)), '') = player.player_id
+    LEFT JOIN {teams_fqn} team
+        ON NULLIF(TRIM(CAST(source.team_id AS STRING)), '') = team.team_id
+    WHERE NULLIF(TRIM(CAST(COALESCE(team_membership_id, id) AS STRING)), '') IS NOT NULL
+      AND NULLIF(TRIM(CAST(source.player_id AS STRING)), '') IS NOT NULL
+      AND player.player_sk IS NOT NULL
+      AND NULLIF(TRIM(CAST(source.team_id AS STRING)), '') IS NOT NULL
+      AND team.team_sk IS NOT NULL
+),
+ranked_rows AS (
+    SELECT
+        *,
+        ROW_NUMBER() OVER (
+            PARTITION BY team_membership_id
+            ORDER BY
+                (
+                    CASE WHEN team_id IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN player_id IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN membership_start_date IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN membership_end_date IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN player_position IS NOT NULL THEN 1 ELSE 0 END
+                ) DESC,
+                sha2(
+                    concat_ws('|',
+                        coalesce(team_membership_id, '<NULL>'),
+                        coalesce(team_id, '<NULL>'),
+                        coalesce(player_id, '<NULL>'),
+                        coalesce(cast(membership_start_date as string), '<NULL>'),
+                        coalesce(cast(membership_end_date as string), '<NULL>'),
+                        coalesce(player_position, '<NULL>')
+                    ),
+                    256
+                ) ASC
+        ) AS duplicate_rank
+    FROM valid_rows
+)
+SELECT COUNT(*) AS value
+FROM ranked_rows
+WHERE duplicate_rank > 1
+""".strip(),
+        warning_count_sql="""
+SELECT COUNT(*) AS value
+FROM {silver_schema_fqn}.team_memberships
+WHERE membership_overlap_flag = true
+""".strip().format(silver_schema_fqn=silver_schema_fqn),
     )
 
 

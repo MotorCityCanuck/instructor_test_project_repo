@@ -17,6 +17,7 @@ class SqlReferenceBuildPlan:
     bronze_row_count_sql: str
     exact_duplicate_count_sql: str
     business_key_duplicate_count_sql: str
+    warning_count_sql: str | None = None
 
 
 def supports_reference_sql_transform(transform_name: str) -> bool:
