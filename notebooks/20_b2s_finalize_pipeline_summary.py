@@ -60,6 +60,10 @@ def main() -> None:
         spark,
         context,
         expected_table_count=expected_table_count,
+        expected_table_names=[
+            str(table_config["target"])
+            for table_config in config.silver_tables_in_build_order
+        ],
     )
     finalize_pipeline_run(spark, context, summary)
     append_records(

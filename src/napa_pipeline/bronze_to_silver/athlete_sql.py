@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from napa_pipeline.bronze_to_silver.config import BronzeToSilverConfig
 from napa_pipeline.bronze_to_silver.operations import PipelineContext
-from napa_pipeline.bronze_to_silver.reference_sql import SqlReferenceBuildPlan, sql_literal
+from napa_pipeline.bronze_to_silver.reference_sql import (
+    SqlReferenceBuildPlan,
+    _normalize_source_columns,
+    _source_nullif_string_expr,
+    _source_string_expr,
+    _source_upper_string_expr,
+    sql_literal,
+)
 
 
 def supports_athlete_sql_transform(transform_name: str) -> bool:
@@ -23,10 +30,12 @@ def build_athlete_sql_plan(
     target_table: str,
     source_table_fqn: str,
     silver_schema_fqn: str,
+    source_columns: set[str] | None = None,
 ) -> SqlReferenceBuildPlan:
     """Return the SQL execution plan for one supported athlete table."""
+    normalized_columns = _normalize_source_columns(source_columns)
     if target_table == "players":
-        return _build_players_sql_plan(config, context, source_table_fqn, silver_schema_fqn)
+        return _build_players_sql_plan(config, context, source_table_fqn, silver_schema_fqn, normalized_columns)
     if target_table == "player_registrations":
         return _build_player_registrations_sql_plan(context, source_table_fqn, silver_schema_fqn)
     if target_table == "player_assessment_history":
@@ -39,9 +48,26 @@ def _build_players_sql_plan(
     context: PipelineContext,
     source_table_fqn: str,
     silver_schema_fqn: str,
+    source_columns: set[str] | None,
 ) -> SqlReferenceBuildPlan:
     regions_fqn = f"{silver_schema_fqn}.regions"
     monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
+    player_id_expr = _source_nullif_string_expr(source_columns, ["player_id", "id"])
+    first_name_expr = _source_nullif_string_expr(source_columns, ["first_name"])
+    last_name_expr = _source_nullif_string_expr(source_columns, ["last_name"])
+    explicit_display_name_expr = _source_nullif_string_expr(source_columns, ["display_name", "full_name"])
+    birth_date_expr = _source_string_expr(source_columns, ["birth_date", "date_of_birth", "dob"])
+    gender_expr_input = _source_upper_string_expr(source_columns, ["gender"])
+    dominant_hand_expr_input = _source_upper_string_expr(source_columns, ["dominant_hand", "handedness"])
+    preferred_side_expr_input = _source_upper_string_expr(source_columns, ["preferred_side", "preferred_position"])
+    home_region_id_expr = _source_nullif_string_expr(source_columns, ["home_region_id", "region_id"])
+    country_expr_input = _source_upper_string_expr(source_columns, ["country_code", "country"])
+    rating_expr = _source_nullif_string_expr(source_columns, ["rating_value", "rating", "player_rating"])
+    rating_confidence_expr = _source_nullif_string_expr(
+        source_columns,
+        ["confidence_score", "rating_confidence", "confidence"],
+    )
+    status_expr = _source_upper_string_expr(source_columns, ["player_status", "active_flag", "status"])
     gender_expr = _domain_case_expression("gender_input", config.data["domains"]["gender"])
     dominant_hand_expr = _domain_case_expression("dominant_hand_input", config.data["domains"]["dominant_hand"])
     preferred_side_expr = _domain_case_expression("preferred_side_input", config.data["domains"]["player_position"])
@@ -62,19 +88,19 @@ WITH release_context AS (
 ),
 normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(player_id, id) AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(first_name AS STRING)), '') AS first_name,
-        NULLIF(TRIM(CAST(last_name AS STRING)), '') AS last_name,
-        NULLIF(TRIM(CAST(COALESCE(display_name, full_name) AS STRING)), '') AS explicit_display_name,
-        TRIM(CAST(COALESCE(birth_date, date_of_birth, dob) AS STRING)) AS birth_date_raw,
-        NULLIF(UPPER(TRIM(CAST(gender AS STRING))), '') AS gender_input,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(dominant_hand, handedness) AS STRING))), '') AS dominant_hand_input,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(preferred_side, preferred_position) AS STRING))), '') AS preferred_side_input,
-        NULLIF(TRIM(CAST(COALESCE(home_region_id, region_id) AS STRING)), '') AS home_region_id,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(country_code, country) AS STRING))), '') AS country_input,
-        NULLIF(TRIM(CAST(COALESCE(rating, player_rating) AS STRING)), '') AS rating_raw,
-        NULLIF(TRIM(CAST(COALESCE(rating_confidence, confidence) AS STRING)), '') AS rating_confidence_raw,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(active_flag, status) AS STRING))), '') AS status_input
+        {player_id_expr} AS player_id,
+        {first_name_expr} AS first_name,
+        {last_name_expr} AS last_name,
+        {explicit_display_name_expr} AS explicit_display_name,
+        {birth_date_expr} AS birth_date_raw,
+        {gender_expr_input} AS gender_input,
+        {dominant_hand_expr_input} AS dominant_hand_input,
+        {preferred_side_expr_input} AS preferred_side_input,
+        {home_region_id_expr} AS home_region_id,
+        {country_expr_input} AS country_input,
+        {rating_expr} AS rating_raw,
+        {rating_confidence_expr} AS rating_confidence_raw,
+        {status_expr} AS status_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -394,19 +420,19 @@ WHERE duplicate_rank > 1
         exact_duplicate_count_sql=f"""
 WITH normalized_source AS (
     SELECT
-        NULLIF(TRIM(CAST(COALESCE(player_id, id) AS STRING)), '') AS player_id,
-        NULLIF(TRIM(CAST(first_name AS STRING)), '') AS first_name,
-        NULLIF(TRIM(CAST(last_name AS STRING)), '') AS last_name,
-        NULLIF(TRIM(CAST(COALESCE(display_name, full_name) AS STRING)), '') AS explicit_display_name,
-        TRIM(CAST(COALESCE(birth_date, date_of_birth, dob) AS STRING)) AS birth_date_raw,
-        NULLIF(UPPER(TRIM(CAST(gender AS STRING))), '') AS gender_input,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(dominant_hand, handedness) AS STRING))), '') AS dominant_hand_input,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(preferred_side, preferred_position) AS STRING))), '') AS preferred_side_input,
-        NULLIF(TRIM(CAST(COALESCE(home_region_id, region_id) AS STRING)), '') AS home_region_id,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(country_code, country) AS STRING))), '') AS country_input,
-        NULLIF(TRIM(CAST(COALESCE(rating, player_rating) AS STRING)), '') AS rating_raw,
-        NULLIF(TRIM(CAST(COALESCE(rating_confidence, confidence) AS STRING)), '') AS rating_confidence_raw,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(active_flag, status) AS STRING))), '') AS status_input
+        {player_id_expr} AS player_id,
+        {first_name_expr} AS first_name,
+        {last_name_expr} AS last_name,
+        {explicit_display_name_expr} AS explicit_display_name,
+        {birth_date_expr} AS birth_date_raw,
+        {gender_expr_input} AS gender_input,
+        {dominant_hand_expr_input} AS dominant_hand_input,
+        {preferred_side_expr_input} AS preferred_side_input,
+        {home_region_id_expr} AS home_region_id,
+        {country_expr_input} AS country_input,
+        {rating_expr} AS rating_raw,
+        {rating_confidence_expr} AS rating_confidence_raw,
+        {status_expr} AS status_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -444,18 +470,18 @@ valid_rows AS (
         CAST(source.rating_confidence_raw AS DOUBLE) AS rating_confidence
     FROM (
         SELECT
-            NULLIF(TRIM(CAST(COALESCE(player_id, id) AS STRING)), '') AS player_id,
-            NULLIF(TRIM(CAST(first_name AS STRING)), '') AS first_name,
-            NULLIF(TRIM(CAST(last_name AS STRING)), '') AS last_name,
-            NULLIF(TRIM(CAST(COALESCE(display_name, full_name) AS STRING)), '') AS explicit_display_name,
-            TRIM(CAST(COALESCE(birth_date, date_of_birth, dob) AS STRING)) AS birth_date_raw,
-            NULLIF(UPPER(TRIM(CAST(gender AS STRING))), '') AS gender_input,
-            NULLIF(UPPER(TRIM(CAST(COALESCE(dominant_hand, handedness) AS STRING))), '') AS dominant_hand_input,
-            NULLIF(UPPER(TRIM(CAST(COALESCE(preferred_side, preferred_position) AS STRING))), '') AS preferred_side_input,
-            NULLIF(TRIM(CAST(COALESCE(home_region_id, region_id) AS STRING)), '') AS home_region_id,
-            NULLIF(UPPER(TRIM(CAST(COALESCE(country_code, country) AS STRING))), '') AS country_input,
-            NULLIF(TRIM(CAST(COALESCE(rating, player_rating) AS STRING)), '') AS rating_raw,
-            NULLIF(TRIM(CAST(COALESCE(rating_confidence, confidence) AS STRING)), '') AS rating_confidence_raw
+            {player_id_expr} AS player_id,
+            {first_name_expr} AS first_name,
+            {last_name_expr} AS last_name,
+            {explicit_display_name_expr} AS explicit_display_name,
+            {birth_date_expr} AS birth_date_raw,
+            {gender_expr_input} AS gender_input,
+            {dominant_hand_expr_input} AS dominant_hand_input,
+            {preferred_side_expr_input} AS preferred_side_input,
+            {home_region_id_expr} AS home_region_id,
+            {country_expr_input} AS country_input,
+            {rating_expr} AS rating_raw,
+            {rating_confidence_expr} AS rating_confidence_raw
         FROM {source_table_fqn}
     ) source
     CROSS JOIN release_context

@@ -50,6 +50,56 @@ def test_build_athlete_sql_plan_for_players_contains_expected_rules() -> None:
     assert "'CANADA'" in plan.accepted_sql
 
 
+def test_build_athlete_sql_plan_for_players_uses_actual_bronze_columns() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_athlete_sql_plan(
+        config,
+        context,
+        target_table="players",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.player_master",
+        silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+        source_columns={
+            "player_id",
+            "external_player_key",
+            "first_name",
+            "last_name",
+            "gender",
+            "birth_date",
+            "dominant_hand",
+            "home_region_id",
+            "registration_date",
+            "player_status",
+            "rating_value",
+            "confidence_score",
+            "volatility_score",
+            "global_percentile",
+            "match_count_used",
+            "rating_date",
+            "rating_batch_id",
+            "snapshot_month",
+        },
+    )
+    combined_sql = "\n".join(
+        [
+            plan.accepted_sql,
+            plan.rejected_sql,
+            plan.exact_duplicate_count_sql,
+            plan.business_key_duplicate_count_sql,
+        ]
+    )
+
+    assert "COALESCE(player_id, id)" not in combined_sql
+    assert "COALESCE(display_name, full_name)" not in combined_sql
+    assert "COALESCE(rating, player_rating)" not in combined_sql
+    assert "COALESCE(rating_confidence, confidence)" not in combined_sql
+    assert "COALESCE(active_flag, status)" not in combined_sql
+    assert "CAST(player_id AS STRING)" in combined_sql
+    assert "CAST(rating_value AS STRING)" in combined_sql
+    assert "CAST(confidence_score AS STRING)" in combined_sql
+    assert "CAST(player_status AS STRING)" in combined_sql
+
+
 def test_build_athlete_sql_plan_for_player_registrations_contains_expected_rules() -> None:
     config, environment, context = _config_environment_context()
 

@@ -265,6 +265,7 @@ def _execute_single_table_sql(
             target_table=target_table,
             source_table_fqn=source_table_fqn,
             silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+            source_columns=_get_table_column_names(spark, source_table_fqn),
         )
     elif supports_organization_sql_transform(str(table_config["transform"])):
         sql_plan = build_organization_sql_plan(

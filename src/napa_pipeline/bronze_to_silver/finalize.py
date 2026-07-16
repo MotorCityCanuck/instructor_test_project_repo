@@ -42,6 +42,7 @@ def summarize_pipeline_run(
     spark: Any,
     context: PipelineContext,
     expected_table_count: int,
+    expected_table_names: list[str] | None = None,
 ) -> PipelineRunSummary:
     """Summarize published Bronze-to-Silver outcomes for one pipeline run."""
     pipeline_run_rows = [
@@ -114,18 +115,17 @@ def summarize_pipeline_run(
     ):
         final_status = "FAILED"
 
-    summary_text = (
-        f"Bronze-to-Silver pipeline succeeded for {expected_table_count} configured tables."
-        if final_status == "SUCCEEDED"
-        else (
-            "Bronze-to-Silver pipeline failed: "
-            f"completed_table_runs={len(table_run_rows)}/{expected_table_count}, "
-            f"failed_table_runs={failed_table_run_count}, "
-            f"reconciliation_results={len(reconciliation_rows)}/{expected_table_count}, "
-            f"mismatched_reconciliations={mismatched_reconciliation_count}, "
-            f"critical_quality_failures={critical_quality_failure_count}, "
-            f"run_messages={len(run_message_rows)}."
-        )
+    summary_text = _build_summary_text(
+        expected_table_count=expected_table_count,
+        expected_table_names=expected_table_names,
+        table_run_rows=table_run_rows,
+        reconciliation_rows=reconciliation_rows,
+        quality_rows=quality_rows,
+        run_message_rows=run_message_rows,
+        final_status=final_status,
+        failed_table_run_count=failed_table_run_count,
+        mismatched_reconciliation_count=mismatched_reconciliation_count,
+        critical_quality_failure_count=critical_quality_failure_count,
     )
 
     return PipelineRunSummary(
@@ -138,6 +138,85 @@ def summarize_pipeline_run(
         final_status=final_status,
         summary_text=summary_text,
     )
+
+
+def _build_summary_text(
+    *,
+    expected_table_count: int,
+    expected_table_names: list[str] | None,
+    table_run_rows: list[dict[str, Any]],
+    reconciliation_rows: list[dict[str, Any]],
+    quality_rows: list[dict[str, Any]],
+    run_message_rows: list[dict[str, Any]],
+    final_status: str,
+    failed_table_run_count: int,
+    mismatched_reconciliation_count: int,
+    critical_quality_failure_count: int,
+) -> str:
+    if final_status == "SUCCEEDED":
+        return f"Bronze-to-Silver pipeline succeeded for {expected_table_count} configured tables."
+
+    details = [
+        "Bronze-to-Silver pipeline failed: "
+        f"completed_table_runs={len(table_run_rows)}/{expected_table_count}, "
+        f"failed_table_runs={failed_table_run_count}, "
+        f"reconciliation_results={len(reconciliation_rows)}/{expected_table_count}, "
+        f"mismatched_reconciliations={mismatched_reconciliation_count}, "
+        f"critical_quality_failures={critical_quality_failure_count}, "
+        f"run_messages={len(run_message_rows)}."
+    ]
+
+    failed_table_details = [
+        _format_failed_table_detail(row)
+        for row in sorted(table_run_rows, key=lambda item: item.get("build_order") or 0)
+        if row.get("status") != "SUCCEEDED"
+    ]
+    if failed_table_details:
+        details.append("Failed table runs: " + "; ".join(failed_table_details) + ".")
+
+    if expected_table_names:
+        completed_targets = {
+            str(row.get("target_table"))
+            for row in table_run_rows
+            if row.get("status") == "SUCCEEDED"
+        }
+        failed_targets = {
+            str(row.get("target_table"))
+            for row in table_run_rows
+            if row.get("status") != "SUCCEEDED"
+        }
+        missing_targets = [
+            table_name
+            for table_name in expected_table_names
+            if table_name not in completed_targets and table_name not in failed_targets
+        ]
+        if missing_targets:
+            details.append("Tables not completed: " + ", ".join(missing_targets) + ".")
+
+    critical_quality_details = [
+        f"{row.get('target_table')}:{row.get('rule_id')} failed_row_count={row.get('failed_row_count')}"
+        for row in quality_rows
+        if row.get("severity") in {"CRITICAL", "ERROR"} and (row.get("failed_row_count") or 0) > 0
+    ]
+    if critical_quality_details:
+        details.append("Critical quality failures: " + "; ".join(critical_quality_details[:10]) + ".")
+
+    return " ".join(details)
+
+
+def _format_failed_table_detail(row: dict[str, Any]) -> str:
+    table_name = row.get("target_table") or "<unknown_table>"
+    stage_name = row.get("build_stage") or "<unknown_stage>"
+    error_message = str(row.get("error_message") or "").strip()
+    if not error_message:
+        return f"{stage_name}.{table_name}"
+    return f"{stage_name}.{table_name}: {_truncate(error_message, 500)}"
+
+
+def _truncate(value: str, limit: int) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: limit - 3] + "..."
 
 
 def finalize_pipeline_run(

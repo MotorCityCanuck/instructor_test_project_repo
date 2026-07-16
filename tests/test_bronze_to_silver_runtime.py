@@ -272,6 +272,91 @@ def test_summarize_pipeline_run_detects_critical_quality_failures() -> None:
     assert summary.critical_quality_failure_count == 1
 
 
+def test_summarize_pipeline_run_reports_failed_and_incomplete_tables() -> None:
+    context = _context()
+    pipeline_runs_fqn = f"{context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}"
+    table_runs_fqn = f"{context.operations_schema_fqn}.{TABLE_RUNS_TABLE}"
+    reconciliation_fqn = f"{context.operations_schema_fqn}.{RECONCILIATION_RESULTS_TABLE}"
+    quality_fqn = f"{context.operations_schema_fqn}.{QUALITY_RESULTS_TABLE}"
+    run_messages_fqn = f"{context.operations_schema_fqn}.{RUN_MESSAGES_TABLE}"
+
+    spark = FakeSparkSession(
+        tables={
+            pipeline_runs_fqn: FakeTable(
+                rows=[
+                    FakeRow(
+                        {
+                            "pipeline_run_id": "run-123",
+                            "started_ts": datetime(2026, 7, 16, 12, 0, tzinfo=timezone.utc),
+                            "completed_ts": None,
+                        }
+                    )
+                ]
+            ),
+            table_runs_fqn: FakeTable(
+                rows=[
+                    FakeRow(
+                        {
+                            "pipeline_run_id": "run-123",
+                            "target_table": "monthly_batches",
+                            "build_stage": "reference",
+                            "build_order": 10,
+                            "status": "SUCCEEDED",
+                            "completed_ts": datetime(2026, 7, 16, 12, 5, tzinfo=timezone.utc),
+                        }
+                    ),
+                    FakeRow(
+                        {
+                            "pipeline_run_id": "run-123",
+                            "target_table": "regions",
+                            "build_stage": "reference",
+                            "build_order": 20,
+                            "status": "SUCCEEDED",
+                            "completed_ts": datetime(2026, 7, 16, 12, 6, tzinfo=timezone.utc),
+                        }
+                    ),
+                    FakeRow(
+                        {
+                            "pipeline_run_id": "run-123",
+                            "target_table": "players",
+                            "build_stage": "athlete",
+                            "build_order": 30,
+                            "status": "FAILED",
+                            "completed_ts": datetime(2026, 7, 16, 12, 7, tzinfo=timezone.utc),
+                            "error_message": "source column display_name cannot be resolved",
+                        }
+                    ),
+                ]
+            ),
+            reconciliation_fqn: FakeTable(
+                rows=[
+                    FakeRow({"pipeline_run_id": "run-123", "status": "PASSED"}),
+                    FakeRow({"pipeline_run_id": "run-123", "status": "PASSED"}),
+                ]
+            ),
+            quality_fqn: FakeTable(rows=[]),
+            run_messages_fqn: FakeTable(rows=[]),
+        }
+    )
+
+    summary = summarize_pipeline_run(
+        spark,
+        context,
+        expected_table_count=5,
+        expected_table_names=[
+            "monthly_batches",
+            "regions",
+            "players",
+            "player_registrations",
+            "player_assessment_history",
+        ],
+    )
+
+    assert summary.final_status == "FAILED"
+    assert "athlete.players: source column display_name cannot be resolved" in summary.summary_text
+    assert "Tables not completed: player_registrations, player_assessment_history." in summary.summary_text
+
+
 def test_run_cross_table_validations_sql_uses_sql_aggregation(monkeypatch) -> None:
     config = load_bronze_to_silver_config("napa_5k")
     environment = resolve_release_environment(config)

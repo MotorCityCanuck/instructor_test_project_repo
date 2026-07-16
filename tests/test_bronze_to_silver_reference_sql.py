@@ -45,6 +45,8 @@ def test_build_reference_sql_plan_for_monthly_batches_contains_expected_rules() 
     assert "BATCH_DUPLICATE" in plan.rejected_sql
     assert "batch_quarter" in plan.accepted_sql
     assert "CREATE OR REPLACE" not in plan.accepted_sql
+    assert "COALESCE(batch_date" not in plan.exact_duplicate_count_sql
+    assert "CAST(batch_month AS STRING)" in plan.exact_duplicate_count_sql
 
 
 def test_build_reference_sql_plan_for_monthly_batches_uses_actual_bronze_columns() -> None:

@@ -673,6 +673,8 @@ def _has_source_column(source_columns: set[str] | None, column_name: str) -> boo
 
 
 def _first_existing_source_column(source_columns: set[str] | None, candidates: list[str]) -> str | None:
+    if source_columns is None:
+        return candidates[0]
     for candidate in candidates:
         if _has_source_column(source_columns, candidate):
             return candidate
@@ -680,8 +682,6 @@ def _first_existing_source_column(source_columns: set[str] | None, candidates: l
 
 
 def _source_string_expr(source_columns: set[str] | None, candidates: list[str]) -> str:
-    if source_columns is None:
-        return f"TRIM(CAST({_coalesce_source_expr(candidates)} AS STRING))"
     source_column = _first_existing_source_column(source_columns, candidates)
     if source_column is None:
         return "CAST(NULL AS STRING)"
@@ -689,8 +689,6 @@ def _source_string_expr(source_columns: set[str] | None, candidates: list[str]) 
 
 
 def _source_nullif_string_expr(source_columns: set[str] | None, candidates: list[str]) -> str:
-    if source_columns is None:
-        return f"NULLIF(TRIM(CAST({_coalesce_source_expr(candidates)} AS STRING)), '')"
     source_column = _first_existing_source_column(source_columns, candidates)
     if source_column is None:
         return "CAST(NULL AS STRING)"
@@ -698,8 +696,6 @@ def _source_nullif_string_expr(source_columns: set[str] | None, candidates: list
 
 
 def _source_upper_string_expr(source_columns: set[str] | None, candidates: list[str]) -> str:
-    if source_columns is None:
-        return f"UPPER(NULLIF(TRIM(CAST({_coalesce_source_expr(candidates)} AS STRING)), ''))"
     source_column = _first_existing_source_column(source_columns, candidates)
     if source_column is None:
         return "CAST(NULL AS STRING)"
@@ -708,7 +704,7 @@ def _source_upper_string_expr(source_columns: set[str] | None, candidates: list[
 
 def _batch_date_raw_expr(source_columns: set[str] | None) -> str:
     if source_columns is None:
-        return "TRIM(CAST(COALESCE(batch_date, release_date, date) AS STRING))"
+        return _source_string_expr(source_columns, ["batch_month"])
     date_column = _first_existing_source_column(source_columns, ["batch_date", "release_date", "date"])
     if date_column is not None:
         return f"TRIM(CAST({date_column} AS STRING))"
@@ -720,13 +716,7 @@ CASE
     ELSE TRIM(CAST(batch_month AS STRING))
 END
 """.strip()
-    return "CAST(NULL AS STRING)"
-
-
-def _coalesce_source_expr(candidates: list[str]) -> str:
-    if len(candidates) == 1:
-        return candidates[0]
-    return f"COALESCE({', '.join(candidates)})"
+    return _source_string_expr(source_columns, ["batch_month"])
 
 
 def _metadata_sql(
