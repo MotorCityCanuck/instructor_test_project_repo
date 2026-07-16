@@ -49,6 +49,10 @@ from napa_pipeline.bronze_to_silver.organization import (
     build_team_memberships,
     build_teams,
 )
+from napa_pipeline.bronze_to_silver.organization_sql import (
+    build_organization_sql_plan,
+    supports_organization_sql_transform,
+)
 from napa_pipeline.bronze_to_silver.publish import (
     append_quality_results_for_rejects,
     append_quality_results_for_reject_table,
@@ -152,6 +156,7 @@ def execute_stage(
             if (
                 supports_reference_sql_transform(str(table_config["transform"]))
                 or supports_athlete_sql_transform(str(table_config["transform"]))
+                or supports_organization_sql_transform(str(table_config["transform"]))
             ):
                 metrics = _execute_single_table_sql(
                     spark,
@@ -248,6 +253,14 @@ def _execute_single_table_sql(
         )
     elif supports_athlete_sql_transform(str(table_config["transform"])):
         sql_plan = build_athlete_sql_plan(
+            config,
+            context,
+            target_table=target_table,
+            source_table_fqn=source_table_fqn,
+            silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+        )
+    elif supports_organization_sql_transform(str(table_config["transform"])):
+        sql_plan = build_organization_sql_plan(
             config,
             context,
             target_table=target_table,
