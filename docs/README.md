@@ -17,3 +17,4 @@
 | ai_usage_summary.md | Document AI-assisted work and human review evidence. | Whenever AI-assisted development materially contributes to work. |
 | runbook.md | Provide reproducible setup and execution instructions. | As setup steps or environment assumptions change. |
 | raw_to_bronze_workflow.md | Deploy, run, inspect, and rerun the Raw-to-Bronze Databricks Workflow. | When workflow task wiring, parameters, deployment, or audit behavior changes. |
+| NAPA_Bronze_to_Silver_Implementation_Decisions.md | Freeze the instructor Bronze-to-Silver repo shape, package layout, config layout, and serverless workflow assumptions before implementation expands. | Before major Bronze-to-Silver implementation work and whenever foundational architecture decisions change. |
