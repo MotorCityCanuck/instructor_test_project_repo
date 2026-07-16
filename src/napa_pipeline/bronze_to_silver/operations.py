@@ -12,12 +12,12 @@ from napa_pipeline.bronze_to_silver.config import BronzeToSilverConfig
 from napa_pipeline.bronze_to_silver.environment import ReleaseEnvironment
 
 
-PIPELINE_RUNS_TABLE = "pipeline_runs"
-TABLE_RUNS_TABLE = "table_runs"
-QUALITY_RESULTS_TABLE = "quality_results"
-RECONCILIATION_RESULTS_TABLE = "reconciliation_results"
-SCHEMA_SNAPSHOTS_TABLE = "schema_snapshots"
-RUN_MESSAGES_TABLE = "run_messages"
+PIPELINE_RUNS_TABLE = "b2s_pipeline_runs"
+TABLE_RUNS_TABLE = "b2s_table_runs"
+QUALITY_RESULTS_TABLE = "b2s_quality_results"
+RECONCILIATION_RESULTS_TABLE = "b2s_reconciliation_results"
+SCHEMA_SNAPSHOTS_TABLE = "b2s_schema_snapshots"
+RUN_MESSAGES_TABLE = "b2s_run_messages"
 
 
 def utc_now() -> datetime:

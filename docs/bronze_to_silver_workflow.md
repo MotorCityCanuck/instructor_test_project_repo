@@ -86,6 +86,15 @@ This workflow resource and its script entrypoints now perform actual stage execu
 - publish convenience SQL views;
 - finalize the durable pipeline run status.
 
+Within the shared `workspace.instructor_ops` schema, Bronze-to-Silver now writes to its own operations tables:
+
+- `b2s_pipeline_runs`
+- `b2s_table_runs`
+- `b2s_quality_results`
+- `b2s_reconciliation_results`
+- `b2s_schema_snapshots`
+- `b2s_run_messages`
+
 One important constraint remains:
 
 - the reference, athlete, organization/partnership, and competition stage builds now publish through Spark SQL;

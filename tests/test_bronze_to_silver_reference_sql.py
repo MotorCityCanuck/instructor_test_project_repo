@@ -3,7 +3,10 @@
 import napa_pipeline.bronze_to_silver.execute as execute_module
 from napa_pipeline.bronze_to_silver.config import load_bronze_to_silver_config
 from napa_pipeline.bronze_to_silver.environment import resolve_release_environment
-from napa_pipeline.bronze_to_silver.operations import create_pipeline_context
+from napa_pipeline.bronze_to_silver.operations import (
+    RECONCILIATION_RESULTS_TABLE,
+    create_pipeline_context,
+)
 from napa_pipeline.bronze_to_silver.reference_sql import (
     build_reference_sql_plan,
     supports_reference_sql_transform,
@@ -134,4 +137,4 @@ def test_execute_single_table_sql_publishes_reference_outputs(monkeypatch) -> No
     assert captured["published"][0][0].endswith(".monthly_batches")
     assert captured["published"][1][0].endswith(".monthly_batches_exceptions")
     assert captured["quality"][0][0] == "monthly_batches"
-    assert any(table_fqn.endswith(".reconciliation_results") for table_fqn, _ in captured["append_tables"])
+    assert any(table_fqn.endswith(f".{RECONCILIATION_RESULTS_TABLE}") for table_fqn, _ in captured["append_tables"])

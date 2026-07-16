@@ -253,9 +253,9 @@ def test_append_records_uses_existing_table_schema() -> None:
         }
     ]
 
-    append_records(spark, "workspace.instructor_ops.run_messages", records)
+    append_records(spark, "workspace.instructor_ops.b2s_run_messages", records)
 
-    assert spark.table_requests == ["workspace.instructor_ops.run_messages"]
+    assert spark.table_requests == ["workspace.instructor_ops.b2s_run_messages"]
     assert spark.created_records == records
     assert spark.created_schema == "schema-from-table"
 
@@ -288,4 +288,4 @@ def test_append_records_raises_clear_error_for_missing_required_field() -> None:
     ]
 
     with pytest.raises(ValueError, match="required field 'release_name' is null or missing"):
-        append_records(spark, "workspace.instructor_ops.run_messages", records)
+        append_records(spark, "workspace.instructor_ops.b2s_run_messages", records)

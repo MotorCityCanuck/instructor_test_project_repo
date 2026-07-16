@@ -8,7 +8,14 @@ from napa_pipeline.bronze_to_silver.cross_table import run_cross_table_validatio
 from napa_pipeline.bronze_to_silver.environment import resolve_release_environment
 from napa_pipeline.bronze_to_silver.execute import publish_convenience_views_task
 from napa_pipeline.bronze_to_silver.finalize import summarize_pipeline_run
-from napa_pipeline.bronze_to_silver.operations import create_pipeline_context
+from napa_pipeline.bronze_to_silver.operations import (
+    PIPELINE_RUNS_TABLE,
+    QUALITY_RESULTS_TABLE,
+    RECONCILIATION_RESULTS_TABLE,
+    RUN_MESSAGES_TABLE,
+    TABLE_RUNS_TABLE,
+    create_pipeline_context,
+)
 from napa_pipeline.bronze_to_silver.publish import (
     append_quality_results_for_rejects,
     publish_records_to_view,
@@ -125,7 +132,7 @@ def _context():
 
 def test_append_quality_results_for_rejects_groups_by_rule() -> None:
     context = _context()
-    table_fqn = f"{context.operations_schema_fqn}.quality_results"
+    table_fqn = f"{context.operations_schema_fqn}.{QUALITY_RESULTS_TABLE}"
     spark = FakeSparkSession(
         tables={table_fqn: FakeTable(schema="schema-from-table")},
         existing_tables={table_fqn},
@@ -154,7 +161,7 @@ def test_append_quality_results_for_rejects_groups_by_rule() -> None:
 
 def test_append_quality_results_for_rejects_ignores_null_sample_business_keys() -> None:
     context = _context()
-    table_fqn = f"{context.operations_schema_fqn}.quality_results"
+    table_fqn = f"{context.operations_schema_fqn}.{QUALITY_RESULTS_TABLE}"
     spark = FakeSparkSession(
         tables={table_fqn: FakeTable(schema="schema-from-table")},
         existing_tables={table_fqn},
@@ -204,11 +211,11 @@ def test_publish_sql_view_emits_create_or_replace_view_sql() -> None:
 
 def test_summarize_pipeline_run_detects_critical_quality_failures() -> None:
     context = _context()
-    pipeline_runs_fqn = f"{context.operations_schema_fqn}.pipeline_runs"
-    table_runs_fqn = f"{context.operations_schema_fqn}.table_runs"
-    reconciliation_fqn = f"{context.operations_schema_fqn}.reconciliation_results"
-    quality_fqn = f"{context.operations_schema_fqn}.quality_results"
-    run_messages_fqn = f"{context.operations_schema_fqn}.run_messages"
+    pipeline_runs_fqn = f"{context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}"
+    table_runs_fqn = f"{context.operations_schema_fqn}.{TABLE_RUNS_TABLE}"
+    reconciliation_fqn = f"{context.operations_schema_fqn}.{RECONCILIATION_RESULTS_TABLE}"
+    quality_fqn = f"{context.operations_schema_fqn}.{QUALITY_RESULTS_TABLE}"
+    run_messages_fqn = f"{context.operations_schema_fqn}.{RUN_MESSAGES_TABLE}"
 
     spark = FakeSparkSession(
         tables={

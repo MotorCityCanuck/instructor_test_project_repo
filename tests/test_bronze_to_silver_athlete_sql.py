@@ -7,7 +7,10 @@ from napa_pipeline.bronze_to_silver.athlete_sql import (
 )
 from napa_pipeline.bronze_to_silver.config import load_bronze_to_silver_config
 from napa_pipeline.bronze_to_silver.environment import resolve_release_environment
-from napa_pipeline.bronze_to_silver.operations import create_pipeline_context
+from napa_pipeline.bronze_to_silver.operations import (
+    RECONCILIATION_RESULTS_TABLE,
+    create_pipeline_context,
+)
 
 
 class DummySpark:
@@ -152,7 +155,7 @@ def test_execute_single_table_sql_publishes_player_outputs(monkeypatch) -> None:
     assert captured["published"][0][0].endswith(".players")
     assert captured["published"][1][0].endswith(".players_exceptions")
     assert captured["quality"][0][0] == "players"
-    assert any(table_fqn.endswith(".reconciliation_results") for table_fqn, _ in captured["append_tables"])
+    assert any(table_fqn.endswith(f".{RECONCILIATION_RESULTS_TABLE}") for table_fqn, _ in captured["append_tables"])
 
 
 def test_execute_single_table_sql_publishes_registration_outputs(monkeypatch) -> None:

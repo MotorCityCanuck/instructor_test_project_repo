@@ -33,6 +33,7 @@ from napa_pipeline.bronze_to_silver.io import (
 )
 from napa_pipeline.bronze_to_silver.operations import (
     PIPELINE_RUNS_TABLE,
+    QUALITY_RESULTS_TABLE,
     RECONCILIATION_RESULTS_TABLE,
     RUN_MESSAGES_TABLE,
     TABLE_RUNS_TABLE,
@@ -366,7 +367,7 @@ def run_cross_table_validation_task(
     )
     append_records(
         spark,
-        f"{context.operations_schema_fqn}.quality_results",
+        f"{context.operations_schema_fqn}.{QUALITY_RESULTS_TABLE}",
         list(result.quality_results),
     )
     return {
