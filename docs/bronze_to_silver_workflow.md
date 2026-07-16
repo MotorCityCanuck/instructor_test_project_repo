@@ -88,6 +88,7 @@ This workflow resource and its script entrypoints now perform actual stage execu
 
 One important constraint remains:
 
-- the current execution path reuses the existing Python-reference builders, which materialize per-table row sets in Python before publication.
+- the stage table-build path still reuses the existing Python reference builders, which materialize per-table row sets in Python before publication.
+- cross-table validation and convenience-view publication now run through Spark SQL against published Silver tables, so those later workflow tasks no longer collect full Silver row sets back to the driver.
 
 That means the workflow is now execution-capable, but it does **not yet** satisfy the spec's final large-release performance bar that forbids driver-side collection for the 250K acceptance run. Treat the current implementation as functionally wired and locally testable, not as the final performance-complete Silver runtime.

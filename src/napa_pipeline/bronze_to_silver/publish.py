@@ -82,6 +82,22 @@ def publish_records_to_view(
     return len(materialized)
 
 
+def publish_sql_view(
+    spark: Any,
+    view_fqn: str,
+    select_sql: str,
+) -> int:
+    """Publish a SQL-backed view and return its row count when available."""
+    try:
+        spark.sql(f"CREATE OR REPLACE VIEW {view_fqn} AS {select_sql}")
+        try:
+            return int(spark.table(view_fqn).count())
+        except Exception:
+            return 0
+    except Exception as exc:
+        raise PublicationError(f"Could not publish view {view_fqn}.") from exc
+
+
 def append_quality_results_for_rejects(
     spark: Any,
     context: PipelineContext,

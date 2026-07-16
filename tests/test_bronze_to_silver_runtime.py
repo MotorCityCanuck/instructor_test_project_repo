@@ -2,13 +2,17 @@
 
 from datetime import datetime, timezone
 
+import napa_pipeline.bronze_to_silver.cross_table as cross_table_module
 from napa_pipeline.bronze_to_silver.config import load_bronze_to_silver_config
+from napa_pipeline.bronze_to_silver.cross_table import run_cross_table_validations_sql
 from napa_pipeline.bronze_to_silver.environment import resolve_release_environment
+from napa_pipeline.bronze_to_silver.execute import publish_convenience_views_task
 from napa_pipeline.bronze_to_silver.finalize import summarize_pipeline_run
 from napa_pipeline.bronze_to_silver.operations import create_pipeline_context
 from napa_pipeline.bronze_to_silver.publish import (
     append_quality_results_for_rejects,
     publish_records_to_view,
+    publish_sql_view,
 )
 
 
@@ -86,6 +90,9 @@ class FakeTable:
     def collect(self):
         return list(self._rows)
 
+    def count(self):
+        return len(self._rows)
+
 
 class FakeSparkSession:
     def __init__(self, tables=None, existing_tables=None):
@@ -104,6 +111,9 @@ class FakeSparkSession:
 
     def sql(self, query: str):
         self.executed_sql.append(query)
+        if query.startswith("CREATE OR REPLACE VIEW "):
+            view_name = query.split(" AS ", 1)[0].replace("CREATE OR REPLACE VIEW ", "").strip()
+            self.tables.setdefault(view_name, FakeTable(rows=[]))
         return None
 
 
@@ -151,6 +161,19 @@ def test_publish_records_to_view_emits_create_or_replace_view_sql() -> None:
 
     assert row_count == 1
     assert any("CREATE OR REPLACE VIEW" in query for query in spark.executed_sql)
+
+
+def test_publish_sql_view_emits_create_or_replace_view_sql() -> None:
+    spark = FakeSparkSession()
+
+    row_count = publish_sql_view(
+        spark,
+        "workspace.instructor_5k_silver.vw_team_rosters",
+        "SELECT 1 AS roster_count",
+    )
+
+    assert row_count == 0
+    assert any("CREATE OR REPLACE VIEW workspace.instructor_5k_silver.vw_team_rosters" in query for query in spark.executed_sql)
 
 
 def test_summarize_pipeline_run_detects_critical_quality_failures() -> None:
@@ -214,3 +237,82 @@ def test_summarize_pipeline_run_detects_critical_quality_failures() -> None:
 
     assert summary.final_status == "FAILED"
     assert summary.critical_quality_failure_count == 1
+
+
+def test_run_cross_table_validations_sql_uses_sql_aggregation(monkeypatch) -> None:
+    config = load_bronze_to_silver_config("napa_5k")
+    environment = resolve_release_environment(config)
+    context = create_pipeline_context(config, environment, pipeline_run_id="run-123")
+    spark = FakeSparkSession()
+
+    def fake_scalar_count(_spark, query: str) -> int:
+        if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(tm.team_membership_id) <> 2" in query:
+            return 1
+        if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(mt.match_team_id) <> 2" in query:
+            return 0
+        if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(mg.match_game_id) < 1" in query:
+            return 0
+        if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(mtp.match_team_player_id) <> 2" in query:
+            return 1
+        if "COUNT(*) AS value FROM (" in query and "team_membership_id" in query and "LEFT ANTI JOIN workspace.instructor_5k_silver.players" in query:
+            return 0
+        if "COUNT(*) AS value FROM (" in query and "match_team_player_id" in query and "LEFT ANTI JOIN workspace.instructor_5k_silver.players" in query:
+            return 0
+        if "COUNT(*) AS value FROM (" in query and "team_winners AS" in query:
+            return 0
+        if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.teams WHERE active_flag = true" in query:
+            return 2
+        if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.matches WHERE completed_flag = true" in query:
+            return 1
+        if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.match_teams" in query:
+            return 2
+        if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.team_memberships" in query:
+            return 3
+        if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.match_team_players" in query:
+            return 3
+        if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.matches" in query:
+            return 1
+        return 0
+
+    def fake_sample_keys(_spark, query: str) -> list[str]:
+        if "HAVING COUNT(tm.team_membership_id) <> 2" in query:
+            return ["team-2"]
+        if "HAVING COUNT(mtp.match_team_player_id) <> 2" in query:
+            return ["mt-2"]
+        return []
+
+    monkeypatch.setattr(cross_table_module, "_scalar_count", fake_scalar_count)
+    monkeypatch.setattr(cross_table_module, "_sample_business_keys", fake_sample_keys)
+
+    result = run_cross_table_validations_sql(
+        spark,
+        context,
+        environment,
+        expected_match_team_count=2,
+        expected_match_team_player_count=2,
+    )
+
+    quality_by_rule = {row["rule_id"]: row for row in result.quality_results}
+    assert quality_by_rule["CROSS_TEAM_001"]["failed_row_count"] == 1
+    assert quality_by_rule["CROSS_MATCH_TEAM_001"]["failed_row_count"] == 1
+    assert quality_by_rule["CROSS_WINNER_001"]["failed_row_count"] == 0
+    assert result.warning_count == 2
+    assert result.failure_count == 0
+
+
+def test_publish_convenience_views_task_uses_sql_views() -> None:
+    config = load_bronze_to_silver_config("napa_5k")
+    environment = resolve_release_environment(config)
+    context = create_pipeline_context(config, environment, pipeline_run_id="run-123")
+    spark = FakeSparkSession()
+
+    published_counts = publish_convenience_views_task(spark, config, environment, context)
+
+    assert set(published_counts) == {
+        "vw_players_current",
+        "vw_current_team_memberships",
+        "vw_team_rosters",
+        "vw_match_results",
+        "vw_player_match_history",
+    }
+    assert sum(1 for query in spark.executed_sql if query.startswith("CREATE OR REPLACE VIEW ")) == 5

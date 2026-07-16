@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from napa_pipeline.bronze_to_silver.environment import ReleaseEnvironment
+
 
 def build_vw_players_current(
     players_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
@@ -24,6 +26,23 @@ def build_vw_players_current(
     )
 
 
+def build_vw_players_current_sql(environment: ReleaseEnvironment) -> str:
+    """Return SQL for the current active-player convenience view."""
+    players_fqn = _silver_table_fqn(environment, "players")
+    return f"""
+SELECT
+    player_id,
+    player_sk,
+    display_name,
+    home_region_id,
+    country_code,
+    age,
+    active_flag
+FROM {players_fqn}
+WHERE active_flag = true
+""".strip()
+
+
 def build_vw_current_team_memberships(
     team_memberships_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
 ) -> tuple[dict[str, Any], ...]:
@@ -39,6 +58,33 @@ def build_vw_current_team_memberships(
             key=lambda item: (str(item["team_id"]), str(item["player_id"])),
         )
     )
+
+
+def build_vw_current_team_memberships_sql(environment: ReleaseEnvironment) -> str:
+    """Return SQL for the current team-membership convenience view."""
+    memberships_fqn = _silver_table_fqn(environment, "team_memberships")
+    return f"""
+SELECT
+    team_membership_id,
+    team_membership_sk,
+    player_id,
+    player_sk,
+    team_id,
+    team_sk,
+    membership_start_date,
+    membership_end_date,
+    membership_status,
+    current_membership_flag,
+    player_role,
+    player_position,
+    _pipeline_run_id,
+    _release_name,
+    _source_dataset,
+    _load_ts,
+    _record_hash
+FROM {memberships_fqn}
+WHERE current_membership_flag = true
+""".strip()
 
 
 def build_vw_team_rosters(
@@ -91,6 +137,75 @@ def build_vw_team_rosters(
             }
         )
     return tuple(result)
+
+
+def build_vw_team_rosters_sql(
+    environment: ReleaseEnvironment,
+    *,
+    expected_roster_count: int,
+) -> str:
+    """Return SQL for the team-roster convenience view."""
+    teams_fqn = _silver_table_fqn(environment, "teams")
+    players_fqn = _silver_table_fqn(environment, "players")
+    memberships_fqn = _silver_table_fqn(environment, "team_memberships")
+    return f"""
+WITH current_memberships AS (
+    SELECT
+        tm.team_id,
+        tm.team_sk,
+        tm.player_id,
+        tm.player_sk,
+        tm.player_role,
+        tm.player_position,
+        p.display_name
+    FROM {memberships_fqn} tm
+    LEFT JOIN {players_fqn} p
+        ON tm.player_id = p.player_id
+    WHERE tm.current_membership_flag = true
+),
+roster_counts AS (
+    SELECT
+        team_id,
+        COUNT(*) AS current_roster_count
+    FROM current_memberships
+    GROUP BY team_id
+),
+roster_players AS (
+    SELECT
+        team_id,
+        ARRAY_SORT(
+            COLLECT_LIST(
+                NAMED_STRUCT(
+                    'player_id', player_id,
+                    'player_sk', player_sk,
+                    'display_name', display_name,
+                    'player_role', player_role,
+                    'player_position', player_position
+                )
+            )
+        ) AS roster_players
+    FROM current_memberships
+    GROUP BY team_id
+)
+SELECT
+    t.team_id,
+    t.team_sk,
+    t.team_name,
+    t.team_category,
+    t.team_status,
+    COALESCE(rc.current_roster_count, 0) AS current_roster_count,
+    {expected_roster_count} AS expected_roster_count,
+    CASE
+        WHEN COALESCE(rc.current_roster_count, 0) = {expected_roster_count} THEN 'OK'
+        ELSE 'WARNING'
+    END AS roster_cardinality_status,
+    COALESCE(rp.roster_players, ARRAY()) AS roster_players
+FROM {teams_fqn} t
+LEFT JOIN roster_counts rc
+    ON t.team_id = rc.team_id
+LEFT JOIN roster_players rp
+    ON t.team_id = rp.team_id
+""".strip()
 
 
 def build_vw_match_results(
@@ -151,6 +266,76 @@ def build_vw_match_results(
             }
         )
     return tuple(results)
+
+
+def build_vw_match_results_sql(environment: ReleaseEnvironment) -> str:
+    """Return SQL for the match-results convenience view."""
+    matches_fqn = _silver_table_fqn(environment, "matches")
+    match_teams_fqn = _silver_table_fqn(environment, "match_teams")
+    match_games_fqn = _silver_table_fqn(environment, "match_games")
+    teams_fqn = _silver_table_fqn(environment, "teams")
+    regions_fqn = _silver_table_fqn(environment, "regions")
+    batches_fqn = _silver_table_fqn(environment, "monthly_batches")
+    return f"""
+WITH side_one AS (
+    SELECT
+        mt.match_id,
+        mt.team_id AS team_one_id,
+        t.team_name AS team_one_name
+    FROM {match_teams_fqn} mt
+    LEFT JOIN {teams_fqn} t
+        ON mt.team_id = t.team_id
+    WHERE mt.team_number = 1
+),
+side_two AS (
+    SELECT
+        mt.match_id,
+        mt.team_id AS team_two_id,
+        t.team_name AS team_two_name
+    FROM {match_teams_fqn} mt
+    LEFT JOIN {teams_fqn} t
+        ON mt.team_id = t.team_id
+    WHERE mt.team_number = 2
+),
+game_scores AS (
+    SELECT
+        match_id,
+        SUM(COALESCE(team_one_score, 0)) AS team_one_total_score,
+        SUM(COALESCE(team_two_score, 0)) AS team_two_total_score,
+        COUNT(*) AS game_count
+    FROM {match_games_fqn}
+    GROUP BY match_id
+)
+SELECT
+    m.match_id,
+    m.match_sk,
+    m.match_date,
+    m.competition_category,
+    m.match_status,
+    m.winning_team_number,
+    s1.team_one_id,
+    s1.team_one_name,
+    s2.team_two_id,
+    s2.team_two_name,
+    COALESCE(gs.team_one_total_score, 0) AS team_one_total_score,
+    COALESCE(gs.team_two_total_score, 0) AS team_two_total_score,
+    COALESCE(gs.game_count, 0) AS game_count,
+    m.region_id,
+    r.region_name,
+    m.batch_id,
+    b.batch_date
+FROM {matches_fqn} m
+LEFT JOIN side_one s1
+    ON m.match_id = s1.match_id
+LEFT JOIN side_two s2
+    ON m.match_id = s2.match_id
+LEFT JOIN game_scores gs
+    ON m.match_id = gs.match_id
+LEFT JOIN {regions_fqn} r
+    ON m.region_id = r.region_id
+LEFT JOIN {batches_fqn} b
+    ON m.batch_id = b.batch_id
+""".strip()
 
 
 def build_vw_player_match_history(
@@ -214,6 +399,67 @@ def build_vw_player_match_history(
     return tuple(results)
 
 
+def build_vw_player_match_history_sql(environment: ReleaseEnvironment) -> str:
+    """Return SQL for the player-match-history convenience view."""
+    match_team_players_fqn = _silver_table_fqn(environment, "match_team_players")
+    match_teams_fqn = _silver_table_fqn(environment, "match_teams")
+    matches_fqn = _silver_table_fqn(environment, "matches")
+    players_fqn = _silver_table_fqn(environment, "players")
+    teams_fqn = _silver_table_fqn(environment, "teams")
+    regions_fqn = _silver_table_fqn(environment, "regions")
+    batches_fqn = _silver_table_fqn(environment, "monthly_batches")
+    return f"""
+WITH opponent_teams AS (
+    SELECT
+        mt1.match_team_id,
+        mt2.team_id AS opponent_team_id
+    FROM {match_teams_fqn} mt1
+    LEFT JOIN {match_teams_fqn} mt2
+        ON mt1.match_id = mt2.match_id
+       AND mt1.match_team_id <> mt2.match_team_id
+)
+SELECT
+    mtp.player_id,
+    mtp.player_sk,
+    p.display_name,
+    mtp.match_id,
+    mtp.match_sk,
+    m.match_date,
+    m.competition_category,
+    mtp.team_id,
+    t.team_name,
+    ot.opponent_team_id,
+    ot_team.team_name AS opponent_team_name,
+    CASE
+        WHEN m.winning_team_number IS NULL OR mt.team_number IS NULL THEN NULL
+        WHEN m.winning_team_number = mt.team_number THEN 'WIN'
+        ELSE 'LOSS'
+    END AS result,
+    mtp.player_rating_at_match,
+    m.region_id,
+    r.region_name,
+    m.batch_id,
+    b.batch_date
+FROM {match_team_players_fqn} mtp
+INNER JOIN {match_teams_fqn} mt
+    ON mtp.match_team_id = mt.match_team_id
+INNER JOIN {matches_fqn} m
+    ON mtp.match_id = m.match_id
+LEFT JOIN {players_fqn} p
+    ON mtp.player_id = p.player_id
+LEFT JOIN {teams_fqn} t
+    ON mtp.team_id = t.team_id
+LEFT JOIN opponent_teams ot
+    ON mtp.match_team_id = ot.match_team_id
+LEFT JOIN {teams_fqn} ot_team
+    ON ot.opponent_team_id = ot_team.team_id
+LEFT JOIN {regions_fqn} r
+    ON m.region_id = r.region_id
+LEFT JOIN {batches_fqn} b
+    ON m.batch_id = b.batch_id
+""".strip()
+
+
 def _aggregate_game_scores(
     match_games_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
 ) -> dict[str, int]:
@@ -244,3 +490,7 @@ def _resolve_player_match_result(
     if winning_team_number is None or team_number is None:
         return None
     return "WIN" if int(winning_team_number) == int(team_number) else "LOSS"
+
+
+def _silver_table_fqn(environment: ReleaseEnvironment, table_name: str) -> str:
+    return f"{environment.catalog}.{environment.silver_schema}.{table_name}"

@@ -16,7 +16,7 @@ from napa_pipeline.bronze_to_silver.competition import (
     build_matches,
 )
 from napa_pipeline.bronze_to_silver.config import BronzeToSilverConfig
-from napa_pipeline.bronze_to_silver.cross_table import run_cross_table_validations
+from napa_pipeline.bronze_to_silver.cross_table import run_cross_table_validations_sql
 from napa_pipeline.bronze_to_silver.environment import ReleaseEnvironment
 from napa_pipeline.bronze_to_silver.io import (
     get_bronze_source_table_fqn,
@@ -51,7 +51,7 @@ from napa_pipeline.bronze_to_silver.publish import (
     append_warning_message,
     collect_table_rows,
     publish_records_to_table,
-    publish_records_to_view,
+    publish_sql_view,
 )
 from napa_pipeline.bronze_to_silver.reference import (
     SilverBuildResult,
@@ -59,11 +59,11 @@ from napa_pipeline.bronze_to_silver.reference import (
     build_regions,
 )
 from napa_pipeline.bronze_to_silver.views import (
-    build_vw_current_team_memberships,
-    build_vw_match_results,
-    build_vw_player_match_history,
-    build_vw_players_current,
-    build_vw_team_rosters,
+    build_vw_current_team_memberships_sql,
+    build_vw_match_results_sql,
+    build_vw_player_match_history_sql,
+    build_vw_players_current_sql,
+    build_vw_team_rosters_sql,
 )
 
 
@@ -202,16 +202,10 @@ def run_cross_table_validation_task(
 ) -> dict[str, int]:
     """Execute cross-table validation against published Silver tables."""
     initialize_pipeline_run(spark, context)
-    table_rows = _load_published_silver_rows(spark, environment)
-    result = run_cross_table_validations(
+    result = run_cross_table_validations_sql(
+        spark,
         context,
-        players_rows=table_rows["players"],
-        teams_rows=table_rows["teams"],
-        team_memberships_rows=table_rows["team_memberships"],
-        matches_rows=table_rows["matches"],
-        match_teams_rows=table_rows["match_teams"],
-        match_team_players_rows=table_rows["match_team_players"],
-        match_games_rows=table_rows["match_games"],
+        environment,
         expected_match_team_count=int(config.data["thresholds"]["expected_match_team_count"]),
         expected_match_team_player_count=int(config.data["thresholds"]["expected_match_team_player_count"]),
     )
@@ -239,53 +233,35 @@ def publish_convenience_views_task(
     context: PipelineContext,
 ) -> dict[str, int]:
     """Publish the configured convenience views."""
-    table_rows = _load_published_silver_rows(spark, environment)
     view_prefix = f"{environment.catalog}.{environment.silver_schema}"
     published_counts = {
-        "vw_players_current": publish_records_to_view(
+        "vw_players_current": publish_sql_view(
             spark,
             f"{view_prefix}.vw_players_current",
-            build_vw_players_current(table_rows["players"]),
+            build_vw_players_current_sql(environment),
         ),
-        "vw_current_team_memberships": publish_records_to_view(
+        "vw_current_team_memberships": publish_sql_view(
             spark,
             f"{view_prefix}.vw_current_team_memberships",
-            build_vw_current_team_memberships(table_rows["team_memberships"]),
+            build_vw_current_team_memberships_sql(environment),
         ),
-        "vw_team_rosters": publish_records_to_view(
+        "vw_team_rosters": publish_sql_view(
             spark,
             f"{view_prefix}.vw_team_rosters",
-            build_vw_team_rosters(
-                table_rows["teams"],
-                table_rows["players"],
-                table_rows["team_memberships"],
+            build_vw_team_rosters_sql(
+                environment,
                 expected_roster_count=int(config.data["thresholds"]["expected_match_team_player_count"]),
             ),
         ),
-        "vw_match_results": publish_records_to_view(
+        "vw_match_results": publish_sql_view(
             spark,
             f"{view_prefix}.vw_match_results",
-            build_vw_match_results(
-                table_rows["matches"],
-                table_rows["match_teams"],
-                table_rows["match_games"],
-                table_rows["teams"],
-                table_rows["regions"],
-                table_rows["monthly_batches"],
-            ),
+            build_vw_match_results_sql(environment),
         ),
-        "vw_player_match_history": publish_records_to_view(
+        "vw_player_match_history": publish_sql_view(
             spark,
             f"{view_prefix}.vw_player_match_history",
-            build_vw_player_match_history(
-                table_rows["match_team_players"],
-                table_rows["match_teams"],
-                table_rows["matches"],
-                table_rows["players"],
-                table_rows["teams"],
-                table_rows["regions"],
-                table_rows["monthly_batches"],
-            ),
+            build_vw_player_match_history_sql(environment),
         ),
     }
     return published_counts
@@ -428,22 +404,3 @@ def _maybe_collect_silver_table(
         return []
     return collect_table_rows(spark, table_fqn)
 
-
-def _load_published_silver_rows(
-    spark: Any,
-    environment: ReleaseEnvironment,
-) -> dict[str, list[dict[str, Any]]]:
-    return {
-        table_name: _maybe_collect_silver_table(spark, environment, table_name)
-        for table_name in (
-            "monthly_batches",
-            "regions",
-            "players",
-            "teams",
-            "team_memberships",
-            "matches",
-            "match_teams",
-            "match_team_players",
-            "match_games",
-        )
-    }

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 from typing import Any
 
+from napa_pipeline.bronze_to_silver.environment import ReleaseEnvironment
 from napa_pipeline.bronze_to_silver.operations import (
     PipelineContext,
     build_quality_result_record,
@@ -108,6 +108,236 @@ def run_cross_table_validations(
         for result in quality_results
         if result["severity"] != "WARNING"
     )
+    return CrossTableValidationResult(
+        quality_results=tuple(quality_results),
+        run_messages=tuple(run_messages),
+        warning_count=warning_count,
+        failure_count=failure_count,
+    )
+
+
+def run_cross_table_validations_sql(
+    spark: Any,
+    context: PipelineContext,
+    environment: ReleaseEnvironment,
+    *,
+    expected_match_team_count: int,
+    expected_match_team_player_count: int,
+) -> CrossTableValidationResult:
+    """Run the cross-table validations directly in Spark SQL."""
+    teams_fqn = _silver_table_fqn(environment, "teams")
+    team_memberships_fqn = _silver_table_fqn(environment, "team_memberships")
+    matches_fqn = _silver_table_fqn(environment, "matches")
+    match_teams_fqn = _silver_table_fqn(environment, "match_teams")
+    match_team_players_fqn = _silver_table_fqn(environment, "match_team_players")
+    match_games_fqn = _silver_table_fqn(environment, "match_games")
+    players_fqn = _silver_table_fqn(environment, "players")
+
+    checks = [
+        {
+            "target_table": "vw_team_rosters",
+            "rule_id": "CROSS_TEAM_001",
+            "rule_type": "cardinality",
+            "severity": "WARNING",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {teams_fqn} WHERE active_flag = true",
+            "failed_sql": f"""
+SELECT t.team_id AS business_key
+FROM {teams_fqn} t
+LEFT JOIN {team_memberships_fqn} tm
+    ON t.team_id = tm.team_id
+   AND tm.current_membership_flag = true
+WHERE t.active_flag = true
+GROUP BY t.team_id
+HAVING COUNT(tm.team_membership_id) <> {expected_match_team_player_count}
+""".strip(),
+            "threshold_value": str(expected_match_team_player_count),
+        },
+        {
+            "target_table": "matches",
+            "rule_id": "CROSS_MATCH_001",
+            "rule_type": "cardinality",
+            "severity": "WARNING",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {matches_fqn} WHERE completed_flag = true",
+            "failed_sql": f"""
+SELECT m.match_id AS business_key
+FROM {matches_fqn} m
+LEFT JOIN {match_teams_fqn} mt
+    ON m.match_id = mt.match_id
+WHERE m.completed_flag = true
+GROUP BY m.match_id
+HAVING COUNT(mt.match_team_id) <> {expected_match_team_count}
+""".strip(),
+            "threshold_value": str(expected_match_team_count),
+        },
+        {
+            "target_table": "matches",
+            "rule_id": "CROSS_MATCH_002",
+            "rule_type": "cardinality",
+            "severity": "WARNING",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {matches_fqn} WHERE completed_flag = true",
+            "failed_sql": f"""
+SELECT m.match_id AS business_key
+FROM {matches_fqn} m
+LEFT JOIN {match_games_fqn} mg
+    ON m.match_id = mg.match_id
+WHERE m.completed_flag = true
+GROUP BY m.match_id
+HAVING COUNT(mg.match_game_id) < 1
+""".strip(),
+            "threshold_value": ">=1",
+        },
+        {
+            "target_table": "match_team_players",
+            "rule_id": "CROSS_MATCH_TEAM_001",
+            "rule_type": "cardinality",
+            "severity": "WARNING",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {match_teams_fqn}",
+            "failed_sql": f"""
+SELECT mt.match_team_id AS business_key
+FROM {match_teams_fqn} mt
+LEFT JOIN {match_team_players_fqn} mtp
+    ON mt.match_team_id = mtp.match_team_id
+GROUP BY mt.match_team_id
+HAVING COUNT(mtp.match_team_player_id) <> {expected_match_team_player_count}
+""".strip(),
+            "threshold_value": str(expected_match_team_player_count),
+        },
+        {
+            "target_table": "team_memberships",
+            "rule_id": "CROSS_PLAYER_001",
+            "rule_type": "foreign_key",
+            "severity": "ERROR",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {team_memberships_fqn}",
+            "failed_sql": f"""
+SELECT tm.team_membership_id AS business_key
+FROM {team_memberships_fqn} tm
+LEFT ANTI JOIN {players_fqn} p
+    ON tm.player_id = p.player_id
+""".strip(),
+            "threshold_value": None,
+        },
+        {
+            "target_table": "match_team_players",
+            "rule_id": "CROSS_PLAYER_002",
+            "rule_type": "foreign_key",
+            "severity": "ERROR",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {match_team_players_fqn}",
+            "failed_sql": f"""
+SELECT mtp.match_team_player_id AS business_key
+FROM {match_team_players_fqn} mtp
+LEFT ANTI JOIN {players_fqn} p
+    ON mtp.player_id = p.player_id
+""".strip(),
+            "threshold_value": None,
+        },
+        {
+            "target_table": "matches",
+            "rule_id": "CROSS_WINNER_001",
+            "rule_type": "consistency",
+            "severity": "ERROR",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {matches_fqn}",
+            "failed_sql": f"""
+WITH team_winners AS (
+    SELECT
+        match_id,
+        COLLECT_SET(CAST(team_number AS INT)) AS winner_team_numbers
+    FROM {match_teams_fqn}
+    WHERE winner_flag = true
+    GROUP BY match_id
+),
+game_winner_counts AS (
+    SELECT
+        match_id,
+        CAST(winning_team_number AS INT) AS winning_team_number,
+        COUNT(*) AS game_wins
+    FROM {match_games_fqn}
+    WHERE winning_team_number IS NOT NULL
+    GROUP BY match_id, CAST(winning_team_number AS INT)
+),
+game_winners AS (
+    SELECT
+        match_id,
+        winning_team_number
+    FROM (
+        SELECT
+            match_id,
+            winning_team_number,
+            ROW_NUMBER() OVER (
+                PARTITION BY match_id
+                ORDER BY game_wins DESC, winning_team_number ASC
+            ) AS row_num
+        FROM game_winner_counts
+    )
+    WHERE row_num = 1
+)
+SELECT m.match_id AS business_key
+FROM {matches_fqn} m
+LEFT JOIN team_winners tw
+    ON m.match_id = tw.match_id
+LEFT JOIN game_winners gw
+    ON m.match_id = gw.match_id
+WHERE m.winning_team_number IS NOT NULL
+  AND (
+      (SIZE(COALESCE(tw.winner_team_numbers, ARRAY())) > 0
+       AND NOT ARRAY_CONTAINS(tw.winner_team_numbers, CAST(m.winning_team_number AS INT)))
+      OR
+      (gw.winning_team_number IS NOT NULL
+       AND gw.winning_team_number <> CAST(m.winning_team_number AS INT))
+  )
+""".strip(),
+            "threshold_value": None,
+        },
+    ]
+
+    quality_results: list[dict[str, Any]] = []
+    run_messages: list[dict[str, Any]] = []
+    warning_count = 0
+    failure_count = 0
+
+    for check in checks:
+        evaluated_row_count = _scalar_count(spark, check["evaluated_sql"])
+        failed_row_count = _scalar_count(
+            spark,
+            f"SELECT COUNT(*) AS value FROM ({check['failed_sql']}) failed_rows",
+        )
+        sample_business_keys = _sample_business_keys(spark, check["failed_sql"])
+        status = "PASSED" if failed_row_count == 0 else "FAILED"
+        failure_pct = _failure_pct(failed_row_count, evaluated_row_count)
+        quality_record = build_quality_result_record(
+            context,
+            target_table=str(check["target_table"]),
+            rule_id=str(check["rule_id"]),
+            rule_type=str(check["rule_type"]),
+            severity=str(check["severity"]),
+            status=status,
+            evaluated_row_count=evaluated_row_count,
+            failed_row_count=failed_row_count,
+            failure_pct=failure_pct,
+            threshold_value=check["threshold_value"],
+            sample_business_keys=sample_business_keys,
+        )
+        quality_results.append(quality_record)
+
+        if failed_row_count:
+            level = "WARNING" if check["severity"] == "WARNING" else "ERROR"
+            run_messages.append(
+                build_run_message_record(
+                    context,
+                    message_level=level,
+                    message_code=str(check["rule_id"]),
+                    message_text=(
+                        f"{check['target_table']} validation {check['rule_id']} "
+                        f"found {failed_row_count} failing rows."
+                    ),
+                    target_table=str(check["target_table"]),
+                )
+            )
+
+        if check["severity"] == "WARNING":
+            warning_count += failed_row_count
+        else:
+            failure_count += failed_row_count
+
     return CrossTableValidationResult(
         quality_results=tuple(quality_results),
         run_messages=tuple(run_messages),
@@ -353,3 +583,29 @@ def _failure_pct(failed_count: int, evaluated_count: int) -> float | None:
     if evaluated_count == 0:
         return None
     return (failed_count / evaluated_count) * 100.0
+
+
+def _scalar_count(spark: Any, query: str) -> int:
+    row = spark.sql(query).collect()[0]
+    if hasattr(row, "asDict"):
+        return int(row.asDict(recursive=True)["value"])
+    if isinstance(row, dict):
+        return int(row["value"])
+    return int(row[0])
+
+
+def _sample_business_keys(spark: Any, query: str) -> list[str]:
+    rows = spark.sql(f"SELECT business_key FROM ({query}) failed_rows LIMIT 10").collect()
+    results: list[str] = []
+    for row in rows:
+        if hasattr(row, "asDict"):
+            results.append(str(row.asDict(recursive=True)["business_key"]))
+        elif isinstance(row, dict):
+            results.append(str(row["business_key"]))
+        else:
+            results.append(str(row[0]))
+    return results
+
+
+def _silver_table_fqn(environment: ReleaseEnvironment, table_name: str) -> str:
+    return f"{environment.catalog}.{environment.silver_schema}.{table_name}"
