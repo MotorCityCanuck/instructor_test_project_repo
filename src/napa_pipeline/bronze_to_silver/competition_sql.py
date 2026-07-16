@@ -807,6 +807,10 @@ def _build_match_team_players_sql_plan(
     team_memberships_fqn = f"{silver_schema_fqn}.team_memberships"
     expected_player_count = int(config.data["thresholds"]["expected_match_team_player_count"])
     position_expr = _domain_case_expression("position_input", config.data["domains"]["player_position"])
+    position_expr_from_source = position_expr.replace(
+        "position_input",
+        "COALESCE(source.player_position_raw, source.position_alias_raw)",
+    )
     metadata_sql = _metadata_sql(
         context,
         source_table="match_team_players",
@@ -821,7 +825,8 @@ WITH normalized_source AS (
         NULLIF(TRIM(CAST(COALESCE(match_team_player_id, id) AS STRING)), '') AS match_team_player_id,
         NULLIF(TRIM(CAST(match_team_id AS STRING)), '') AS match_team_id,
         NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(player_position, position) AS STRING))), '') AS position_input,
+        NULLIF(UPPER(TRIM(CAST(player_position AS STRING))), '') AS player_position_raw,
+        NULLIF(UPPER(TRIM(CAST(position AS STRING))), '') AS position_alias_raw,
         NULLIF(TRIM(CAST(COALESCE(player_rating_at_match, rating_at_match) AS STRING)), '') AS player_rating_at_match_raw
     FROM {source_table_fqn}
 ),
@@ -832,7 +837,8 @@ deduped_source AS (
 typed_source AS (
     SELECT
         source.*,
-        {position_expr} AS player_position,
+        COALESCE(source.player_position_raw, source.position_alias_raw) AS position_input,
+        {position_expr_from_source} AS player_position,
         CAST(source.player_rating_at_match_raw AS DOUBLE) AS player_rating_at_match
     FROM deduped_source source
 ),
@@ -861,14 +867,14 @@ invalid_rows AS (
             WHEN match_team_player_id IS NULL THEN 'MISSING_PRIMARY_KEY'
             WHEN match_team_id IS NULL OR match_team_sk IS NULL THEN 'ORPHAN_FOREIGN_KEY'
             WHEN player_id IS NULL OR player_sk IS NULL THEN 'ORPHAN_FOREIGN_KEY'
-            WHEN position_input IS NOT NULL AND player_position IS NULL THEN 'INVALID_DOMAIN_VALUE'
+            WHEN player_position_raw IS NOT NULL AND player_position IS NULL THEN 'INVALID_DOMAIN_VALUE'
             WHEN player_rating_at_match_raw IS NOT NULL AND player_rating_at_match IS NULL THEN 'INVALID_DATA_TYPE'
         END AS reject_reason,
         CASE
             WHEN match_team_player_id IS NULL THEN 'MATCH_TEAM_PLAYER_001'
             WHEN match_team_id IS NULL OR match_team_sk IS NULL THEN 'MATCH_TEAM_PLAYER_002'
             WHEN player_id IS NULL OR player_sk IS NULL THEN 'MATCH_TEAM_PLAYER_003'
-            WHEN position_input IS NOT NULL AND player_position IS NULL THEN 'MATCH_TEAM_PLAYER_004'
+            WHEN player_position_raw IS NOT NULL AND player_position IS NULL THEN 'MATCH_TEAM_PLAYER_004'
             WHEN player_rating_at_match_raw IS NOT NULL AND player_rating_at_match IS NULL THEN 'MATCH_TEAM_PLAYER_005'
         END AS rule_id,
         CASE
@@ -879,7 +885,7 @@ invalid_rows AS (
             WHEN match_team_player_id IS NULL THEN 'match_team_player_id could not be resolved.'
             WHEN match_team_id IS NULL OR match_team_sk IS NULL THEN concat('match_team_id ''', match_team_id, ''' was not found in accepted match_teams.')
             WHEN player_id IS NULL OR player_sk IS NULL THEN concat('player_id ''', player_id, ''' was not found in accepted players.')
-            WHEN position_input IS NOT NULL AND player_position IS NULL THEN concat('Invalid player_position value ''', position_input, '''.')
+            WHEN player_position_raw IS NOT NULL AND player_position IS NULL THEN concat('Invalid player_position value ''', player_position_raw, '''.')
             WHEN player_rating_at_match_raw IS NOT NULL AND player_rating_at_match IS NULL THEN concat('Invalid player_rating_at_match value ''', player_rating_at_match_raw, '''.')
         END AS reject_reason_detail,
         {sql_literal(context.pipeline_run_id)} AS pipeline_run_id,
@@ -892,6 +898,8 @@ invalid_rows AS (
                 'match_team_player_id', match_team_player_id,
                 'match_team_id', match_team_id,
                 'player_id', player_id,
+                'player_position_raw', player_position_raw,
+                'position_alias_raw', position_alias_raw,
                 'position_input', position_input,
                 'player_rating_at_match_raw', player_rating_at_match_raw
             )
@@ -902,7 +910,7 @@ invalid_rows AS (
        OR match_team_sk IS NULL
        OR player_id IS NULL
        OR player_sk IS NULL
-       OR (position_input IS NOT NULL AND player_position IS NULL)
+       OR (player_position_raw IS NOT NULL AND player_position IS NULL)
        OR (player_rating_at_match_raw IS NOT NULL AND player_rating_at_match IS NULL)
 ),
 valid_rows AS (
@@ -926,7 +934,7 @@ valid_rows AS (
       AND player_id IS NOT NULL
       AND player_sk IS NOT NULL
       AND NOT (
-          (position_input IS NOT NULL AND player_position IS NULL)
+          (player_position_raw IS NOT NULL AND player_position IS NULL)
           OR (player_rating_at_match_raw IS NOT NULL AND player_rating_at_match IS NULL)
       )
 ),
@@ -1170,7 +1178,9 @@ FROM structural_rejects
                 "NULLIF(TRIM(CAST(COALESCE(match_team_player_id, id) AS STRING)), '') AS match_team_player_id",
                 "NULLIF(TRIM(CAST(match_team_id AS STRING)), '') AS match_team_id",
                 "NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(player_position, position) AS STRING))), '') AS position_input",
+                "NULLIF(UPPER(TRIM(CAST(player_position AS STRING))), '') AS player_position_raw",
+                "NULLIF(UPPER(TRIM(CAST(position AS STRING))), '') AS position_alias_raw",
+                "COALESCE(NULLIF(UPPER(TRIM(CAST(player_position AS STRING))), ''), NULLIF(UPPER(TRIM(CAST(position AS STRING))), '')) AS position_input",
                 "NULLIF(TRIM(CAST(COALESCE(player_rating_at_match, rating_at_match) AS STRING)), '') AS player_rating_at_match_raw",
             ],
         ),
@@ -1182,14 +1192,15 @@ WITH valid_rows AS (
         source.player_id,
         match_team.match_team_sk,
         player.player_sk,
-        {position_expr} AS player_position,
+        {position_expr_from_source} AS player_position,
         CAST(source.player_rating_at_match_raw AS DOUBLE) AS player_rating_at_match
     FROM (
         SELECT
             NULLIF(TRIM(CAST(COALESCE(match_team_player_id, id) AS STRING)), '') AS match_team_player_id,
             NULLIF(TRIM(CAST(match_team_id AS STRING)), '') AS match_team_id,
             NULLIF(TRIM(CAST(player_id AS STRING)), '') AS player_id,
-            NULLIF(UPPER(TRIM(CAST(COALESCE(player_position, position) AS STRING))), '') AS position_input,
+            NULLIF(UPPER(TRIM(CAST(player_position AS STRING))), '') AS player_position_raw,
+            NULLIF(UPPER(TRIM(CAST(position AS STRING))), '') AS position_alias_raw,
             NULLIF(TRIM(CAST(COALESCE(player_rating_at_match, rating_at_match) AS STRING)), '') AS player_rating_at_match_raw
         FROM {source_table_fqn}
     ) source
@@ -1203,7 +1214,7 @@ WITH valid_rows AS (
       AND source.player_id IS NOT NULL
       AND player.player_sk IS NOT NULL
       AND NOT (
-          (source.position_input IS NOT NULL AND {position_expr} IS NULL)
+          (source.player_position_raw IS NOT NULL AND {position_expr_from_source} IS NULL)
           OR (source.player_rating_at_match_raw IS NOT NULL AND CAST(source.player_rating_at_match_raw AS DOUBLE) IS NULL)
       )
 ),

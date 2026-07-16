@@ -172,6 +172,8 @@ def test_build_competition_sql_plan_for_match_team_players_contains_expected_rul
     assert "MATCH_TEAM_PLAYER_007" in plan.rejected_sql
     assert "MATCH_TEAM_PLAYER_DUPLICATE" in plan.rejected_sql
     assert "membership_history_warning_flag" in plan.accepted_sql
+    assert "player_position_raw IS NOT NULL AND player_position IS NULL" in plan.rejected_sql
+    assert "position_alias_raw" in plan.rejected_sql
     assert plan.warning_count_sql is not None
 
 

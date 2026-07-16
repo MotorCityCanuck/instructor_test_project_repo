@@ -633,11 +633,13 @@ def _build_match_team_player_candidate(
             reject_reason_detail=f"player_id '{player_id}' was not found in accepted players.",
         )
 
+    player_position_raw = normalized.get("player_position")
+    position_alias_raw = normalized.get("position")
     player_position = _normalize_optional_domain_value(
-        normalized.get("player_position") or normalized.get("position"),
+        player_position_raw or position_alias_raw,
         side_domain,
     )
-    if normalized.get("player_position") not in (None, "") and player_position is None:
+    if player_position_raw not in (None, "") and player_position is None:
         return None, build_reject_record(
             context,
             source_table="match_team_players",
@@ -647,7 +649,7 @@ def _build_match_team_player_candidate(
             rule_id="MATCH_TEAM_PLAYER_004",
             rule_severity="ERROR",
             source_record=normalized,
-            reject_reason_detail=f"Invalid player_position value '{normalized.get('player_position')}'.",
+            reject_reason_detail=f"Invalid player_position value '{player_position_raw}'.",
         )
 
     rating, rating_reject = _safe_optional_float(
