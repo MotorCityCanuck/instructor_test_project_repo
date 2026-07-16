@@ -73,13 +73,15 @@ SELECT
     team_sk,
     membership_start_date,
     membership_end_date,
-    membership_status,
+    membership_duration_days,
     current_membership_flag,
+    membership_overlap_flag,
     player_role,
     player_position,
     _pipeline_run_id,
-    _release_name,
+    _pipeline_version,
     _source_dataset,
+    _source_table,
     _load_ts,
     _record_hash
 FROM {memberships_fqn}

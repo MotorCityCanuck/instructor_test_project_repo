@@ -21,6 +21,7 @@ from napa_pipeline.bronze_to_silver.reference import (
 )
 from napa_pipeline.bronze_to_silver.views import (
     build_vw_current_team_memberships,
+    build_vw_current_team_memberships_sql,
     build_vw_match_results,
     build_vw_player_match_history,
     build_vw_players_current,
@@ -210,6 +211,20 @@ def test_build_vw_current_team_memberships_filters_current_rows() -> None:
 
     assert len(view_rows) == 3
     assert all(row["current_membership_flag"] is True for row in view_rows)
+
+
+def test_build_vw_current_team_memberships_sql_matches_published_schema() -> None:
+    config = load_bronze_to_silver_config("napa_5k")
+    environment = resolve_release_environment(config)
+
+    view_sql = build_vw_current_team_memberships_sql(environment)
+
+    assert "membership_status" not in view_sql
+    assert "_release_name" not in view_sql
+    assert "membership_duration_days" in view_sql
+    assert "membership_overlap_flag" in view_sql
+    assert "_pipeline_version" in view_sql
+    assert "_source_table" in view_sql
 
 
 def test_build_vw_team_rosters_exposes_roster_status() -> None:
