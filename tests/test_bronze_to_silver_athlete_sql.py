@@ -48,6 +48,8 @@ def test_build_athlete_sql_plan_for_players_contains_expected_rules() -> None:
     assert "home_region_sk" in plan.accepted_sql
     assert "rating_confidence" in plan.accepted_sql
     assert "'CANADA'" in plan.accepted_sql
+    assert "CAST(NULL AS STRING) AS age_group" not in plan.accepted_sql
+    assert "'AGE_18_34'" in plan.accepted_sql
 
 
 def test_build_athlete_sql_plan_for_players_uses_actual_bronze_columns() -> None:

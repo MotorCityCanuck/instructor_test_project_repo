@@ -43,6 +43,21 @@ thresholds:
   warning_quality_deduction: 5
   expected_match_team_count: 2
   expected_match_team_player_count: 2
+  player_age_groups:
+    - label: UNDER_18
+      min_age: 0
+      max_age: 17
+    - label: AGE_18_34
+      min_age: 18
+      max_age: 34
+    - label: AGE_35_49
+      min_age: 35
+      max_age: 49
+    - label: AGE_50_64
+      min_age: 50
+      max_age: 64
+    - label: AGE_65_PLUS
+      min_age: 65
 
 paths:
   workflow_script_root: notebooks

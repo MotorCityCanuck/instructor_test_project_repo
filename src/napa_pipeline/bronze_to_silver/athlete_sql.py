@@ -73,6 +73,23 @@ def _build_players_sql_plan(
     dominant_hand_expr = _domain_case_expression("dominant_hand_input", config.data["domains"]["dominant_hand"])
     preferred_side_expr = _domain_case_expression("preferred_side_input", config.data["domains"]["player_position"])
     country_expr = _domain_case_expression("country_input", config.data["domains"]["country_code"])
+    age_expr = """
+CASE
+    WHEN birth_date IS NOT NULL AND as_of_date IS NOT NULL
+        THEN YEAR(as_of_date) - YEAR(birth_date)
+             - CASE
+                 WHEN MONTH(as_of_date) < MONTH(birth_date)
+                      OR (MONTH(as_of_date) = MONTH(birth_date) AND DAY(as_of_date) < DAY(birth_date))
+                     THEN 1
+                 ELSE 0
+               END
+    ELSE NULL
+END
+""".strip()
+    age_group_expr = _age_group_case_expression(
+        age_expr,
+        config.data["thresholds"].get("player_age_groups"),
+    )
     metadata_sql = _metadata_sql(
         context,
         source_table="player_master",
@@ -255,18 +272,8 @@ valid_rows AS (
             WHEN status_input IN ('FALSE', 'F', 'NO', 'N', '0', 'INACTIVE') THEN false
             ELSE NULL
         END AS active_flag,
-        CASE
-            WHEN birth_date IS NOT NULL AND as_of_date IS NOT NULL
-                THEN YEAR(as_of_date) - YEAR(birth_date)
-                     - CASE
-                         WHEN MONTH(as_of_date) < MONTH(birth_date)
-                              OR (MONTH(as_of_date) = MONTH(birth_date) AND DAY(as_of_date) < DAY(birth_date))
-                             THEN 1
-                         ELSE 0
-                       END
-            ELSE NULL
-        END AS age,
-        CAST(NULL AS STRING) AS age_group,
+        {age_expr} AS age,
+        {age_group_expr} AS age_group,
         rating_value AS rating,
         rating_confidence_value AS rating_confidence
     FROM validated_source
@@ -1386,3 +1393,33 @@ def _domain_case_expression(column_name: str, domain_config: dict[str, object]) 
         if value not in synonyms
     )
     return "CASE " + " ".join(lines) + " ELSE NULL END"
+
+
+def _age_group_case_expression(
+    age_expr: str,
+    age_groups: list[dict[str, object]] | None,
+) -> str:
+    resolved_age_groups = age_groups or [
+        {"label": "UNDER_18", "min_age": 0, "max_age": 17},
+        {"label": "AGE_18_34", "min_age": 18, "max_age": 34},
+        {"label": "AGE_35_49", "min_age": 35, "max_age": 49},
+        {"label": "AGE_50_64", "min_age": 50, "max_age": 64},
+        {"label": "AGE_65_PLUS", "min_age": 65},
+    ]
+    lines = [f"WHEN ({age_expr}) IS NULL THEN CAST(NULL AS STRING)"]
+    for group in resolved_age_groups:
+        label = group.get("label")
+        minimum_age = group.get("min_age")
+        maximum_age = group.get("max_age")
+        if label is None:
+            continue
+        predicates: list[str] = []
+        if minimum_age is not None:
+            predicates.append(f"({age_expr}) >= {int(minimum_age)}")
+        if maximum_age is not None:
+            predicates.append(f"({age_expr}) <= {int(maximum_age)}")
+        if not predicates:
+            continue
+        lines.append(f"WHEN {' AND '.join(predicates)} THEN {sql_literal(str(label))}")
+    lines.append("ELSE CAST(NULL AS STRING)")
+    return "CASE " + " ".join(lines) + " END"

@@ -27,6 +27,14 @@ from napa_pipeline.bronze_to_silver.transforms import (
     standardize_string,
 )
 
+DEFAULT_PLAYER_AGE_GROUPS = (
+    {"label": "UNDER_18", "min_age": 0, "max_age": 17},
+    {"label": "AGE_18_34", "min_age": 18, "max_age": 34},
+    {"label": "AGE_35_49", "min_age": 35, "max_age": 49},
+    {"label": "AGE_50_64", "min_age": 50, "max_age": 64},
+    {"label": "AGE_65_PLUS", "min_age": 65},
+)
+
 
 def build_players(
     source_rows: list[dict[str, Any]],
@@ -43,6 +51,7 @@ def build_players(
     gender_domain = config.data["domains"]["gender"]
     dominant_hand_domain = config.data["domains"]["dominant_hand"]
     side_domain = config.data["domains"]["player_position"]
+    player_age_groups = config.data["thresholds"].get("player_age_groups")
     region_index = _index_rows(regions_rows, "region_id")
     as_of_date = _resolve_release_as_of_date(monthly_batches_rows)
 
@@ -80,6 +89,7 @@ def build_players(
             gender_domain=gender_domain,
             dominant_hand_domain=dominant_hand_domain,
             side_domain=side_domain,
+            player_age_groups=player_age_groups,
             as_of_date=as_of_date,
             context=context,
         )
@@ -293,6 +303,7 @@ def _build_player_candidate(
     gender_domain: dict[str, Any],
     dominant_hand_domain: dict[str, Any],
     side_domain: dict[str, Any],
+    player_age_groups: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
     as_of_date: date | None,
     context: PipelineContext,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -446,7 +457,10 @@ def _build_player_candidate(
         "country_code": country_code,
         "active_flag": _derive_active_flag(normalized),
         "age": age,
-        "age_group": _derive_age_group(age, config_values=None),
+        "age_group": _derive_age_group(
+            age,
+            config_values=player_age_groups,
+        ),
         "rating": rating,
         "rating_confidence": confidence,
     }
@@ -908,10 +922,21 @@ def _calculate_age(
 def _derive_age_group(
     age: int | None,
     *,
-    config_values: dict[str, Any] | None,
+    config_values: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
 ) -> str | None:
-    if age is None or not config_values:
+    if age is None:
         return None
+    age_groups = config_values or DEFAULT_PLAYER_AGE_GROUPS
+    for group in age_groups:
+        minimum_age = group.get("min_age")
+        maximum_age = group.get("max_age")
+        if minimum_age is not None and age < int(minimum_age):
+            continue
+        if maximum_age is not None and age > int(maximum_age):
+            continue
+        label = group.get("label")
+        if label is not None:
+            return str(label)
     return None
 
 

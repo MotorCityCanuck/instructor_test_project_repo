@@ -83,6 +83,7 @@ def test_build_players_accepts_valid_row_and_derives_age_and_region_key() -> Non
     assert row["home_region_id"] == "region-1"
     assert row["home_region_sk"] == regions_rows[0]["region_sk"]
     assert row["age"] == 25
+    assert row["age_group"] == "AGE_18_34"
     assert row["active_flag"] is True
     assert row["_source_table"] == "player_master"
 
