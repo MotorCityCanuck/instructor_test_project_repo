@@ -167,7 +167,7 @@ Runtime-only values still need Databricks inspection:
 
 - `match_teams` includes persistent `team_id` in the implemented Silver SQL plan.
 - `match_team_players` includes `team_id`, `match_id`, `match_date`, and `player_id`, which supports player-match and team-match attribution.
-- `players` includes direct `country_code` and also `home_region_id` / `home_region_sk`. `regions` also includes `country_code`, so Gold can compare direct and region-derived country where both are present.
+- `players.country_code` is derived from direct player country where present, otherwise from `regions.country_code` through `players.home_region_id`.
 - `team_memberships` includes `membership_start_date`, `membership_end_date`, and `current_membership_flag`, supporting as-of membership logic.
 - `club_memberships` includes equivalent membership dates and flags.
 - `matches` includes `winning_team_number` and `completed_flag`.
@@ -175,7 +175,7 @@ Runtime-only values still need Databricks inspection:
 - Provided `matches` profiling shows `match_type` values: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
 - Provided `matches` profiling shows `competition_category` and `match_status` are null for all profiled distinct rows, and `completed_flag` is false for all profiled distinct rows.
 - Provided `teams` profiling returned headers but zero distinct rows, indicating `teams` may be empty in the profiled Silver schema.
-- Provided `players` profiling shows gender values `F` and `M`, but `country_code` is null across the profiled distinct rows.
+- Provided `players` profiling confirms gender values `F` and `M`. Player `country_code` is expected to be populated from home region when direct player country is absent.
 - Provided `players` profiling shows `active_flag` values null, false, and true.
 - Provided unprefixed `pipeline_runs` history contains five recent `bronze_to_silver` rows for `napa_5k`, all with `status = FAILED`. Because the implemented Bronze-to-Silver code writes to `b2s_pipeline_runs`, this output may be from a legacy or Raw-to-Bronze-compatible operations table rather than the active Bronze-to-Silver audit table.
 
@@ -186,7 +186,7 @@ Runtime-only values still need Databricks inspection:
 - The Gold spec's required Silver metadata does not match the implemented Silver metadata exactly.
 - No successful upstream `bronze_to_silver` run has been provided from the implemented `b2s_pipeline_runs` table. The Gold upstream success gate remains unverified until `b2s_pipeline_runs` is queried.
 - `teams` appears empty from the distinct-value query. This blocks team scorecards, partnership analytics, and Olympic candidate generation.
-- `players.country_code` appears null in the profiled values. This blocks country eligibility unless region-derived country is confirmed and approved as the fallback.
+- Player `country_code` should not be null when `home_region_id` resolves to a valid region with `country_code`. Any remaining null player country values should be investigated as missing home-region data or invalid region linkage.
 - `matches` appears to contain no completed matches in the profiled distinct values. This blocks match outcome, rating, team-performance, and recommendation analytics until confirmed or corrected.
 - `competition_category` is null in the profiled `matches` values. This blocks category-specific Gold products unless category can be derived from `teams.team_category` or another approved source.
 - No local Delta/Spark Silver tables are available in this repository. Physical schemas and profiling output were provided externally, but row counts and source correction must occur in Databricks.
@@ -230,7 +230,7 @@ UNION ALL SELECT 'match_games', COUNT(*) FROM workspace.instructor_5k_silver.mat
 - Confirm whether the Gold package should be added on a new branch before Phase 1.
 - Confirm whether `workspace` is the intended instructor-test catalog for all three releases.
 - Decide whether to repair Bronze-to-Silver and rerun before Gold, given the absence of successful upstream runs.
-- Decide whether `players.country_code` null values should be fixed upstream or derived from `regions.country_code`.
+- Confirm corrected `players.country_code` profiling output shows no null values after rerunning Bronze-to-Silver.
 - Decide whether empty `teams` is expected for this test state or an upstream failure requiring correction.
 - Confirm accepted `match_type` values: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
 - Confirm whether `competition_category` should be sourced from `matches.competition_category`, `teams.team_category`, or another approved derivation.

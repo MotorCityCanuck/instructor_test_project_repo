@@ -125,8 +125,8 @@ Columns:
 Gold uses:
 
 - Player identity and display fields.
-- Direct country code.
-- Region-derived country through `home_region_id`.
+- Direct country code where present.
+- Region-derived country through `home_region_id` when direct player country is absent.
 - Gender, hand, preferred side, age group, rating, rating confidence.
 - Active status via `active_flag`.
 
@@ -462,7 +462,7 @@ Known implemented joins:
 - Actual Databricks physical data types are confirmed for all required Silver source tables.
 - No successful upstream `bronze_to_silver` run was provided.
 - Provided `teams` profiling returned zero rows, so team category and team status values are not validated from data.
-- Provided `players` profiling shows `country_code` as null across all distinct rows, so player-country eligibility is unresolved.
+- Player `country_code` is expected to be populated from direct player country or from `regions.country_code` through `home_region_id`. Null values should be treated as missing home-region data or invalid region linkage.
 - Provided `matches` profiling shows no completed matches, so match outcome and rating inputs are unresolved.
 - `region_type` is requested by Phase 0, but the implemented `regions` Silver plan does not expose a `region_type` column.
 - Player status is exposed as `active_flag`, not `player_status`.
@@ -472,7 +472,7 @@ Known implemented joins:
 
 ## Approved Fallbacks Proposed for Instructor Review
 
-- Use `regions.country_code` through `players.home_region_id` as a proposed fallback for player country only if the instructor approves and region coverage validates.
+- Use `players.country_code` as the Gold player country source after Bronze-to-Silver is rerun. Silver is responsible for deriving it from home region when direct country is absent.
 - Use `teams.team_category` as the Gold team category field.
 - Use `players.active_flag` and `teams.active_flag` as status booleans, while preserving `teams.team_status` where categorical status is needed.
 - Use `match_teams.team_id` for persistent historical team attribution.
