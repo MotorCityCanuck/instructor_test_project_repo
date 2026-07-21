@@ -100,6 +100,9 @@ def test_build_athlete_sql_plan_for_players_uses_actual_bronze_columns() -> None
     assert "CAST(rating_value AS STRING)" in combined_sql
     assert "CAST(confidence_score AS STRING)" in combined_sql
     assert "CAST(player_status AS STRING)" in combined_sql
+    assert "COALESCE(source.source_country_code, region.country_code) AS country_code" in combined_sql
+    assert "COALESCE(CASE" in combined_sql
+    assert "region.country_code) AS country_code" in combined_sql
 
 
 def test_build_athlete_sql_plan_for_player_registrations_contains_expected_rules() -> None:

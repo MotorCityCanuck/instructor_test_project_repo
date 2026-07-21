@@ -88,6 +88,29 @@ def test_build_players_accepts_valid_row_and_derives_age_and_region_key() -> Non
     assert row["_source_table"] == "player_master"
 
 
+def test_build_players_derives_country_from_home_region_when_direct_country_missing() -> None:
+    config, context, monthly_batches_rows, regions_rows = _parents()
+
+    result = build_players(
+        [
+            {
+                "id": "player-1",
+                "first_name": "Taylor",
+                "last_name": "Ng",
+                "home_region_id": "region-1",
+            }
+        ],
+        config,
+        context,
+        regions_rows=regions_rows,
+        monthly_batches_rows=monthly_batches_rows,
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    assert len(result.accepted_rows) == 1
+    assert result.accepted_rows[0]["country_code"] == "CAN"
+
+
 def test_build_players_rejects_orphan_region() -> None:
     config, context, monthly_batches_rows, _ = _parents()
 

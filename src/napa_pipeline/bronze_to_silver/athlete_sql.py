@@ -147,13 +147,14 @@ typed_source AS (
         {gender_expr} AS gender,
         {dominant_hand_expr} AS dominant_hand,
         {preferred_side_expr} AS preferred_side,
-        {country_expr} AS country_code
+        {country_expr} AS source_country_code
     FROM deduped_source source
 ),
 validated_source AS (
     SELECT
         source.*,
         region.region_sk AS home_region_sk,
+        COALESCE(source.source_country_code, region.country_code) AS country_code,
         release_context.as_of_date
     FROM typed_source source
     CROSS JOIN release_context
@@ -473,7 +474,7 @@ valid_rows AS (
         {preferred_side_expr} AS preferred_side,
         source.home_region_id,
         region.region_sk AS home_region_sk,
-        {country_expr} AS country_code,
+        COALESCE({country_expr}, region.country_code) AS country_code,
         CAST(source.rating_raw AS DOUBLE) AS rating,
         CAST(source.rating_confidence_raw AS DOUBLE) AS rating_confidence
     FROM (

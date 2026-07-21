@@ -400,7 +400,12 @@ def _build_player_candidate(
             source_record=normalized,
         )
 
-    country_raw = normalized.get("country_code") or normalized.get("country")
+    region_row = region_index.get(home_region_id) if home_region_id else None
+    country_raw = (
+        normalized.get("country_code")
+        or normalized.get("country")
+        or (region_row.get("country_code") if region_row else None)
+    )
     country_code = _normalize_optional_domain_value(country_raw, country_domain)
     if country_raw not in (None, "") and country_code is None:
         return None, _invalid_domain_reject(
@@ -439,7 +444,6 @@ def _build_player_candidate(
     if confidence_reject is not None:
         return None, confidence_reject
 
-    region_row = region_index.get(home_region_id) if home_region_id else None
     age = _calculate_age(birth_date, as_of_date)
 
     candidate = {
