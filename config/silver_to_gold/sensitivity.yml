@@ -1,0 +1,9 @@
+sensitivity:
+  scenarios:
+    - BALANCED
+    - PERFORMANCE_HEAVY
+    - RATING_HEAVY
+    - RECENT_FORM_HEAVY
+    - CONFIDENCE_CONSERVATIVE
+    - DEVELOPMENT_ORIENTED
+

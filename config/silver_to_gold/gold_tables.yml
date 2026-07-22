@@ -1,0 +1,177 @@
+gold_tables:
+  competition_match_sides:
+    enabled: true
+    build_order: 10
+    stage: foundation
+    target: competition_match_sides
+    transform: build_competition_match_sides
+    primary_key: [match_id, team_number]
+
+  competition_player_matches:
+    enabled: true
+    build_order: 20
+    stage: foundation
+    target: competition_player_matches
+    transform: build_competition_player_matches
+    primary_key: [match_id, team_id, player_id]
+
+  resolved_match_teams:
+    enabled: true
+    build_order: 30
+    stage: foundation
+    target: resolved_match_teams
+    transform: resolve_match_teams
+    primary_key: [match_id, match_team_id]
+
+  player_rating_events:
+    enabled: true
+    build_order: 40
+    stage: ratings
+    target: player_rating_events
+    transform: build_player_rating_events
+    primary_key: [match_id, player_id]
+
+  player_rating_history:
+    enabled: true
+    build_order: 50
+    stage: ratings
+    target: player_rating_history
+    transform: build_player_rating_history
+    primary_key: [player_id, rating_effective_date]
+
+  player_current_ratings:
+    enabled: true
+    build_order: 60
+    stage: ratings
+    target: player_current_ratings
+    transform: build_player_current_ratings
+    primary_key: [player_id]
+
+  player_performance_features:
+    enabled: true
+    build_order: 70
+    stage: player_features
+    target: player_performance_features
+    transform: build_player_performance_features
+    primary_key: [player_id]
+
+  player_development_features:
+    enabled: true
+    build_order: 80
+    stage: player_features
+    target: player_development_features
+    transform: build_player_development_features
+    primary_key: [player_id]
+
+  team_performance_features:
+    enabled: true
+    build_order: 90
+    stage: team_features
+    target: team_performance_features
+    transform: build_team_performance_features
+    primary_key: [team_id]
+
+  partnership_effectiveness:
+    enabled: true
+    build_order: 100
+    stage: team_features
+    target: partnership_effectiveness
+    transform: build_partnership_effectiveness
+    primary_key: [team_id]
+
+  entity_data_quality_confidence:
+    enabled: true
+    build_order: 110
+    stage: quality
+    target: entity_data_quality_confidence
+    transform: build_entity_data_quality_confidence
+    primary_key: [entity_type, entity_id]
+
+  match_outcome_training_set:
+    enabled: true
+    build_order: 120
+    stage: modeling
+    target: match_outcome_training_set
+    transform: build_match_outcome_training_set
+    primary_key: [match_id, team_id]
+
+  match_outcome_predictions:
+    enabled: true
+    build_order: 130
+    stage: modeling
+    target: match_outcome_predictions
+    transform: build_match_outcome_predictions
+    primary_key: [match_id, team_id]
+
+  match_model_metrics:
+    enabled: true
+    build_order: 140
+    stage: modeling
+    target: match_model_metrics
+    transform: build_match_model_metrics
+    primary_key: [model_name, evaluation_window]
+
+  player_evaluation_scorecards:
+    enabled: true
+    build_order: 150
+    stage: scorecards
+    target: player_evaluation_scorecards
+    transform: build_player_evaluation_scorecards
+    primary_key: [player_id]
+
+  national_player_rankings:
+    enabled: true
+    build_order: 160
+    stage: scorecards
+    target: national_player_rankings
+    transform: build_national_player_rankings
+    primary_key: [country_code, ranking_group, rank]
+
+  team_selection_scorecards:
+    enabled: true
+    build_order: 170
+    stage: scorecards
+    target: team_selection_scorecards
+    transform: build_team_selection_scorecards
+    primary_key: [team_id]
+
+  olympic_team_candidates:
+    enabled: true
+    build_order: 180
+    stage: recommendations
+    target: olympic_team_candidates
+    transform: build_olympic_team_candidates
+    primary_key: [country_code, category_code, team_id]
+
+  olympic_team_recommendations:
+    enabled: true
+    build_order: 190
+    stage: recommendations
+    target: olympic_team_recommendations
+    transform: build_olympic_team_recommendations
+    primary_key: [country_code, category_code, recommendation_status, team_id]
+
+  selection_sensitivity_results:
+    enabled: true
+    build_order: 200
+    stage: sensitivity
+    target: selection_sensitivity_results
+    transform: build_selection_sensitivity_results
+    primary_key: [scenario_name, country_code, category_code, team_id]
+
+  recommendation_explanations:
+    enabled: true
+    build_order: 210
+    stage: sensitivity
+    target: recommendation_explanations
+    transform: build_recommendation_explanations
+    primary_key: [country_code, category_code, team_id]
+
+  gold_run_summary:
+    enabled: true
+    build_order: 220
+    stage: publication
+    target: gold_run_summary
+    transform: build_gold_run_summary
+    primary_key: [pipeline_run_id]
+

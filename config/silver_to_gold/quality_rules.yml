@@ -1,0 +1,6 @@
+quality_rules:
+  maximum_player_country_null_pct: 0.0
+  maximum_team_country_null_pct: 0.0
+  maximum_unresolved_team_pct: 0.1
+  maximum_leakage_failures: 0
+

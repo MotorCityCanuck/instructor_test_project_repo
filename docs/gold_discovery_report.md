@@ -155,13 +155,13 @@ Configured accepted domain values are:
 - Gender: `M`, `F`.
 - Player status: `ACTIVE`, `INACTIVE`.
 - Team status: `ACTIVE`, `INACTIVE`, `DISSOLVED`.
-- Team type/category: `MENS`, `WOMENS`, `MIXED`.
+- Team type/category: `MENS`, `WOMENS`, `MIXED`, `OPEN`.
 - Player position: `LEFT`, `RIGHT`.
 
 Runtime-only values still need Databricks inspection:
 
 - Actual values present in Silver `batch_type` and `batch_status`.
-- Actual table-level row counts for all required Silver tables.
+- Residual reject patterns after the latest Bronze-to-Silver rerun.
 
 ## Key Phase 0 Findings
 
@@ -174,18 +174,37 @@ Runtime-only values still need Databricks inspection:
 - `match_games` includes game-level scores and winning side, supporting winner validation and point metrics.
 - Provided `matches` profiling shows `match_type` values: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
 - Provided `matches` profiling shows `competition_category` and `match_status` are null for all profiled distinct rows, and `completed_flag` is false for all profiled distinct rows.
-- Provided `teams` profiling returned headers but zero distinct rows, indicating `teams` may be empty in the profiled Silver schema.
 - Provided `players` profiling confirms gender values `F` and `M`. Player `country_code` is expected to be populated from home region when direct player country is absent.
 - Provided `players` profiling shows `active_flag` values null, false, and true.
-- Provided unprefixed `pipeline_runs` history contains five recent `bronze_to_silver` rows for `napa_5k`, all with `status = FAILED`. Because the implemented Bronze-to-Silver code writes to `b2s_pipeline_runs`, this output may be from a legacy or Raw-to-Bronze-compatible operations table rather than the active Bronze-to-Silver audit table.
+- Databricks validation on July 22, 2026 confirmed a successful latest 5K Bronze-to-Silver run in `workspace.instructor_ops.b2s_pipeline_runs` with:
+  - `pipeline_run_id = c08cf5ff-efdf-4e74-b12d-705e34cc2ccc`
+  - `release_name = napa_5k`
+  - `started_ts = 2026-07-22T11:43:48.850Z`
+  - `completed_ts = 2026-07-22T11:53:57.433Z`
+- Databricks row-count validation on July 22, 2026 confirmed current 5K Silver population for all required tables:
+  - `monthly_batches = 12`
+  - `regions = 494`
+  - `clubs = 2,430`
+  - `club_memberships = 5,812`
+  - `players = 6,096`
+  - `player_registrations = 6,096`
+  - `player_assessment_history = 283,847`
+  - `teams = 13,200`
+  - `team_memberships = 25,881`
+  - `matches = 78,074`
+  - `match_teams = 156,148`
+  - `match_team_players = 306,300`
+  - `match_games = 117,439`
+- Databricks domain validation on July 22, 2026 confirmed delivered Bronze-to-Silver mappings now handle:
+  - `team_type`: `MENS_DOUBLES`, `WOMENS_DOUBLES`, `MIXED_DOUBLES`, `OPEN_DOUBLES`
+  - `team_status`: `ACTIVE`, `DORMANT`, `RETIRED`
+  - `player_position`: numeric values `1` and `2`, normalized to `LEFT` and `RIGHT`
 
 ## Issues and Concerns
 
 - The new Silver-to-Gold specification references versioned file names such as `NAPA_Bronze_to_Silver_Spec_v1.1.md`, but the actual repository file is `docs/NAPA_Bronze_to_Silver_Spec.md`.
 - `databricks.yml` does not include `config/silver_to_gold/**`; future Gold workflow/config files would not deploy until the bundle is updated.
 - The Gold spec's required Silver metadata does not match the implemented Silver metadata exactly.
-- No successful upstream `bronze_to_silver` run has been provided from the implemented `b2s_pipeline_runs` table. The Gold upstream success gate remains unverified until `b2s_pipeline_runs` is queried.
-- `teams` appears empty from the distinct-value query. This blocks team scorecards, partnership analytics, and Olympic candidate generation.
 - Player `country_code` should not be null when `home_region_id` resolves to a valid region with `country_code`. Any remaining null player country values should be investigated as missing home-region data or invalid region linkage.
 - `matches` appears to contain no completed matches in the profiled distinct values. This blocks match outcome, rating, team-performance, and recommendation analytics until confirmed or corrected.
 - `competition_category` is null in the profiled `matches` values. This blocks category-specific Gold products unless category can be derived from `teams.team_category` or another approved source.
@@ -195,7 +214,7 @@ Runtime-only values still need Databricks inspection:
 
 ## Runtime Checks Still Required
 
-Run these remaining validation checks in Databricks before Phase 1 implementation is treated as unblocked:
+Run these validation checks in Databricks before or during Phase 1 implementation:
 
 ```sql
 SELECT
@@ -206,7 +225,7 @@ SELECT
     published_row_count,
     error_message
 FROM workspace.instructor_ops.b2s_table_runs
-WHERE pipeline_run_id = 'a6117206-0024-4b73-ae10-7e9534f2cf65'
+WHERE pipeline_run_id = 'c08cf5ff-efdf-4e74-b12d-705e34cc2ccc'
 ORDER BY build_order;
 
 SELECT 'monthly_batches' AS table_name, COUNT(*) AS row_count FROM workspace.instructor_5k_silver.monthly_batches
@@ -229,13 +248,11 @@ UNION ALL SELECT 'match_games', COUNT(*) FROM workspace.instructor_5k_silver.mat
 - Decide whether Gold should accept current Silver metadata names or require Bronze-to-Silver metadata changes before Gold implementation.
 - Confirm whether the Gold package should be added on a new branch before Phase 1.
 - Confirm whether `workspace` is the intended instructor-test catalog for all three releases.
-- Decide whether to repair Bronze-to-Silver and rerun before Gold, given the absence of successful upstream runs.
 - Confirm corrected `players.country_code` profiling output shows no null values after rerunning Bronze-to-Silver.
-- Decide whether empty `teams` is expected for this test state or an upstream failure requiring correction.
 - Confirm accepted `match_type` values: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
 - Confirm whether `competition_category` should be sourced from `matches.competition_category`, `teams.team_category`, or another approved derivation.
 - Confirm whether current team membership as-of logic should use `matches.match_date` or release `analysis_as_of_date` when reconstructing historical rosters.
 
 ## Phase 0 Status
 
-Phase 0 repository and schema discovery is complete enough to identify material blockers. Silver-to-Gold implementation should not proceed to Phase 1 until the upstream Bronze-to-Silver success gate and profiled data issues are resolved or explicitly waived by the instructor.
+Phase 0 repository and schema discovery is complete. The upstream Bronze-to-Silver success gate is now verified for `napa_5k`, and the required team and competition-participation Silver tables are populated. Silver-to-Gold work may proceed to Phase 1, with remaining focus on metadata alignment, player-country residuals, and category-derivation decisions rather than structural source-table blockers.

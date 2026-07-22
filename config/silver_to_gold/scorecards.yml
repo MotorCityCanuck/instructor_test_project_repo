@@ -1,0 +1,19 @@
+scorecards:
+  player_weights:
+    performance: 0.35
+    rating: 0.30
+    consistency: 0.15
+    development: 0.10
+    confidence: 0.10
+
+  team_weights:
+    partnership: 0.35
+    player_strength: 0.30
+    prediction: 0.20
+    confidence: 0.15
+
+  development_weights:
+    trend: 0.50
+    headroom: 0.30
+    confidence: 0.20
+

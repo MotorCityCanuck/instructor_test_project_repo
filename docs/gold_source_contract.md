@@ -460,8 +460,19 @@ Known implemented joins:
 ## Unsupported or Unresolved Concepts
 
 - Actual Databricks physical data types are confirmed for all required Silver source tables.
-- No successful upstream `bronze_to_silver` run was provided.
-- Provided `teams` profiling returned zero rows, so team category and team status values are not validated from data.
+- Databricks validation on July 22, 2026 confirmed a successful upstream `bronze_to_silver` run for `napa_5k`:
+  - `pipeline_run_id = c08cf5ff-efdf-4e74-b12d-705e34cc2ccc`
+  - `started_ts = 2026-07-22T11:43:48.850Z`
+  - `completed_ts = 2026-07-22T11:53:57.433Z`
+- Databricks validation on July 22, 2026 confirmed the current 5K Silver row counts for team and participation tables:
+  - `teams = 13,200`
+  - `team_memberships = 25,881`
+  - `match_teams = 156,148`
+  - `match_team_players = 306,300`
+- Delivered Bronze values now confirmed through rerun and reject-triage:
+  - `teams.team_category` derives from Bronze `team_type` values `MENS_DOUBLES`, `WOMENS_DOUBLES`, `MIXED_DOUBLES`, `OPEN_DOUBLES`
+  - `teams.team_status` derives from Bronze `team_status` values including `ACTIVE`, `DORMANT`, and `RETIRED`
+  - `team_memberships.player_position` and `match_team_players.player_position` may arrive as numeric values `1` and `2`, normalized to `LEFT` and `RIGHT`
 - Player `country_code` is expected to be populated from direct player country or from `regions.country_code` through `home_region_id`. Null values should be treated as missing home-region data or invalid region linkage.
 - Provided `matches` profiling shows no completed matches, so match outcome and rating inputs are unresolved.
 - `region_type` is requested by Phase 0, but the implemented `regions` Silver plan does not expose a `region_type` column.

@@ -1,0 +1,9 @@
+eligibility:
+  countries: [USA, CAN]
+  categories: [MENS, WOMENS, MIXED, OPEN]
+  require_active_player: true
+  require_active_team: true
+  primary_teams_per_country_category: 1
+  alternate_teams_per_country_category: 2
+  watchlist_teams_per_country_category: 3
+

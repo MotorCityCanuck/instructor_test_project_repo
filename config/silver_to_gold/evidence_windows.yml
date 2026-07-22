@@ -1,0 +1,7 @@
+evidence_windows:
+  primary_window_days: 365
+  recent_window_days: 90
+  trend_window_days: 180
+  minimum_matches_for_ranking: 5
+  minimum_matches_for_team_scorecard: 3
+

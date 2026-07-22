@@ -1,0 +1,15 @@
+release:
+  release_name: napa_250k
+  release_role: production
+  authoritative_recommendation_flag: true
+
+schemas:
+  silver: ${runtime.team_prefix}_250k_silver
+  gold: ${runtime.team_prefix}_250k_gold
+  gold_stage: ${runtime.team_prefix}_250k_gold_stage
+  operations: ${objects.operations_schema}
+
+performance:
+  shuffle_partitions: 200
+  broadcast_row_threshold: 500000
+

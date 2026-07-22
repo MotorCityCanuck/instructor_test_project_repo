@@ -1,0 +1,37 @@
+project:
+  name: napa_olympic_analytics
+  pipeline_name: silver_to_gold
+  pipeline_version: "1.0.0"
+  processing_mode: full_refresh
+
+runtime:
+  catalog: workspace
+  team_prefix: instructor
+  default_release: napa_5k
+  timezone: America/New_York
+
+objects:
+  operations_schema: ${runtime.team_prefix}_ops
+
+execution:
+  scoring_scenario: BALANCED
+  model_enabled: true
+  deterministic_seed: 42
+
+publication:
+  format: delta
+  mode: overwrite
+  overwrite_schema: true
+  use_staging: true
+
+time_controls:
+  analysis_date_strategy: MAX_VALID_MATCH_DATE
+
+paths:
+  workflow_script_root: notebooks
+
+source_contract:
+  require_successful_upstream_run: true
+  expected_upstream_pipeline_name: bronze_to_silver
+  upstream_pipeline_runs_table: b2s_pipeline_runs
+

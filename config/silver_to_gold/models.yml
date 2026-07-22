@@ -1,0 +1,7 @@
+models:
+  baseline_model: analytical_rating_probability
+  enabled: ${execution.model_enabled}
+  train_fraction: 0.8
+  validation_fraction: 0.2
+  random_seed: ${execution.deterministic_seed}
+

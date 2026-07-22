@@ -1,0 +1,6 @@
+features:
+  recency_half_life_days: 60
+  enable_opponent_adjustment: true
+  enable_strength_of_schedule: true
+  minimum_matches_for_consistency: 5
+

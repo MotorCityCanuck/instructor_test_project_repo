@@ -1,0 +1,8 @@
+ratings:
+  default_rating: 1500.0
+  k_factor: 32.0
+  margin_multiplier: 1.0
+  rating_floor: 1000.0
+  rating_ceiling: 3000.0
+  minimum_matches_for_reliability: 5
+

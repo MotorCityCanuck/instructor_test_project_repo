@@ -1,0 +1,15 @@
+release:
+  release_name: napa_50k
+  release_role: validation
+  authoritative_recommendation_flag: false
+
+schemas:
+  silver: ${runtime.team_prefix}_50k_silver
+  gold: ${runtime.team_prefix}_50k_gold
+  gold_stage: ${runtime.team_prefix}_50k_gold_stage
+  operations: ${objects.operations_schema}
+
+performance:
+  shuffle_partitions: 64
+  broadcast_row_threshold: 250000
+
