@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
 
 
 class AnalysisDateResolutionError(ValueError):
@@ -22,7 +21,6 @@ def resolve_analysis_as_of_date(
     valid_match_dates = [
         parsed_date
         for row in match_rows
-        if _is_valid_match(row)
         for parsed_date in [_parse_date_value(row.get("match_date"))]
         if parsed_date is not None
     ]
@@ -31,25 +29,6 @@ def resolve_analysis_as_of_date(
             "Could not resolve analysis_as_of_date from matches using MAX_VALID_MATCH_DATE."
         )
     return max(valid_match_dates)
-
-
-def _is_valid_match(row: dict[str, Any]) -> bool:
-    completed_flag = row.get("completed_flag")
-    match_date = row.get("match_date")
-    return _coerce_bool(completed_flag) is True and _parse_date_value(match_date) is not None
-
-
-def _coerce_bool(value: Any) -> bool | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return value
-    normalized = str(value).strip().upper()
-    if normalized in {"TRUE", "T", "YES", "Y", "1"}:
-        return True
-    if normalized in {"FALSE", "F", "NO", "N", "0"}:
-        return False
-    return None
 
 
 def _parse_date_value(value: Any) -> date | None:
@@ -63,4 +42,3 @@ def _parse_date_value(value: Any) -> date | None:
         return date.fromisoformat(str(value))
     except ValueError:
         return None
-

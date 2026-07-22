@@ -10,7 +10,7 @@ from napa_pipeline.silver_to_gold.time_controls import (
 )
 
 
-def test_resolve_analysis_as_of_date_uses_max_valid_completed_match_date() -> None:
+def test_resolve_analysis_as_of_date_uses_max_valid_match_date() -> None:
     resolved = resolve_analysis_as_of_date(
         [
             {"match_date": "2026-06-15", "completed_flag": True},
@@ -20,7 +20,7 @@ def test_resolve_analysis_as_of_date_uses_max_valid_completed_match_date() -> No
         ]
     )
 
-    assert resolved == date(2026, 6, 20)
+    assert resolved == date(2026, 6, 25)
 
 
 def test_resolve_analysis_as_of_date_returns_explicit_override() -> None:
@@ -34,12 +34,13 @@ def test_resolve_analysis_as_of_date_returns_explicit_override() -> None:
     assert resolved == explicit
 
 
-def test_resolve_analysis_as_of_date_rejects_when_no_valid_completed_matches_exist() -> None:
+def test_resolve_analysis_as_of_date_rejects_when_no_valid_match_dates_exist() -> None:
     with pytest.raises(AnalysisDateResolutionError, match="Could not resolve analysis_as_of_date"):
         resolve_analysis_as_of_date(
             [
-                {"match_date": "2026-06-15", "completed_flag": False},
+                {"match_date": "not-a-date", "completed_flag": False},
                 {"match_date": None, "completed_flag": True},
+                {"match_date": "", "completed_flag": False},
+                {"match_date": "2026/06/15", "completed_flag": True},
             ]
         )
-
