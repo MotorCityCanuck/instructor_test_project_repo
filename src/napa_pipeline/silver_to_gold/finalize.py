@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from uuid import uuid4
 
 from napa_pipeline.silver_to_gold.operations import (
     PIPELINE_RUNS_TABLE,
@@ -13,6 +12,7 @@ from napa_pipeline.silver_to_gold.operations import (
     TABLE_RUNS_TABLE,
     PipelineContext,
     append_records,
+    _merge_pipeline_run_record,
     build_pipeline_run_end_record,
     get_operations_table_fqn,
     utc_now,
@@ -178,7 +178,7 @@ def finalize_pipeline_run(
         workflow_run_id=open_row.get("workflow_run_id"),
         triggered_by=open_row.get("triggered_by"),
     )
-    _merge_pipeline_run_record(spark, pipeline_runs_fqn, final_record)
+    _merge_pipeline_run_record_for_finalize(spark, pipeline_runs_fqn, final_record)
 
 
 def _build_summary_text(
@@ -268,60 +268,14 @@ def _truncate(value: str, limit: int) -> str:
     return value[: limit - 3] + "..."
 
 
-def _merge_pipeline_run_record(
+def _merge_pipeline_run_record_for_finalize(
     spark: Any,
     table_fqn: str,
     record: dict[str, Any],
 ) -> None:
-    temp_view_name = f"_g2g_pipeline_run_update_{uuid4().hex}"
     try:
-        schema = spark.table(table_fqn).schema
-        update_df = spark.createDataFrame([record], schema=schema)
-        update_df.createOrReplaceTempView(temp_view_name)
-        field_names = [field.name for field in getattr(schema, "fields", [])]
-        merge_columns = [
-            column_name
-            for column_name in (
-                "pipeline_name",
-                "pipeline_version",
-                "release_name",
-                "processing_mode",
-                "configuration_hash",
-                "workflow_run_id",
-                "upstream_pipeline_run_id",
-                "analysis_as_of_date",
-                "scoring_scenario",
-                "authoritative_recommendation_flag",
-                "status",
-                "started_ts",
-                "completed_ts",
-                "duration_seconds",
-                "triggered_by",
-                "error_class",
-                "error_message",
-            )
-            if column_name in field_names
-        ]
-        update_assignments = ",\n  ".join(
-            f"target.{column_name} = source.{column_name}" for column_name in merge_columns
-        )
-        spark.sql(
-            f"""
-MERGE INTO {table_fqn} AS target
-USING {temp_view_name} AS source
-ON target.pipeline_run_id = source.pipeline_run_id
-   AND target.completed_ts IS NULL
-WHEN MATCHED THEN UPDATE SET
-  {update_assignments}
-WHEN NOT MATCHED THEN INSERT *
-""".strip()
-        )
+        _merge_pipeline_run_record(spark, table_fqn, record)
     except Exception as exc:
         raise PipelineFinalizationError(
             f"Could not finalize pipeline run {record['pipeline_run_id']}."
         ) from exc
-    finally:
-        try:
-            spark.catalog.dropTempView(temp_view_name)
-        except Exception:
-            pass

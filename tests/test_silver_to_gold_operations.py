@@ -26,6 +26,7 @@ from napa_pipeline.silver_to_gold.operations import (
     build_table_run_end_record,
     build_table_run_start_record,
     calculate_record_hash,
+    complete_pipeline_run,
     create_pipeline_context,
     ensure_operations_tables,
 )
@@ -39,6 +40,12 @@ class FakeSparkSession:
         self.table_requests: list[str] = []
         self.created_records: list[dict] | None = None
         self.created_schema = None
+        self.tables: dict[str, object] = {}
+        self.catalog = type(
+            "FakeCatalog",
+            (),
+            {"dropTempView": lambda self, _name: None},
+        )()
 
     def sql(self, query: str):
         self.executed_queries.append(query)
@@ -46,7 +53,16 @@ class FakeSparkSession:
 
     def table(self, table_name: str):
         self.table_requests.append(table_name)
-        return type("FakeTable", (), {"schema": "schema-from-table"})()
+        if table_name in self.tables:
+            return self.tables[table_name]
+        return type(
+            "FakeTable",
+            (),
+            {
+                "schema": "schema-from-table",
+                "toLocalIterator": lambda self: iter(()),
+            },
+        )()
 
     def createDataFrame(self, records, schema=None):
         self.created_records = list(records)
@@ -79,6 +95,9 @@ class FakeWriteDataFrame:
     def __init__(self):
         self.write = FakeWriteBuilder()
 
+    def createOrReplaceTempView(self, _name: str):
+        return None
+
 
 class FakeField:
     def __init__(self, name: str, nullable: bool):
@@ -89,6 +108,23 @@ class FakeField:
 class FakeSchema:
     def __init__(self, fields):
         self.fields = fields
+
+
+class FakeExistingRow:
+    def __init__(self, mapping):
+        self._mapping = mapping
+
+    def asDict(self, recursive: bool = True):
+        return dict(self._mapping)
+
+
+class FakePipelineTable:
+    def __init__(self, schema, rows):
+        self.schema = schema
+        self._rows = rows
+
+    def toLocalIterator(self):
+        return iter(self._rows)
 
 
 def _runtime_context():
@@ -282,3 +318,52 @@ def test_append_records_raises_clear_error_for_missing_required_field() -> None:
 
     with pytest.raises(ValueError, match="required field 'release_name' is null or missing"):
         append_records(spark, "workspace.instructor_ops.gold_quality_results", records)
+
+
+def test_complete_pipeline_run_merges_completion_into_open_record() -> None:
+    context = _context()
+    pipeline_runs_fqn = f"{context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}"
+    schema = FakeSchema(
+        [
+            FakeField("pipeline_run_id", False),
+            FakeField("pipeline_name", False),
+            FakeField("pipeline_version", False),
+            FakeField("release_name", False),
+            FakeField("processing_mode", False),
+            FakeField("configuration_hash", False),
+            FakeField("workflow_run_id", True),
+            FakeField("status", False),
+            FakeField("started_ts", False),
+            FakeField("completed_ts", True),
+            FakeField("duration_seconds", True),
+            FakeField("triggered_by", True),
+            FakeField("error_class", True),
+            FakeField("error_message", True),
+        ]
+    )
+    open_row = FakeExistingRow(
+        {
+            "pipeline_run_id": "run-123",
+            "pipeline_name": "silver_to_gold",
+            "pipeline_version": "1.0.0",
+            "release_name": "napa_5k",
+            "processing_mode": "full_refresh",
+            "configuration_hash": "hash",
+            "workflow_run_id": None,
+            "status": "RUNNING",
+            "started_ts": datetime(2026, 7, 22, 12, 0, tzinfo=timezone.utc),
+            "completed_ts": None,
+            "duration_seconds": None,
+            "triggered_by": None,
+            "error_class": None,
+            "error_message": None,
+        }
+    )
+    spark = FakeSparkSession()
+    spark.tables[pipeline_runs_fqn] = FakePipelineTable(schema, [open_row])
+
+    complete_pipeline_run(spark, context, status="SUCCEEDED")
+
+    assert spark.created_schema == schema
+    assert spark.created_records[0]["status"] == "SUCCEEDED"
+    assert any("MERGE INTO" in query for query in spark.executed_queries)

@@ -524,6 +524,41 @@ def build_recommendation_run_record(
     }
 
 
+def complete_pipeline_run(
+    spark: Any,
+    context: PipelineContext,
+    *,
+    status: str,
+    error_class: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    """Finalize the shared pipeline-runs record for lightweight Gold harness tasks."""
+    table_fqn = get_operations_table_fqn(context, PIPELINE_RUNS_TABLE)
+    existing_rows = [
+        row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
+        for row in spark.table(table_fqn).toLocalIterator()
+        if (row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)).get("pipeline_run_id")
+        == context.pipeline_run_id
+    ]
+    open_row = next(
+        (row for row in existing_rows if row.get("completed_ts") is None),
+        None,
+    )
+    if open_row is None:
+        return
+
+    final_record = build_pipeline_run_end_record(
+        context,
+        started_ts=open_row["started_ts"],
+        status=status,
+        error_class=error_class,
+        error_message=error_message,
+        workflow_run_id=open_row.get("workflow_run_id"),
+        triggered_by=open_row.get("triggered_by"),
+    )
+    _merge_pipeline_run_record(spark, table_fqn, final_record)
+
+
 def calculate_record_hash(record: dict[str, Any], include_keys: list[str] | None = None) -> str:
     """Calculate a deterministic hash for a record or selected business fields."""
     keys = include_keys or sorted(record.keys())
@@ -547,3 +582,59 @@ def _normalize_record_for_schema(
             )
         normalized[field.name] = value
     return normalized
+
+
+def _merge_pipeline_run_record(
+    spark: Any,
+    table_fqn: str,
+    record: dict[str, Any],
+) -> None:
+    """Merge a completed Gold pipeline-run record into an existing open row."""
+    temp_view_name = f"_g2g_pipeline_run_update_{uuid4().hex}"
+    try:
+        schema = spark.table(table_fqn).schema
+        update_df = spark.createDataFrame([record], schema=schema)
+        update_df.createOrReplaceTempView(temp_view_name)
+        field_names = [field.name for field in getattr(schema, "fields", [])]
+        merge_columns = [
+            column_name
+            for column_name in (
+                "pipeline_name",
+                "pipeline_version",
+                "release_name",
+                "processing_mode",
+                "configuration_hash",
+                "workflow_run_id",
+                "upstream_pipeline_run_id",
+                "analysis_as_of_date",
+                "scoring_scenario",
+                "authoritative_recommendation_flag",
+                "status",
+                "started_ts",
+                "completed_ts",
+                "duration_seconds",
+                "triggered_by",
+                "error_class",
+                "error_message",
+            )
+            if column_name in field_names
+        ]
+        update_assignments = ",\n  ".join(
+            f"target.{column_name} = source.{column_name}" for column_name in merge_columns
+        )
+        spark.sql(
+            f"""
+MERGE INTO {table_fqn} AS target
+USING {temp_view_name} AS source
+ON target.pipeline_run_id = source.pipeline_run_id
+   AND target.completed_ts IS NULL
+WHEN MATCHED THEN UPDATE SET
+  {update_assignments}
+WHEN NOT MATCHED THEN INSERT *
+""".strip()
+        )
+    finally:
+        try:
+            spark.catalog.dropTempView(temp_view_name)
+        except Exception:
+            pass
