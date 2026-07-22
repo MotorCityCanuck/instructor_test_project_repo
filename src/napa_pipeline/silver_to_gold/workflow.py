@@ -37,6 +37,10 @@ PHASE3_TARGET_TABLES = (
     "competition_player_matches",
 )
 
+PHASE4_TARGET_TABLES = (
+    "resolved_match_teams",
+)
+
 
 class UpstreamSilverRunNotFoundError(RuntimeError):
     """Raised when no successful upstream Bronze-to-Silver run can be resolved."""
@@ -141,6 +145,19 @@ FROM {matches_fqn}
     return [
         row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
         for row in rows
+    ]
+
+
+def collect_silver_table_rows(
+    spark: Any,
+    environment: ReleaseEnvironment,
+    table_name: str,
+) -> list[dict[str, Any]]:
+    """Collect one Silver table into Python dict rows for lightweight harness execution."""
+    table_fqn = get_silver_source_table_fqn(environment, table_name)
+    return [
+        row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
+        for row in spark.table(table_fqn).toLocalIterator()
     ]
 
 

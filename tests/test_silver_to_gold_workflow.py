@@ -9,10 +9,12 @@ from napa_pipeline.silver_to_gold.environment import build_runtime_context, reso
 from napa_pipeline.silver_to_gold.operations import PIPELINE_RUNS_TABLE, create_pipeline_context
 from napa_pipeline.silver_to_gold.workflow import (
     PHASE3_TARGET_TABLES,
+    PHASE4_TARGET_TABLES,
     REQUIRED_SILVER_SOURCE_TABLES,
     SilverSourceValidationError,
     UpstreamSilverRunNotFoundError,
     collect_match_rows_for_analysis_date,
+    collect_silver_table_rows,
     initialize_pipeline_run,
     require_required_silver_source_tables,
     resolve_latest_successful_upstream_run_id,
@@ -123,6 +125,10 @@ def test_phase3_target_table_inventory_is_expected() -> None:
     )
 
 
+def test_phase4_target_table_inventory_is_expected() -> None:
+    assert PHASE4_TARGET_TABLES == ("resolved_match_teams",)
+
+
 def test_validate_required_silver_source_tables_returns_existing_and_missing() -> None:
     _config, environment = _config_environment()
     existing_fqns = {
@@ -206,6 +212,28 @@ FROM {environment.catalog}.{environment.silver_schema}.matches
     assert rows == [
         {"match_date": "2026-06-24", "completed_flag": True},
         {"match_date": "2026-06-25", "completed_flag": False},
+    ]
+
+
+def test_collect_silver_table_rows_returns_table_rows() -> None:
+    _config, environment = _config_environment()
+    table_fqn = f"{environment.catalog}.{environment.silver_schema}.teams"
+    spark = FakeSparkSession(
+        tables={
+            table_fqn: FakeTable(
+                rows=[
+                    {"team_id": "team-1", "team_status": "ACTIVE"},
+                    {"team_id": "team-2", "team_status": "DISSOLVED"},
+                ]
+            )
+        }
+    )
+
+    rows = collect_silver_table_rows(spark, environment, "teams")
+
+    assert rows == [
+        {"team_id": "team-1", "team_status": "ACTIVE"},
+        {"team_id": "team-2", "team_status": "DISSOLVED"},
     ]
 
 
