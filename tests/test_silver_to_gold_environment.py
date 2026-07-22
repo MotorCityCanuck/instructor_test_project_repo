@@ -111,6 +111,7 @@ def test_build_runtime_context_resolves_analysis_date_and_core_fields() -> None:
     assert context.analysis_as_of_date == date(2026, 6, 25)
     assert context.scoring_scenario == "BALANCED"
     assert context.model_enabled is True
+    assert context.authoritative_recommendation_flag is False
     assert context.deterministic_seed == 42
     assert context.upstream_silver_run_id == "upstream-run-123"
 
@@ -141,4 +142,3 @@ def test_build_runtime_context_rejects_empty_upstream_run_id() -> None:
             upstream_silver_run_id="",
             match_rows=[{"match_date": "2026-06-25", "completed_flag": True}],
         )
-

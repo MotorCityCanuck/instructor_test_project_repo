@@ -59,6 +59,7 @@ class GoldRuntimeContext:
     analysis_as_of_date: date
     scoring_scenario: str
     model_enabled: bool
+    authoritative_recommendation_flag: bool
     pipeline_version: str
     configuration_hash: str
     deterministic_seed: int
@@ -145,6 +146,9 @@ def build_runtime_context(
         analysis_as_of_date=resolved_analysis_as_of_date,
         scoring_scenario=config.scoring_scenario,
         model_enabled=config.model_enabled,
+        authoritative_recommendation_flag=bool(
+            config.data["release"]["authoritative_recommendation_flag"]
+        ),
         pipeline_version=str(config.data["project"]["pipeline_version"]),
         configuration_hash=config.config_hash,
         deterministic_seed=config.deterministic_seed,
@@ -170,4 +174,3 @@ def _get_existing_schemas(spark: Any, catalog: str) -> set[str]:
                 schema_names.add(str(value))
                 break
     return schema_names
-

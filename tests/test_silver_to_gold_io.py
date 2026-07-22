@@ -30,6 +30,7 @@ def test_io_helpers_return_expected_fully_qualified_names() -> None:
         analysis_as_of_date=date(2026, 6, 30),
         scoring_scenario="BALANCED",
         model_enabled=True,
+        authoritative_recommendation_flag=False,
         pipeline_version="1.0.0",
         configuration_hash="abc123",
         deterministic_seed=42,
