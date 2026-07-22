@@ -26,9 +26,17 @@ domains:
 
   team_status:
     allowed: [ACTIVE, INACTIVE, DISSOLVED]
+    synonyms:
+      DORMANT: INACTIVE
+      RETIRED: DISSOLVED
 
   team_type:
-    allowed: [MENS, WOMENS, MIXED]
+    allowed: [MENS, WOMENS, MIXED, OPEN]
+    synonyms:
+      MENS_DOUBLES: MENS
+      WOMENS_DOUBLES: WOMENS
+      MIXED_DOUBLES: MIXED
+      OPEN_DOUBLES: OPEN
 
   player_position:
     allowed: [LEFT, RIGHT]
