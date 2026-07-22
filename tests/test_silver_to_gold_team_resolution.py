@@ -2,6 +2,8 @@
 
 from datetime import date
 
+from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
+from napa_pipeline.silver_to_gold.environment import resolve_release_environment
 from napa_pipeline.silver_to_gold.team_resolution import (
     ACTIVE_MEMBERSHIP_PAIR,
     AMBIGUOUS,
@@ -9,7 +11,9 @@ from napa_pipeline.silver_to_gold.team_resolution import (
     RESOLVED,
     UNIQUE_HISTORICAL_PAIR,
     UNRESOLVED,
+    build_resolved_match_teams_sql,
     build_resolved_match_teams,
+    publish_resolved_match_teams,
 )
 
 
@@ -417,3 +421,108 @@ def test_build_resolved_match_teams_normalizes_reversed_player_order_and_duplica
     assert row["canonical_player_pair_key"] == "player-17:player-18"
     assert row["team_resolution_method"] == ACTIVE_MEMBERSHIP_PAIR
     assert row["resolved_team_id"] == "team-active-pair"
+
+
+def test_build_resolved_match_teams_sql_references_required_sources() -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+
+    sql = build_resolved_match_teams_sql(environment)
+
+    assert f"{environment.catalog}.{environment.silver_schema}.match_teams" in sql
+    assert f"{environment.catalog}.{environment.silver_schema}.match_team_players" in sql
+    assert f"{environment.catalog}.{environment.silver_schema}.team_memberships" in sql
+    assert f"{environment.catalog}.{environment.silver_schema}.teams" in sql
+    assert "candidate_attribution_allowed_flag" in sql
+    assert "team_resolution_confidence" in sql
+
+
+class _FakeRow:
+    def __init__(self, mapping):
+        self._mapping = mapping
+
+    def asDict(self, recursive: bool = True):
+        return dict(self._mapping)
+
+
+class _FakeCollectResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def collect(self):
+        return [_FakeRow(row) for row in self._rows]
+
+
+class _FakeCountTable:
+    def __init__(self, row_count: int):
+        self._row_count = row_count
+
+    def count(self):
+        return self._row_count
+
+
+class _FakeSpark:
+    def __init__(self, input_row_count: int, summary_row: dict[str, object]):
+        self._input_row_count = input_row_count
+        self._summary_row = summary_row
+        self.executed_sql: list[str] = []
+        self.requested_tables: list[str] = []
+
+    def table(self, table_name: str):
+        self.requested_tables.append(table_name)
+        return _FakeCountTable(self._input_row_count)
+
+    def sql(self, query: str):
+        self.executed_sql.append(query)
+        return _FakeCollectResult([self._summary_row])
+
+
+def test_publish_resolved_match_teams_returns_summary(monkeypatch) -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+    spark = _FakeSpark(
+        input_row_count=156148,
+        summary_row={
+            "output_row_count": 156148,
+            "direct_resolution_count": 80000,
+            "active_pair_resolution_count": 50000,
+            "historical_pair_resolution_count": 10000,
+            "ambiguous_count": 5000,
+            "unresolved_count": 1148,
+            "persistent_team_resolution_pct": 89.0,
+        },
+    )
+    published = {}
+
+    def _fake_publish_stage_to_gold_table(
+        _spark,
+        *,
+        stage_table_fqn: str,
+        target_table_fqn: str,
+        stage_sql: str,
+        validation_fn=None,
+        count_fn=None,
+    ):
+        published["stage_table_fqn"] = stage_table_fqn
+        published["target_table_fqn"] = target_table_fqn
+        published["stage_sql"] = stage_sql
+        return 156148, 156148
+
+    monkeypatch.setattr(
+        "napa_pipeline.silver_to_gold.team_resolution.publish_stage_to_gold_table",
+        _fake_publish_stage_to_gold_table,
+    )
+
+    summary = publish_resolved_match_teams(spark, environment)
+
+    assert summary.input_row_count == 156148
+    assert summary.output_row_count == 156148
+    assert summary.direct_resolution_count == 80000
+    assert summary.active_pair_resolution_count == 50000
+    assert summary.historical_pair_resolution_count == 10000
+    assert summary.ambiguous_count == 5000
+    assert summary.unresolved_count == 1148
+    assert summary.persistent_team_resolution_pct == 89.0
+    assert published["target_table_fqn"] == f"{environment.catalog}.{environment.gold_schema}.resolved_match_teams"
+    assert published["stage_table_fqn"] == f"{environment.catalog}.{environment.gold_stage_schema}.resolved_match_teams"
+    assert "DIRECT_VALID_TEAM_ID" in published["stage_sql"]

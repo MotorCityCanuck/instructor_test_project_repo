@@ -22,14 +22,21 @@ from napa_pipeline.silver_to_gold.environment import (
     ensure_release_environment,
 )
 from napa_pipeline.silver_to_gold.operations import (
+    TABLE_RUNS_TABLE,
+    RECONCILIATION_RESULTS_TABLE,
+    append_records,
+    build_reconciliation_record,
+    build_table_run_end_record,
+    build_table_run_start_record,
     complete_pipeline_run,
     create_pipeline_context,
+    get_operations_table_fqn,
+    utc_now,
 )
-from napa_pipeline.silver_to_gold.team_resolution import build_resolved_match_teams
+from napa_pipeline.silver_to_gold.team_resolution import publish_resolved_match_teams
 from napa_pipeline.silver_to_gold.workflow import (
     PHASE4_TARGET_TABLES,
     collect_match_rows_for_analysis_date,
-    collect_silver_table_rows,
     initialize_pipeline_run,
     require_required_silver_source_tables,
     resolve_latest_successful_upstream_run_id,
@@ -38,12 +45,8 @@ from napa_pipeline.silver_to_gold.workflow import (
 
 SCRIPT_VERSION = "2026.07.22.1"
 
-PHASE4_SOURCE_TABLES = (
-    "match_teams",
-    "match_team_players",
-    "team_memberships",
-    "teams",
-)
+PHASE4_BUILD_ORDER = 30
+PHASE4_TARGET_TABLE = "resolved_match_teams"
 
 
 def parse_args() -> argparse.Namespace:
@@ -61,6 +64,7 @@ def main() -> None:
     spark = get_databricks_global("spark")
     dbutils = get_databricks_global("dbutils")
     pipeline_context = None
+    table_run_started_ts = None
 
     try:
         config = load_silver_to_gold_config(
@@ -85,37 +89,73 @@ def main() -> None:
         )
         pipeline_context = create_pipeline_context(runtime_context)
         initialize_pipeline_run(spark, pipeline_context)
-
-        phase4_inputs = {
-            table_name: collect_silver_table_rows(spark, environment, table_name)
-            for table_name in PHASE4_SOURCE_TABLES
-        }
-        resolution_result = build_resolved_match_teams(
-            phase4_inputs["match_teams"],
-            phase4_inputs["match_team_players"],
-            phase4_inputs["team_memberships"],
-            phase4_inputs["teams"],
+        table_run_started_ts = utc_now()
+        append_records(
+            spark,
+            get_operations_table_fqn(pipeline_context, TABLE_RUNS_TABLE),
+            [
+                build_table_run_start_record(
+                    pipeline_context,
+                    target_gold_table=PHASE4_TARGET_TABLE,
+                    build_stage="gold",
+                    build_order=PHASE4_BUILD_ORDER,
+                    started_ts=table_run_started_ts,
+                )
+            ],
         )
-
-        if len(resolution_result.rows) != len(phase4_inputs["match_teams"]):
+        resolution_summary = publish_resolved_match_teams(spark, environment)
+        if resolution_summary.output_row_count != resolution_summary.input_row_count:
             raise ValueError(
                 "Resolved match-side row count does not reconcile with match_teams: "
-                f"resolved_rows={len(resolution_result.rows)}, "
-                f"match_teams_rows={len(phase4_inputs['match_teams'])}."
+                f"resolved_rows={resolution_summary.output_row_count}, "
+                f"match_teams_rows={resolution_summary.input_row_count}."
             )
-
         resolution_total = (
-            resolution_result.direct_resolution_count
-            + resolution_result.active_pair_resolution_count
-            + resolution_result.historical_pair_resolution_count
-            + resolution_result.ambiguous_count
-            + resolution_result.unresolved_count
+            resolution_summary.direct_resolution_count
+            + resolution_summary.active_pair_resolution_count
+            + resolution_summary.historical_pair_resolution_count
+            + resolution_summary.ambiguous_count
+            + resolution_summary.unresolved_count
         )
-        if resolution_total != len(resolution_result.rows):
+        if resolution_total != resolution_summary.output_row_count:
             raise ValueError(
                 "Resolution summary counts do not reconcile with resolved rows: "
-                f"summary_total={resolution_total}, resolved_rows={len(resolution_result.rows)}."
+                f"summary_total={resolution_total}, resolved_rows={resolution_summary.output_row_count}."
             )
+        append_records(
+            spark,
+            get_operations_table_fqn(pipeline_context, TABLE_RUNS_TABLE),
+            [
+                build_table_run_end_record(
+                    pipeline_context,
+                    target_gold_table=PHASE4_TARGET_TABLE,
+                    build_stage="gold",
+                    build_order=PHASE4_BUILD_ORDER,
+                    started_ts=table_run_started_ts,
+                    status="SUCCEEDED",
+                    input_row_count=resolution_summary.input_row_count,
+                    output_row_count=resolution_summary.output_row_count,
+                    excluded_row_count=0,
+                    warning_count=(
+                        resolution_summary.ambiguous_count
+                        + resolution_summary.unresolved_count
+                    ),
+                )
+            ],
+        )
+        append_records(
+            spark,
+            get_operations_table_fqn(pipeline_context, RECONCILIATION_RESULTS_TABLE),
+            [
+                build_reconciliation_record(
+                    pipeline_context,
+                    reconciliation_name="resolved_match_teams_row_balance",
+                    source_count=resolution_summary.input_row_count,
+                    accepted_count=resolution_summary.output_row_count,
+                    excluded_count=0,
+                )
+            ],
+        )
 
         print(f"Script version: {SCRIPT_VERSION}")
         print(f"Pipeline name: {pipeline_context.pipeline_name}")
@@ -138,27 +178,28 @@ def main() -> None:
         print(f"Gold stage schema: {environment.gold_stage_schema}")
         print(f"Operations schema: {environment.operations_schema}")
         print(f"Required Silver source table count: {len(existing_silver_tables)}")
-        print("Phase 4 source row counts:")
-        for table_name in PHASE4_SOURCE_TABLES:
-            print(f"  - {table_name}: {len(phase4_inputs[table_name])}")
         print("Planned Phase 4 target tables:")
         for table_name in PHASE4_TARGET_TABLES:
             print(f"  - {environment.catalog}.{environment.gold_schema}.{table_name}")
+        print(f"Published stage table: {resolution_summary.stage_table_fqn}")
+        print(f"Published target table: {resolution_summary.target_table_fqn}")
+        print(f"match_teams input row count: {resolution_summary.input_row_count}")
+        print(f"resolved_match_teams output row count: {resolution_summary.output_row_count}")
         print("Resolution counts:")
-        print(f"  - direct_resolution_count: {resolution_result.direct_resolution_count}")
+        print(f"  - direct_resolution_count: {resolution_summary.direct_resolution_count}")
         print(
             f"  - active_pair_resolution_count: "
-            f"{resolution_result.active_pair_resolution_count}"
+            f"{resolution_summary.active_pair_resolution_count}"
         )
         print(
             f"  - historical_pair_resolution_count: "
-            f"{resolution_result.historical_pair_resolution_count}"
+            f"{resolution_summary.historical_pair_resolution_count}"
         )
-        print(f"  - ambiguous_count: {resolution_result.ambiguous_count}")
-        print(f"  - unresolved_count: {resolution_result.unresolved_count}")
+        print(f"  - ambiguous_count: {resolution_summary.ambiguous_count}")
+        print(f"  - unresolved_count: {resolution_summary.unresolved_count}")
         print(
             f"  - persistent_team_resolution_pct: "
-            f"{resolution_result.persistent_team_resolution_pct:.2f}"
+            f"{resolution_summary.persistent_team_resolution_pct:.2f}"
         )
 
         set_task_value(dbutils, "run_id", pipeline_context.pipeline_run_id)
@@ -171,40 +212,56 @@ def main() -> None:
         set_task_value(
             dbutils,
             "phase4_resolved_row_count",
-            len(resolution_result.rows),
+            resolution_summary.output_row_count,
         )
         set_task_value(
             dbutils,
             "phase4_direct_resolution_count",
-            resolution_result.direct_resolution_count,
+            resolution_summary.direct_resolution_count,
         )
         set_task_value(
             dbutils,
             "phase4_active_pair_resolution_count",
-            resolution_result.active_pair_resolution_count,
+            resolution_summary.active_pair_resolution_count,
         )
         set_task_value(
             dbutils,
             "phase4_historical_pair_resolution_count",
-            resolution_result.historical_pair_resolution_count,
+            resolution_summary.historical_pair_resolution_count,
         )
         set_task_value(
             dbutils,
             "phase4_ambiguous_count",
-            resolution_result.ambiguous_count,
+            resolution_summary.ambiguous_count,
         )
         set_task_value(
             dbutils,
             "phase4_unresolved_count",
-            resolution_result.unresolved_count,
+            resolution_summary.unresolved_count,
         )
         set_task_value(
             dbutils,
             "phase4_persistent_team_resolution_pct",
-            round(resolution_result.persistent_team_resolution_pct, 4),
+            round(resolution_summary.persistent_team_resolution_pct, 4),
         )
         complete_pipeline_run(spark, pipeline_context, status="SUCCEEDED")
     except Exception as exc:
+        if pipeline_context is not None and table_run_started_ts is not None:
+            append_records(
+                spark,
+                get_operations_table_fqn(pipeline_context, TABLE_RUNS_TABLE),
+                [
+                    build_table_run_end_record(
+                        pipeline_context,
+                        target_gold_table=PHASE4_TARGET_TABLE,
+                        build_stage="gold",
+                        build_order=PHASE4_BUILD_ORDER,
+                        started_ts=table_run_started_ts,
+                        status="FAILED",
+                        error_message=str(exc),
+                    )
+                ],
+            )
         if pipeline_context is not None:
             complete_pipeline_run(
                 spark,

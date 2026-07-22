@@ -14,7 +14,6 @@ from napa_pipeline.silver_to_gold.workflow import (
     SilverSourceValidationError,
     UpstreamSilverRunNotFoundError,
     collect_match_rows_for_analysis_date,
-    collect_silver_table_rows,
     initialize_pipeline_run,
     require_required_silver_source_tables,
     resolve_latest_successful_upstream_run_id,
@@ -212,28 +211,6 @@ FROM {environment.catalog}.{environment.silver_schema}.matches
     assert rows == [
         {"match_date": "2026-06-24", "completed_flag": True},
         {"match_date": "2026-06-25", "completed_flag": False},
-    ]
-
-
-def test_collect_silver_table_rows_returns_table_rows() -> None:
-    _config, environment = _config_environment()
-    table_fqn = f"{environment.catalog}.{environment.silver_schema}.teams"
-    spark = FakeSparkSession(
-        tables={
-            table_fqn: FakeTable(
-                rows=[
-                    {"team_id": "team-1", "team_status": "ACTIVE"},
-                    {"team_id": "team-2", "team_status": "DISSOLVED"},
-                ]
-            )
-        }
-    )
-
-    rows = collect_silver_table_rows(spark, environment, "teams")
-
-    assert rows == [
-        {"team_id": "team-1", "team_status": "ACTIVE"},
-        {"team_id": "team-2", "team_status": "DISSOLVED"},
     ]
 
 

@@ -6,6 +6,14 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
+from napa_pipeline.silver_to_gold.io import (
+    get_gold_stage_table_fqn,
+    get_gold_target_table_fqn,
+    get_silver_source_table_fqn,
+)
+from napa_pipeline.silver_to_gold.publish import publish_stage_to_gold_table
+from napa_pipeline.silver_to_gold.environment import ReleaseEnvironment
+
 
 DIRECT_VALID_TEAM_ID = "DIRECT_VALID_TEAM_ID"
 ACTIVE_MEMBERSHIP_PAIR = "ACTIVE_MEMBERSHIP_PAIR"
@@ -25,6 +33,22 @@ class ResolvedMatchTeamsResult:
     """Resolved match-side rows and summary counts for one Phase 4 build."""
 
     rows: tuple[dict[str, Any], ...]
+    direct_resolution_count: int
+    active_pair_resolution_count: int
+    historical_pair_resolution_count: int
+    ambiguous_count: int
+    unresolved_count: int
+    persistent_team_resolution_pct: float
+
+
+@dataclass(frozen=True)
+class ResolvedMatchTeamsPublicationSummary:
+    """Published-table summary for the Spark-native Phase 4 build."""
+
+    target_table_fqn: str
+    stage_table_fqn: str
+    input_row_count: int
+    output_row_count: int
     direct_resolution_count: int
     active_pair_resolution_count: int
     historical_pair_resolution_count: int
@@ -97,6 +121,264 @@ def build_resolved_match_teams(
         unresolved_count=unresolved_count,
         persistent_team_resolution_pct=persistent_team_resolution_pct,
     )
+
+
+def build_resolved_match_teams_sql(environment: ReleaseEnvironment) -> str:
+    """Return the Spark SQL used to build the Gold resolved_match_teams table."""
+    matches_fqn = get_silver_source_table_fqn(environment, "matches")
+    match_teams_fqn = get_silver_source_table_fqn(environment, "match_teams")
+    match_team_players_fqn = get_silver_source_table_fqn(environment, "match_team_players")
+    team_memberships_fqn = get_silver_source_table_fqn(environment, "team_memberships")
+    teams_fqn = get_silver_source_table_fqn(environment, "teams")
+
+    return f"""
+WITH match_team_base AS (
+    SELECT
+        CAST(mt.match_id AS STRING) AS match_id,
+        CAST(mt.match_team_id AS STRING) AS match_team_id,
+        mt.team_number AS team_number,
+        CAST(mt.team_id AS STRING) AS direct_team_id,
+        COALESCE(CAST(mt.match_date AS DATE), CAST(m.match_date AS DATE)) AS match_date
+    FROM {match_teams_fqn} AS mt
+    LEFT JOIN {matches_fqn} AS m
+      ON CAST(mt.match_id AS STRING) = CAST(m.match_id AS STRING)
+),
+match_team_pairs AS (
+    SELECT
+        CAST(match_team_id AS STRING) AS match_team_id,
+        array_sort(collect_set(CAST(player_id AS STRING))) AS player_ids
+    FROM {match_team_players_fqn}
+    WHERE player_id IS NOT NULL
+      AND match_team_id IS NOT NULL
+    GROUP BY CAST(match_team_id AS STRING)
+),
+base AS (
+    SELECT
+        mtb.match_id,
+        mtb.match_team_id,
+        mtb.team_number,
+        mtb.direct_team_id,
+        mtb.match_date,
+        CASE WHEN size(mtp.player_ids) = 2 THEN element_at(mtp.player_ids, 1) END AS player_one_id,
+        CASE WHEN size(mtp.player_ids) = 2 THEN element_at(mtp.player_ids, 2) END AS player_two_id,
+        CASE
+            WHEN size(mtp.player_ids) = 2 THEN concat_ws(':', element_at(mtp.player_ids, 1), element_at(mtp.player_ids, 2))
+        END AS canonical_player_pair_key
+    FROM match_team_base AS mtb
+    LEFT JOIN match_team_pairs AS mtp
+      ON mtb.match_team_id = mtp.match_team_id
+),
+teams_normalized AS (
+    SELECT
+        CAST(team_id AS STRING) AS team_id,
+        CAST(formation_date AS DATE) AS formation_date,
+        CAST(dissolution_date AS DATE) AS dissolution_date,
+        active_flag,
+        UPPER(TRIM(CAST(team_status AS STRING))) AS team_status
+    FROM {teams_fqn}
+    WHERE team_id IS NOT NULL
+),
+team_memberships_deduped AS (
+    SELECT DISTINCT
+        CAST(team_id AS STRING) AS team_id,
+        CAST(player_id AS STRING) AS player_id,
+        CAST(membership_start_date AS DATE) AS membership_start_date,
+        CAST(membership_end_date AS DATE) AS membership_end_date
+    FROM {team_memberships_fqn}
+    WHERE team_id IS NOT NULL
+      AND player_id IS NOT NULL
+),
+membership_pairs AS (
+    SELECT
+        m1.team_id AS team_id,
+        m1.player_id AS player_one_id,
+        m2.player_id AS player_two_id,
+        greatest(m1.membership_start_date, m2.membership_start_date) AS overlap_start_date,
+        least(m1.membership_end_date, m2.membership_end_date) AS overlap_end_date
+    FROM team_memberships_deduped AS m1
+    INNER JOIN team_memberships_deduped AS m2
+      ON m1.team_id = m2.team_id
+     AND m1.player_id < m2.player_id
+    WHERE
+        greatest(m1.membership_start_date, m2.membership_start_date) IS NULL
+        OR least(m1.membership_end_date, m2.membership_end_date) IS NULL
+        OR greatest(m1.membership_start_date, m2.membership_start_date)
+           <= least(m1.membership_end_date, m2.membership_end_date)
+),
+active_pair_candidates AS (
+    SELECT
+        b.match_team_id,
+        sort_array(collect_set(mp.team_id)) AS active_team_ids,
+        COUNT(DISTINCT mp.team_id) AS active_team_count
+    FROM base AS b
+    INNER JOIN membership_pairs AS mp
+      ON b.player_one_id = mp.player_one_id
+     AND b.player_two_id = mp.player_two_id
+    INNER JOIN teams_normalized AS t
+      ON mp.team_id = t.team_id
+    WHERE b.match_date IS NOT NULL
+      AND (mp.overlap_start_date IS NULL OR b.match_date >= mp.overlap_start_date)
+      AND (mp.overlap_end_date IS NULL OR b.match_date <= mp.overlap_end_date)
+      AND (t.formation_date IS NULL OR b.match_date >= t.formation_date)
+      AND (t.dissolution_date IS NULL OR b.match_date <= t.dissolution_date)
+    GROUP BY b.match_team_id
+),
+historical_pair_candidates AS (
+    SELECT
+        player_one_id,
+        player_two_id,
+        sort_array(collect_set(team_id)) AS historical_team_ids,
+        COUNT(DISTINCT team_id) AS historical_team_count
+    FROM membership_pairs
+    GROUP BY player_one_id, player_two_id
+),
+resolved_pre AS (
+    SELECT
+        b.match_id,
+        b.match_team_id,
+        b.team_number,
+        b.match_date,
+        b.player_one_id,
+        b.player_two_id,
+        b.canonical_player_pair_key,
+        CASE
+            WHEN dt.team_id IS NOT NULL THEN dt.team_id
+            WHEN COALESCE(apc.active_team_count, 0) = 1 THEN element_at(apc.active_team_ids, 1)
+            WHEN COALESCE(apc.active_team_count, 0) > 1 THEN NULL
+            WHEN COALESCE(hpc.historical_team_count, 0) = 1 THEN element_at(hpc.historical_team_ids, 1)
+            WHEN COALESCE(hpc.historical_team_count, 0) > 1 THEN NULL
+            ELSE NULL
+        END AS resolved_team_id,
+        CASE
+            WHEN dt.team_id IS NOT NULL THEN '{DIRECT_VALID_TEAM_ID}'
+            WHEN COALESCE(apc.active_team_count, 0) = 1 THEN '{ACTIVE_MEMBERSHIP_PAIR}'
+            WHEN COALESCE(apc.active_team_count, 0) > 1 THEN '{AMBIGUOUS}'
+            WHEN COALESCE(hpc.historical_team_count, 0) = 1 THEN '{UNIQUE_HISTORICAL_PAIR}'
+            WHEN COALESCE(hpc.historical_team_count, 0) > 1 THEN '{AMBIGUOUS}'
+            ELSE '{UNRESOLVED}'
+        END AS team_resolution_method,
+        CASE
+            WHEN dt.team_id IS NOT NULL THEN '{RESOLVED}'
+            WHEN COALESCE(apc.active_team_count, 0) = 1 THEN '{RESOLVED}'
+            WHEN COALESCE(apc.active_team_count, 0) > 1 THEN '{AMBIGUOUS}'
+            WHEN COALESCE(hpc.historical_team_count, 0) = 1 THEN '{RESOLVED}'
+            WHEN COALESCE(hpc.historical_team_count, 0) > 1 THEN '{AMBIGUOUS}'
+            ELSE '{UNRESOLVED}'
+        END AS team_resolution_status,
+        CASE
+            WHEN dt.team_id IS NOT NULL THEN {DIRECT_RESOLUTION_CONFIDENCE}
+            WHEN COALESCE(apc.active_team_count, 0) = 1 THEN {ACTIVE_PAIR_RESOLUTION_CONFIDENCE}
+            WHEN COALESCE(hpc.historical_team_count, 0) = 1 THEN {HISTORICAL_PAIR_RESOLUTION_CONFIDENCE}
+            ELSE {UNRESOLVED_CONFIDENCE}
+        END AS team_resolution_confidence
+    FROM base AS b
+    LEFT JOIN teams_normalized AS dt
+      ON b.direct_team_id = dt.team_id
+     AND (b.match_date IS NULL OR dt.formation_date IS NULL OR b.match_date >= dt.formation_date)
+     AND (b.match_date IS NULL OR dt.dissolution_date IS NULL OR b.match_date <= dt.dissolution_date)
+    LEFT JOIN active_pair_candidates AS apc
+      ON b.match_team_id = apc.match_team_id
+    LEFT JOIN historical_pair_candidates AS hpc
+      ON b.player_one_id = hpc.player_one_id
+     AND b.player_two_id = hpc.player_two_id
+)
+SELECT
+    match_id,
+    match_team_id,
+    team_number,
+    match_date,
+    player_one_id,
+    player_two_id,
+    canonical_player_pair_key,
+    resolved_team_id,
+    team_resolution_method,
+    team_resolution_status,
+    team_resolution_confidence,
+    CASE
+        WHEN rt.team_id IS NULL THEN FALSE
+        WHEN rt.active_flag IS TRUE THEN TRUE
+        WHEN rt.active_flag IS FALSE THEN FALSE
+        WHEN rt.team_status = 'ACTIVE' THEN TRUE
+        ELSE FALSE
+    END AS candidate_attribution_allowed_flag
+FROM resolved_pre AS rp
+LEFT JOIN teams_normalized AS rt
+  ON rp.resolved_team_id = rt.team_id
+""".strip()
+
+
+def publish_resolved_match_teams(
+    spark: Any,
+    environment: ReleaseEnvironment,
+) -> ResolvedMatchTeamsPublicationSummary:
+    """Build and publish resolved_match_teams using Spark-native SQL."""
+    target_table_fqn = get_gold_target_table_fqn(environment, "resolved_match_teams")
+    stage_table_fqn = get_gold_stage_table_fqn(environment, "resolved_match_teams")
+    publish_stage_to_gold_table(
+        spark,
+        stage_table_fqn=stage_table_fqn,
+        target_table_fqn=target_table_fqn,
+        stage_sql=build_resolved_match_teams_sql(environment),
+        validation_fn=_validate_resolved_match_teams_table,
+    )
+    input_row_count = int(spark.table(get_silver_source_table_fqn(environment, "match_teams")).count())
+    summary_row = spark.sql(
+        f"""
+SELECT
+    COUNT(*) AS output_row_count,
+    SUM(CASE WHEN team_resolution_method = '{DIRECT_VALID_TEAM_ID}' THEN 1 ELSE 0 END) AS direct_resolution_count,
+    SUM(CASE WHEN team_resolution_method = '{ACTIVE_MEMBERSHIP_PAIR}' THEN 1 ELSE 0 END) AS active_pair_resolution_count,
+    SUM(CASE WHEN team_resolution_method = '{UNIQUE_HISTORICAL_PAIR}' THEN 1 ELSE 0 END) AS historical_pair_resolution_count,
+    SUM(CASE WHEN team_resolution_status = '{AMBIGUOUS}' THEN 1 ELSE 0 END) AS ambiguous_count,
+    SUM(CASE WHEN team_resolution_status = '{UNRESOLVED}' THEN 1 ELSE 0 END) AS unresolved_count,
+    CASE
+        WHEN COUNT(*) = 0 THEN 0.0
+        ELSE 100.0 * SUM(CASE WHEN team_resolution_status = '{RESOLVED}' THEN 1 ELSE 0 END) / COUNT(*)
+    END AS persistent_team_resolution_pct
+FROM {target_table_fqn}
+""".strip()
+    ).collect()[0]
+    mapping = summary_row.asDict(recursive=True) if hasattr(summary_row, "asDict") else dict(summary_row)
+
+    return ResolvedMatchTeamsPublicationSummary(
+        target_table_fqn=target_table_fqn,
+        stage_table_fqn=stage_table_fqn,
+        input_row_count=input_row_count,
+        output_row_count=int(mapping["output_row_count"]),
+        direct_resolution_count=int(mapping["direct_resolution_count"] or 0),
+        active_pair_resolution_count=int(mapping["active_pair_resolution_count"] or 0),
+        historical_pair_resolution_count=int(mapping["historical_pair_resolution_count"] or 0),
+        ambiguous_count=int(mapping["ambiguous_count"] or 0),
+        unresolved_count=int(mapping["unresolved_count"] or 0),
+        persistent_team_resolution_pct=float(mapping["persistent_team_resolution_pct"] or 0.0),
+    )
+
+
+def _validate_resolved_match_teams_table(spark: Any, table_fqn: str) -> None:
+    """Validate primary-key uniqueness and non-null key fields for resolved_match_teams."""
+    validation_row = spark.sql(
+        f"""
+SELECT
+    SUM(CASE WHEN match_id IS NULL OR team_number IS NULL THEN 1 ELSE 0 END) AS null_key_count,
+    SUM(CASE WHEN duplicate_key_count > 1 THEN 1 ELSE 0 END) AS duplicate_group_count
+FROM (
+    SELECT
+        match_id,
+        team_number,
+        COUNT(*) AS duplicate_key_count
+    FROM {table_fqn}
+    GROUP BY match_id, team_number
+)
+""".strip()
+    ).collect()[0]
+    mapping = validation_row.asDict(recursive=True) if hasattr(validation_row, "asDict") else dict(validation_row)
+    null_key_count = int(mapping["null_key_count"] or 0)
+    duplicate_group_count = int(mapping["duplicate_group_count"] or 0)
+    if null_key_count != 0 or duplicate_group_count != 0:
+        raise ValueError(
+            f"Resolved match teams validation failed for {table_fqn}: "
+            f"null_key_count={null_key_count}, duplicate_group_count={duplicate_group_count}."
+        )
 
 
 def _resolve_match_team_row(
