@@ -40,3 +40,6 @@ domains:
 
   player_position:
     allowed: [LEFT, RIGHT]
+    synonyms:
+      "1": LEFT
+      "2": RIGHT

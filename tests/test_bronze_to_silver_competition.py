@@ -331,6 +331,38 @@ def test_build_match_team_players_allows_unmapped_position_alias() -> None:
     assert all(row["player_position"] is None for row in result.accepted_rows)
 
 
+def test_build_match_team_players_normalizes_numeric_player_positions() -> None:
+    (
+        config,
+        context,
+        _monthly_batches_rows,
+        _regions_rows,
+        players_rows,
+        _teams_rows,
+        team_memberships_rows,
+        _matches_rows,
+        match_teams_rows,
+    ) = _parents()
+
+    result = build_match_team_players(
+        [
+            {"id": "mtp-1", "match_team_id": "mt-1", "player_id": "player-1", "player_position": "1"},
+            {"id": "mtp-2", "match_team_id": "mt-1", "player_id": "player-2", "player_position": "2"},
+        ],
+        config,
+        context,
+        match_teams_rows=match_teams_rows,
+        players_rows=players_rows,
+        team_memberships_rows=team_memberships_rows,
+    )
+
+    assert len(result.accepted_rows) == 2
+    assert len(result.rejected_rows) == 0
+    positions_by_player = {row["player_id"]: row["player_position"] for row in result.accepted_rows}
+    assert positions_by_player["player-1"] == "LEFT"
+    assert positions_by_player["player-2"] == "RIGHT"
+
+
 def test_build_match_games_accepts_valid_row_and_derives_scoring_fields() -> None:
     config, context, *_parents_data, matches_rows, _match_teams_rows = _parents()
 
