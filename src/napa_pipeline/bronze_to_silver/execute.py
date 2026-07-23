@@ -117,6 +117,8 @@ COMPETITION_SOURCE_COLUMN_CANDIDATES = {
     "status",
     "winning_team_number",
     "winner_team_number",
+    "winning_team_id",
+    "winner_team_id",
     "match_team_id",
     "team_id",
     "team_number",
@@ -326,6 +328,12 @@ def _execute_single_table_sql(
             target_table=target_table,
             source_table_fqn=source_table_sql,
             silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+            match_teams_source_table_fqn=get_bronze_source_table_fqn(
+                environment,
+                config.enabled_sources["match_teams"],
+            )
+            if target_table == "matches"
+            else None,
         )
     else:
         raise ValueError(f"No SQL execution plan is defined for target table '{target_table}'.")
@@ -477,6 +485,7 @@ def _execute_single_table(
     target_table = str(table_config["target"])
     kwargs = _resolve_builder_kwargs(
         spark,
+        config,
         environment,
         target_table=target_table,
     )
@@ -558,6 +567,7 @@ def _source_table_with_missing_columns(
 
 def _resolve_builder_kwargs(
     spark: Any,
+    config: BronzeToSilverConfig,
     environment: ReleaseEnvironment,
     *,
     target_table: str,
@@ -602,6 +612,14 @@ def _resolve_builder_kwargs(
         "matches": {
             "monthly_batches_rows": base_tables["monthly_batches"],
             "regions_rows": base_tables["regions"],
+            "match_teams_source_rows": collect_table_rows(
+                spark,
+                get_bronze_source_table_fqn(environment, config.enabled_sources["match_teams"]),
+            )
+            if spark.catalog.tableExists(
+                get_bronze_source_table_fqn(environment, config.enabled_sources["match_teams"])
+            )
+            else [],
         },
         "match_teams": {
             "matches_rows": base_tables["matches"],

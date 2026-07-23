@@ -58,6 +58,8 @@ def test_build_competition_sql_plan_for_matches_contains_expected_rules() -> Non
     assert "MATCH_DUPLICATE" in plan.rejected_sql
     assert "match_year" in plan.accepted_sql
     assert "completed_flag" in plan.accepted_sql
+    assert "winning_team_id" in plan.rejected_sql
+    assert "winner_team_lookup" in plan.accepted_sql
 
 
 def test_build_competition_sql_plan_for_match_teams_contains_expected_rules() -> None:

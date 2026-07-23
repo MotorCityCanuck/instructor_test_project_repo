@@ -43,12 +43,14 @@ def build_matches(
     *,
     monthly_batches_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
     regions_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
+    match_teams_source_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
 ) -> SilverBuildResult:
     """Build the Silver matches table from Bronze rows."""
     table_name = "matches"
     exact_deduped, exact_duplicate_count = _dedupe_exact_rows(source_rows)
     batches_index = _index_rows(monthly_batches_rows, "batch_id")
     regions_index = _index_rows(regions_rows, "region_id")
+    winner_team_index = _index_match_team_numbers(match_teams_source_rows)
 
     candidates: dict[str, list[dict[str, Any]]] = {}
     rejects: list[dict[str, Any]] = []
@@ -78,6 +80,7 @@ def build_matches(
             match_id=match_id,
             batches_index=batches_index,
             regions_index=regions_index,
+            winner_team_index=winner_team_index,
             context=context,
         )
         if reject is not None:
@@ -370,6 +373,7 @@ def _build_match_candidate(
     match_id: str,
     batches_index: dict[str, dict[str, Any]],
     regions_index: dict[str, dict[str, Any]],
+    winner_team_index: dict[tuple[str, str], set[int]],
     context: PipelineContext,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     batch_id = standardize_string(normalized.get("batch_id"), uppercase=False)
@@ -414,7 +418,7 @@ def _build_match_candidate(
         return None, date_reject
 
     status = standardize_string(normalized.get("match_status") or normalized.get("status"), uppercase=True)
-    winner, winner_reject = _safe_optional_side_number(
+    explicit_winner, winner_reject = _safe_optional_side_number(
         normalized.get("winning_team_number") or normalized.get("winner_team_number"),
         context=context,
         source_table="matches",
@@ -426,6 +430,45 @@ def _build_match_candidate(
     )
     if winner_reject is not None:
         return None, winner_reject
+    winner_team_id = standardize_string(
+        normalized.get("winning_team_id") or normalized.get("winner_team_id"),
+        uppercase=False,
+    )
+    derived_winner = _resolve_winning_team_number(
+        match_id,
+        winner_team_id,
+        winner_team_index=winner_team_index,
+    )
+    if explicit_winner is not None and derived_winner is not None and explicit_winner != derived_winner:
+        return None, build_reject_record(
+            context,
+            source_table="matches",
+            target_table="matches",
+            source_business_key=match_id,
+            reject_reason="VALUE_OUT_OF_RANGE",
+            rule_id="MATCH_005",
+            rule_severity="ERROR",
+            source_record=normalized,
+            reject_reason_detail=(
+                "winning_team_number is inconsistent with the winning_team_id mapping."
+            ),
+        )
+    winner = explicit_winner if explicit_winner is not None else derived_winner
+    if winner_team_id and winner is None:
+        return None, build_reject_record(
+            context,
+            source_table="matches",
+            target_table="matches",
+            source_business_key=match_id,
+            reject_reason="VALUE_OUT_OF_RANGE",
+            rule_id="MATCH_005",
+            rule_severity="ERROR",
+            source_record=normalized,
+            reject_reason_detail=(
+                f"winning_team_id '{winner_team_id}' could not be resolved to team_number 1 or 2 "
+                "from the match_teams source."
+            ),
+        )
 
     completed_flag = status in COMPLETED_MATCH_STATUSES or winner is not None
     if completed_flag and winner is None:
@@ -491,6 +534,42 @@ def _build_match_candidate(
         )
     )
     return candidate, None
+
+
+def _index_match_team_numbers(
+    match_teams_source_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> dict[tuple[str, str], set[int]]:
+    index: dict[tuple[str, str], set[int]] = {}
+    for source_row in match_teams_source_rows:
+        normalized = _normalize_source_keys(source_row)
+        match_id = standardize_string(normalized.get("match_id"), uppercase=False)
+        team_id = standardize_string(normalized.get("team_id"), uppercase=False)
+        if not match_id or not team_id:
+            continue
+        try:
+            team_number = safe_cast_int(
+                normalized.get("team_number") or normalized.get("side_number")
+            )
+        except Exception:
+            team_number = None
+        if team_number not in (1, 2):
+            continue
+        index.setdefault((match_id, team_id), set()).add(team_number)
+    return index
+
+
+def _resolve_winning_team_number(
+    match_id: str,
+    winner_team_id: str | None,
+    *,
+    winner_team_index: dict[tuple[str, str], set[int]],
+) -> int | None:
+    if winner_team_id is None:
+        return None
+    candidate_numbers = winner_team_index.get((match_id, winner_team_id), set())
+    if len(candidate_numbers) != 1:
+        return None
+    return next(iter(candidate_numbers))
 
 
 def _build_match_team_candidate(
