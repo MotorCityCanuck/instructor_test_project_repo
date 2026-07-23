@@ -86,20 +86,32 @@ deduped_source AS (
 winner_team_lookup AS (
     SELECT
         match_id,
-        team_id AS winning_team_id,
+        winning_team_reference AS winning_team_id,
         COUNT(DISTINCT team_number) AS winner_team_number_count,
         MIN(team_number) AS derived_winning_team_number
     FROM (
         SELECT DISTINCT
-            NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
-            NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
-            CAST(TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS INT) AS team_number
-        FROM {resolved_match_teams_source_fqn}
+            source_match_teams.match_id,
+            source_match_teams.winning_team_reference,
+            source_match_teams.team_number
+        FROM (
+            SELECT DISTINCT
+                NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
+                NULLIF(TRIM(CAST(COALESCE(match_team_id, id) AS STRING)), '') AS winning_team_reference,
+                CAST(TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS INT) AS team_number
+            FROM {resolved_match_teams_source_fqn}
+            UNION
+            SELECT DISTINCT
+                NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
+                NULLIF(TRIM(CAST(team_id AS STRING)), '') AS winning_team_reference,
+                CAST(TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS INT) AS team_number
+            FROM {resolved_match_teams_source_fqn}
+        ) source_match_teams
     ) source_match_teams
     WHERE match_id IS NOT NULL
-      AND team_id IS NOT NULL
+      AND winning_team_reference IS NOT NULL
       AND team_number IN (1, 2)
-    GROUP BY match_id, team_id
+    GROUP BY match_id, winning_team_reference
 ),
 typed_source AS (
     SELECT
@@ -386,20 +398,32 @@ WHERE duplicate_rank > 1
 WITH winner_team_lookup AS (
     SELECT
         match_id,
-        team_id AS winning_team_id,
+        winning_team_reference AS winning_team_id,
         COUNT(DISTINCT team_number) AS winner_team_number_count,
         MIN(team_number) AS derived_winning_team_number
     FROM (
         SELECT DISTINCT
-            NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
-            NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
-            CAST(TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS INT) AS team_number
-        FROM {resolved_match_teams_source_fqn}
+            source_match_teams.match_id,
+            source_match_teams.winning_team_reference,
+            source_match_teams.team_number
+        FROM (
+            SELECT DISTINCT
+                NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
+                NULLIF(TRIM(CAST(COALESCE(match_team_id, id) AS STRING)), '') AS winning_team_reference,
+                CAST(TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS INT) AS team_number
+            FROM {resolved_match_teams_source_fqn}
+            UNION
+            SELECT DISTINCT
+                NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
+                NULLIF(TRIM(CAST(team_id AS STRING)), '') AS winning_team_reference,
+                CAST(TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS INT) AS team_number
+            FROM {resolved_match_teams_source_fqn}
+        ) source_match_teams
     ) source_match_teams
     WHERE match_id IS NOT NULL
-      AND team_id IS NOT NULL
+      AND winning_team_reference IS NOT NULL
       AND team_number IN (1, 2)
-    GROUP BY match_id, team_id
+    GROUP BY match_id, winning_team_reference
 ),
 valid_rows AS (
     SELECT DISTINCT

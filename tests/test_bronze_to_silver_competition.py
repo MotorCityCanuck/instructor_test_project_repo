@@ -185,6 +185,36 @@ def test_build_matches_derives_winner_from_winning_team_id() -> None:
     assert row["completed_flag"] is True
 
 
+def test_build_matches_derives_winner_from_match_team_row_id() -> None:
+    config, context, monthly_batches_rows, regions_rows, *_ = _parents()
+
+    result = build_matches(
+        [
+            {
+                "id": "match-2",
+                "batch_id": "batch-2026-06",
+                "region_id": "region-1",
+                "match_date": "2026-06-20",
+                "match_type": "league",
+                "winning_team_id": "mt-4",
+            }
+        ],
+        config,
+        context,
+        monthly_batches_rows=monthly_batches_rows,
+        regions_rows=regions_rows,
+        match_teams_source_rows=[
+            {"id": "mt-3", "match_id": "match-2", "team_id": "team-1", "team_number": "1"},
+            {"id": "mt-4", "match_id": "match-2", "team_id": "team-2", "team_number": "2"},
+        ],
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    row = result.accepted_rows[0]
+    assert row["winning_team_number"] == 2
+    assert row["completed_flag"] is True
+
+
 def test_build_matches_accepts_missing_winner_as_incomplete_match() -> None:
     config, context, monthly_batches_rows, regions_rows, *_ = _parents()
 

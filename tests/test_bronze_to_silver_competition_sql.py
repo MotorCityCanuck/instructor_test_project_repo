@@ -62,6 +62,7 @@ def test_build_competition_sql_plan_for_matches_contains_expected_rules() -> Non
     assert "),\nvalid_rows AS (" in plan.business_key_duplicate_count_sql
     assert "CAST(NULL AS STRING) AS competition_category" in plan.accepted_sql
     assert "CAST(NULL AS STRING) AS match_status" in plan.accepted_sql
+    assert "COALESCE(match_team_id, id)" in plan.accepted_sql
 
 
 def test_build_competition_sql_plan_for_match_teams_contains_expected_rules() -> None:
