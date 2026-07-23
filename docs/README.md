@@ -18,3 +18,5 @@
 | runbook.md | Provide reproducible setup and execution instructions. | As setup steps or environment assumptions change. |
 | raw_to_bronze_workflow.md | Deploy, run, inspect, and rerun the Raw-to-Bronze Databricks Workflow. | When workflow task wiring, parameters, deployment, or audit behavior changes. |
 | NAPA_Bronze_to_Silver_Implementation_Decisions.md | Freeze the instructor Bronze-to-Silver repo shape, package layout, config layout, and serverless workflow assumptions before implementation expands. | Before major Bronze-to-Silver implementation work and whenever foundational architecture decisions change. |
+| gold_contract_workflow.md | Define the contract-first workflow for Gold development so deployed Databricks schemas stay ahead of implementation assumptions. | Before each new Gold phase and after any Bronze-to-Silver contract change. |
+| gold_target_schema_registry.md | Track the evolving Gold target table contracts, phase status, dependencies, and unresolved derivations. | Before and after each Gold table implementation or contract change. |
