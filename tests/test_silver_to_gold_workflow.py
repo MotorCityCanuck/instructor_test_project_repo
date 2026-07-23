@@ -112,7 +112,7 @@ def _pipeline_context():
         config,
         environment,
         upstream_silver_run_id="upstream-run-123",
-        match_rows=[{"match_date": "2026-06-25", "completed_flag": True}],
+        match_rows=[{"match_date": "2026-06-25"}],
     )
     return create_pipeline_context(runtime_context, pipeline_run_id="gold-run-123")
 
@@ -193,15 +193,14 @@ def test_collect_match_rows_for_analysis_date_returns_minimal_rows() -> None:
     _config, environment = _config_environment()
     query = f"""
 SELECT
-    match_date,
-    completed_flag
+    match_date
 FROM {environment.catalog}.{environment.silver_schema}.matches
 """.strip()
     spark = FakeSparkSession(
         sql_rows_by_query={
             query: [
-                {"match_date": "2026-06-24", "completed_flag": True},
-                {"match_date": "2026-06-25", "completed_flag": False},
+                {"match_date": "2026-06-24"},
+                {"match_date": "2026-06-25"},
             ]
         }
     )
@@ -209,8 +208,8 @@ FROM {environment.catalog}.{environment.silver_schema}.matches
     rows = collect_match_rows_for_analysis_date(spark, environment)
 
     assert rows == [
-        {"match_date": "2026-06-24", "completed_flag": True},
-        {"match_date": "2026-06-25", "completed_flag": False},
+        {"match_date": "2026-06-24"},
+        {"match_date": "2026-06-25"},
     ]
 
 

@@ -137,8 +137,7 @@ def collect_match_rows_for_analysis_date(
     rows = spark.sql(
         f"""
 SELECT
-    match_date,
-    completed_flag
+    match_date
 FROM {matches_fqn}
 """.strip()
     ).collect()

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document captures the Phase 0 Silver source contract available to the Silver-to-Gold pipeline. It is based on existing Bronze-to-Silver configuration, SQL plans, and provided Databricks `DESCRIBE TABLE` output where available.
+This document captures the Phase 0 Silver source contract available to the Silver-to-Gold pipeline. As of July 23, 2026, the authoritative contract is the Databricks-exported schema file [docs/napa_5k_bronze_silver_columns.csv](D:/@repos/instructor_test_project_repo/docs/napa_5k_bronze_silver_columns.csv), with supporting interpretation captured in [docs/gold_schema_audit_from_databricks_csv.md](D:/@repos/instructor_test_project_repo/docs/gold_schema_audit_from_databricks_csv.md).
 
 ## Source Namespace Pattern
 
@@ -334,12 +334,13 @@ Gold uses:
 - Winner derivation through `winning_team_number`.
 - Region and batch joins.
 
-Runtime values still required:
+Runtime values and limitations:
 
 - `match_type` values provided: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
-- `competition_category` is null in the provided profiling output.
-- `match_status` is null in the provided profiling output.
-- `completed_flag` is false in all provided distinct match-profile rows.
+- Bronze `matches` does not provide `competition_category`.
+- Bronze `matches` does not provide `match_status`.
+- `competition_category` and `match_status` exist physically in Silver but should currently be treated as nullable placeholders unless an approved derivation is introduced.
+- `winning_team_number` and `completed_flag` are derived Silver fields, not direct Bronze source fields.
 
 ### `match_teams`
 
@@ -474,7 +475,7 @@ Known implemented joins:
   - `teams.team_status` derives from Bronze `team_status` values including `ACTIVE`, `DORMANT`, and `RETIRED`
   - `team_memberships.player_position` and `match_team_players.player_position` may arrive as numeric values `1` and `2`, normalized to `LEFT` and `RIGHT`
 - Player `country_code` is expected to be populated from direct player country or from `regions.country_code` through `home_region_id`. Null values should be treated as missing home-region data or invalid region linkage.
-- Provided `matches` profiling shows no completed matches, so match outcome and rating inputs are unresolved.
+- Match outcome semantics should rely on the current Silver derivation of `winning_team_number` and `completed_flag`, not on any assumed Bronze `match_status`.
 - `region_type` is requested by Phase 0, but the implemented `regions` Silver plan does not expose a `region_type` column.
 - Player status is exposed as `active_flag`, not `player_status`.
 - Team type is exposed as `team_category`, not `team_type`.
