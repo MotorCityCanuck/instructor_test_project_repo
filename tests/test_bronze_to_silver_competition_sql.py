@@ -60,6 +60,7 @@ def test_build_competition_sql_plan_for_matches_contains_expected_rules() -> Non
     assert "completed_flag" in plan.accepted_sql
     assert "winning_team_id" in plan.rejected_sql
     assert "winner_team_lookup" in plan.accepted_sql
+    assert "),\nvalid_rows AS (" in plan.business_key_duplicate_count_sql
 
 
 def test_build_competition_sql_plan_for_match_teams_contains_expected_rules() -> None:
@@ -118,6 +119,45 @@ def test_execute_single_table_sql_publishes_match_outputs(monkeypatch) -> None:
     assert metrics["rejected_row_count"] == 2
     assert metrics["warning_count"] == 0
     assert captured["quality"][0][0] == "matches"
+
+
+def test_execute_single_table_sql_wraps_match_teams_source_for_matches(monkeypatch) -> None:
+    config, environment, context = _config_environment_context()
+    spark = DummySpark()
+    captured: dict[str, str | None] = {"match_teams_source_table_fqn": None}
+
+    monkeypatch.setattr(
+        execute_module,
+        "_get_table_column_names",
+        lambda _spark, table_fqn: {"match_id", "team_id", "team_number"}
+        if str(table_fqn).endswith(".match_teams")
+        else {"match_id", "winning_team_id"},
+    )
+    monkeypatch.setattr(
+        execute_module,
+        "build_competition_sql_plan",
+        lambda *args, **kwargs: captured.update(
+            {"match_teams_source_table_fqn": kwargs.get("match_teams_source_table_fqn")}
+        )
+        or build_competition_sql_plan(*args, **kwargs),
+    )
+    monkeypatch.setattr(execute_module, "scalar_sql_value", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(execute_module, "publish_sql_table", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(execute_module, "append_quality_results_for_reject_table", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(execute_module, "append_schema_snapshot_for_table", lambda *args, **kwargs: None)
+    monkeypatch.setattr(execute_module, "append_records", lambda *args, **kwargs: None)
+    monkeypatch.setattr(execute_module, "append_warning_message", lambda *args, **kwargs: None)
+
+    execute_module._execute_single_table_sql(
+        spark,
+        config,
+        environment,
+        context,
+        table_config=config.data["silver_tables"]["matches"],
+    )
+
+    assert captured["match_teams_source_table_fqn"] is not None
+    assert "CAST(NULL AS STRING) AS side_number" in str(captured["match_teams_source_table_fqn"])
 
 
 def test_execute_single_table_sql_publishes_match_team_outputs(monkeypatch) -> None:

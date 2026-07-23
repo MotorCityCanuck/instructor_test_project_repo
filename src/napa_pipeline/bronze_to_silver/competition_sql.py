@@ -413,7 +413,7 @@ WITH winner_team_lookup AS (
       AND team_number IN (1, 2)
     GROUP BY match_id, team_id
 ),
-WITH valid_rows AS (
+valid_rows AS (
     SELECT DISTINCT
         source.match_id,
         source.batch_id,

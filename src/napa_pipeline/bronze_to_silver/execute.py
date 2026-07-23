@@ -322,18 +322,24 @@ def _execute_single_table_sql(
             source_columns,
             COMPETITION_SOURCE_COLUMN_CANDIDATES,
         )
+        match_teams_source_sql = None
+        if target_table == "matches":
+            match_teams_source_fqn = get_bronze_source_table_fqn(
+                environment,
+                config.enabled_sources["match_teams"],
+            )
+            match_teams_source_sql = _source_table_with_missing_columns(
+                match_teams_source_fqn,
+                _get_table_column_names(spark, match_teams_source_fqn),
+                {"id", "match_team_id", "match_id", "team_id", "team_number", "side_number"},
+            )
         sql_plan = build_competition_sql_plan(
             config,
             context,
             target_table=target_table,
             source_table_fqn=source_table_sql,
             silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
-            match_teams_source_table_fqn=get_bronze_source_table_fqn(
-                environment,
-                config.enabled_sources["match_teams"],
-            )
-            if target_table == "matches"
-            else None,
+            match_teams_source_table_fqn=match_teams_source_sql,
         )
     else:
         raise ValueError(f"No SQL execution plan is defined for target table '{target_table}'.")
