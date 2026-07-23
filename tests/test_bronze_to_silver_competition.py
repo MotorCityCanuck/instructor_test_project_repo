@@ -92,7 +92,6 @@ def _parents():
                 "batch_id": "batch-2026-06",
                 "region_id": "region-1",
                 "match_date": "2026-06-15",
-                "status": "completed",
                 "winning_team_number": "1",
             }
         ],
@@ -135,8 +134,6 @@ def test_build_matches_accepts_valid_row_and_derives_calendar_fields() -> None:
                 "region_id": "region-1",
                 "match_date": "2026-06-20",
                 "match_type": "league",
-                "competition_category": "mixed",
-                "status": "completed",
                 "winning_team_number": "2",
             }
         ],
@@ -152,6 +149,8 @@ def test_build_matches_accepts_valid_row_and_derives_calendar_fields() -> None:
     assert row["batch_sk"] == monthly_batches_rows[0]["batch_sk"]
     assert row["region_sk"] == regions_rows[0]["region_sk"]
     assert row["completed_flag"] is True
+    assert row["competition_category"] is None
+    assert row["match_status"] is None
     assert row["match_year"] == 2026
     assert row["match_month"] == 6
 
@@ -186,7 +185,7 @@ def test_build_matches_derives_winner_from_winning_team_id() -> None:
     assert row["completed_flag"] is True
 
 
-def test_build_matches_rejects_missing_winner_for_completed_status() -> None:
+def test_build_matches_accepts_missing_winner_as_incomplete_match() -> None:
     config, context, monthly_batches_rows, regions_rows, *_ = _parents()
 
     result = build_matches(
@@ -195,7 +194,7 @@ def test_build_matches_rejects_missing_winner_for_completed_status() -> None:
                 "id": "match-2",
                 "batch_id": "batch-2026-06",
                 "region_id": "region-1",
-                "status": "completed",
+                "match_date": "2026-06-20",
             }
         ],
         config,
@@ -204,8 +203,10 @@ def test_build_matches_rejects_missing_winner_for_completed_status() -> None:
         regions_rows=regions_rows,
     )
 
-    assert len(result.accepted_rows) == 0
-    assert result.rejected_rows[0]["reject_reason"] == "VALUE_OUT_OF_RANGE"
+    assert len(result.rejected_rows) == 0
+    assert len(result.accepted_rows) == 1
+    assert result.accepted_rows[0]["winning_team_number"] is None
+    assert result.accepted_rows[0]["completed_flag"] is False
 
 
 def test_build_matches_rejects_unresolvable_winning_team_id() -> None:

@@ -73,8 +73,8 @@ WITH normalized_source AS (
         NULLIF(TRIM(CAST(region_id AS STRING)), '') AS region_id,
         TRIM(CAST(COALESCE(match_date, date) AS STRING)) AS match_date_raw,
         NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS match_type,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(competition_category, category) AS STRING))), '') AS competition_category,
-        NULLIF(UPPER(TRIM(CAST(COALESCE(match_status, status) AS STRING))), '') AS match_status,
+        CAST(NULL AS STRING) AS competition_category,
+        CAST(NULL AS STRING) AS match_status,
         TRIM(CAST(COALESCE(winning_team_number, winner_team_number) AS STRING)) AS winning_team_number_raw,
         NULLIF(TRIM(CAST(COALESCE(winning_team_id, winner_team_id) AS STRING)), '') AS winning_team_id
     FROM {source_table_fqn}
@@ -124,7 +124,7 @@ validated_source AS (
         batch.batch_sk,
         region.region_sk,
         CASE
-            WHEN source.match_status IN ('COMPLETED', 'FINAL') OR source.winning_team_number IS NOT NULL THEN true
+            WHEN source.winning_team_number IS NOT NULL THEN true
             ELSE false
         END AS completed_flag
     FROM typed_source source
@@ -150,8 +150,6 @@ invalid_rows AS (
             WHEN winning_team_id IS NOT NULL
                  AND explicit_winning_team_number IS NOT NULL
                  AND explicit_winning_team_number <> derived_winning_team_number THEN 'VALUE_OUT_OF_RANGE'
-            WHEN completed_flag = true AND winning_team_number IS NULL THEN 'VALUE_OUT_OF_RANGE'
-            WHEN match_status IN ('CANCELLED', 'FORFEITED') AND completed_flag = true THEN 'VALUE_OUT_OF_RANGE'
         END AS reject_reason,
         CASE
             WHEN match_id IS NULL THEN 'MATCH_001'
@@ -165,8 +163,6 @@ invalid_rows AS (
             WHEN winning_team_id IS NOT NULL
                  AND explicit_winning_team_number IS NOT NULL
                  AND explicit_winning_team_number <> derived_winning_team_number THEN 'MATCH_005'
-            WHEN completed_flag = true AND winning_team_number IS NULL THEN 'MATCH_006'
-            WHEN match_status IN ('CANCELLED', 'FORFEITED') AND completed_flag = true THEN 'MATCH_007'
         END AS rule_id,
         CASE
             WHEN match_id IS NULL THEN 'CRITICAL'
@@ -184,8 +180,6 @@ invalid_rows AS (
             WHEN winning_team_id IS NOT NULL
                  AND explicit_winning_team_number IS NOT NULL
                  AND explicit_winning_team_number <> derived_winning_team_number THEN 'winning_team_number is inconsistent with the winning_team_id mapping.'
-            WHEN completed_flag = true AND winning_team_number IS NULL THEN 'Completed matches require a winning_team_number.'
-            WHEN match_status IN ('CANCELLED', 'FORFEITED') AND completed_flag = true THEN 'Cancelled or forfeited matches cannot be completed.'
         END AS reject_reason_detail,
         {sql_literal(context.pipeline_run_id)} AS pipeline_run_id,
         {sql_literal(context.pipeline_run_id)} AS _pipeline_run_id,
@@ -220,8 +214,6 @@ invalid_rows AS (
             AND explicit_winning_team_number IS NOT NULL
             AND explicit_winning_team_number <> derived_winning_team_number
        )
-       OR (completed_flag = true AND winning_team_number IS NULL)
-       OR (match_status IN ('CANCELLED', 'FORFEITED') AND completed_flag = true)
 ),
 valid_rows AS (
     SELECT
@@ -252,8 +244,6 @@ valid_rows AS (
                 AND explicit_winning_team_number IS NOT NULL
                 AND explicit_winning_team_number <> derived_winning_team_number
           )
-          OR (completed_flag = true AND winning_team_number IS NULL)
-          OR (match_status IN ('CANCELLED', 'FORFEITED') AND completed_flag = true)
       )
 ),
 ranked_rows AS (
@@ -388,8 +378,6 @@ WHERE duplicate_rank > 1
                 "NULLIF(TRIM(CAST(region_id AS STRING)), '') AS region_id",
                 "TRIM(CAST(COALESCE(match_date, date) AS STRING)) AS match_date_raw",
                 "NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS match_type",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(competition_category, category) AS STRING))), '') AS competition_category",
-                "NULLIF(UPPER(TRIM(CAST(COALESCE(match_status, status) AS STRING))), '') AS match_status",
                 "TRIM(CAST(COALESCE(winning_team_number, winner_team_number) AS STRING)) AS winning_team_number_raw",
                 "NULLIF(TRIM(CAST(COALESCE(winning_team_id, winner_team_id) AS STRING)), '') AS winning_team_id",
             ],
@@ -430,14 +418,13 @@ valid_rows AS (
             ELSE NULL
         END AS winning_team_number,
         CASE
-            WHEN source.match_status IN ('COMPLETED', 'FINAL')
-                 OR (
-                    CASE
-                        WHEN CAST(source.winning_team_number_raw AS INT) IS NOT NULL THEN CAST(source.winning_team_number_raw AS INT)
-                        WHEN winner_lookup.winner_team_number_count = 1 THEN winner_lookup.derived_winning_team_number
-                        ELSE NULL
-                    END
-                 ) IS NOT NULL THEN true
+            WHEN (
+                CASE
+                    WHEN CAST(source.winning_team_number_raw AS INT) IS NOT NULL THEN CAST(source.winning_team_number_raw AS INT)
+                    WHEN winner_lookup.winner_team_number_count = 1 THEN winner_lookup.derived_winning_team_number
+                    ELSE NULL
+                END
+            ) IS NOT NULL THEN true
             ELSE false
         END AS completed_flag
     FROM (
@@ -447,8 +434,8 @@ valid_rows AS (
             NULLIF(TRIM(CAST(region_id AS STRING)), '') AS region_id,
             TRIM(CAST(COALESCE(match_date, date) AS STRING)) AS match_date_raw,
             NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS match_type,
-            NULLIF(UPPER(TRIM(CAST(COALESCE(competition_category, category) AS STRING))), '') AS competition_category,
-            NULLIF(UPPER(TRIM(CAST(COALESCE(match_status, status) AS STRING))), '') AS match_status,
+            CAST(NULL AS STRING) AS competition_category,
+            CAST(NULL AS STRING) AS match_status,
             TRIM(CAST(COALESCE(winning_team_number, winner_team_number) AS STRING)) AS winning_team_number_raw,
             NULLIF(TRIM(CAST(COALESCE(winning_team_id, winner_team_id) AS STRING)), '') AS winning_team_id
         FROM {source_table_fqn}
@@ -474,42 +461,6 @@ valid_rows AS (
                 source.winning_team_id IS NOT NULL
                 AND CAST(source.winning_team_number_raw AS INT) IS NOT NULL
                 AND CAST(source.winning_team_number_raw AS INT) <> winner_lookup.derived_winning_team_number
-          )
-          OR (
-                CASE
-                    WHEN source.match_status IN ('COMPLETED', 'FINAL')
-                         OR (
-                            CASE
-                                WHEN CAST(source.winning_team_number_raw AS INT) IS NOT NULL THEN CAST(source.winning_team_number_raw AS INT)
-                                WHEN winner_lookup.winner_team_number_count = 1 THEN winner_lookup.derived_winning_team_number
-                                ELSE NULL
-                            END
-                         ) IS NOT NULL THEN true
-                    ELSE false
-                END = true
-                AND (
-                    CASE
-                        WHEN CAST(source.winning_team_number_raw AS INT) IS NOT NULL THEN CAST(source.winning_team_number_raw AS INT)
-                        WHEN winner_lookup.winner_team_number_count = 1 THEN winner_lookup.derived_winning_team_number
-                        ELSE NULL
-                    END
-                ) IS NULL
-          )
-          OR (
-                source.match_status IN ('CANCELLED', 'FORFEITED')
-                AND (
-                    CASE
-                        WHEN source.match_status IN ('COMPLETED', 'FINAL')
-                             OR (
-                                CASE
-                                    WHEN CAST(source.winning_team_number_raw AS INT) IS NOT NULL THEN CAST(source.winning_team_number_raw AS INT)
-                                    WHEN winner_lookup.winner_team_number_count = 1 THEN winner_lookup.derived_winning_team_number
-                                    ELSE NULL
-                                END
-                             ) IS NOT NULL THEN true
-                        ELSE false
-                    END = true
-                )
           )
       )
 ),

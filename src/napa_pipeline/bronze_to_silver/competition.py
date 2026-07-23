@@ -32,10 +32,6 @@ from napa_pipeline.bronze_to_silver.transforms import (
 )
 
 
-COMPLETED_MATCH_STATUSES = {"COMPLETED", "FINAL"}
-CANCELLED_MATCH_STATUSES = {"CANCELLED", "FORFEITED"}
-
-
 def build_matches(
     source_rows: list[dict[str, Any]],
     config: BronzeToSilverConfig,
@@ -417,7 +413,6 @@ def _build_match_candidate(
     if date_reject is not None:
         return None, date_reject
 
-    status = standardize_string(normalized.get("match_status") or normalized.get("status"), uppercase=True)
     explicit_winner, winner_reject = _safe_optional_side_number(
         normalized.get("winning_team_number") or normalized.get("winner_team_number"),
         context=context,
@@ -470,31 +465,7 @@ def _build_match_candidate(
             ),
         )
 
-    completed_flag = status in COMPLETED_MATCH_STATUSES or winner is not None
-    if completed_flag and winner is None:
-        return None, build_reject_record(
-            context,
-            source_table="matches",
-            target_table="matches",
-            source_business_key=match_id,
-            reject_reason="VALUE_OUT_OF_RANGE",
-            rule_id="MATCH_006",
-            rule_severity="ERROR",
-            source_record=normalized,
-            reject_reason_detail="Completed matches require a winning_team_number.",
-        )
-    if status in CANCELLED_MATCH_STATUSES and completed_flag:
-        return None, build_reject_record(
-            context,
-            source_table="matches",
-            target_table="matches",
-            source_business_key=match_id,
-            reject_reason="VALUE_OUT_OF_RANGE",
-            rule_id="MATCH_007",
-            rule_severity="ERROR",
-            source_record=normalized,
-            reject_reason_detail="Cancelled or forfeited matches cannot be completed.",
-        )
+    completed_flag = winner is not None
 
     batch_row = batches_index.get(batch_id) if batch_id else None
     region_row = regions_index.get(region_id) if region_id else None
@@ -507,11 +478,8 @@ def _build_match_candidate(
         "region_sk": region_row.get("region_sk") if region_row else None,
         "match_date": match_date,
         "match_type": standardize_string(normalized.get("match_type"), uppercase=True),
-        "competition_category": standardize_string(
-            normalized.get("competition_category") or normalized.get("category"),
-            uppercase=True,
-        ),
-        "match_status": status,
+        "competition_category": None,
+        "match_status": None,
         "winning_team_number": winner,
         "completed_flag": completed_flag,
         "match_year": match_date.year if match_date else None,
