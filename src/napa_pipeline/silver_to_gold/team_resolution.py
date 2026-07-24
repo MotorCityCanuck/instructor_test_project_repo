@@ -138,7 +138,8 @@ WITH match_team_base AS (
         CAST(mt.match_team_id AS STRING) AS match_team_id,
         mt.team_number AS team_number,
         CAST(mt.team_id AS STRING) AS direct_team_id,
-        COALESCE(CAST(mt.match_date AS DATE), CAST(m.match_date AS DATE)) AS match_date
+        COALESCE(CAST(mt.match_date AS DATE), CAST(m.match_date AS DATE)) AS match_date,
+        CAST(m.winning_team_id AS STRING) AS winning_team_id
     FROM {match_teams_fqn} AS mt
     LEFT JOIN {matches_fqn} AS m
       ON CAST(mt.match_id AS STRING) = CAST(m.match_id AS STRING)
@@ -159,6 +160,7 @@ base AS (
         mtb.team_number,
         mtb.direct_team_id,
         mtb.match_date,
+        mtb.winning_team_id,
         CASE WHEN size(mtp.player_ids) = 2 THEN element_at(mtp.player_ids, 1) END AS player_one_id,
         CASE WHEN size(mtp.player_ids) = 2 THEN element_at(mtp.player_ids, 2) END AS player_two_id,
         CASE
@@ -174,7 +176,8 @@ teams_normalized AS (
         CAST(formation_date AS DATE) AS formation_date,
         CAST(dissolution_date AS DATE) AS dissolution_date,
         active_flag,
-        UPPER(TRIM(CAST(team_status AS STRING))) AS team_status
+        UPPER(TRIM(CAST(team_status AS STRING))) AS team_status,
+        UPPER(TRIM(CAST(team_identity_type AS STRING))) AS team_identity_type
     FROM {teams_fqn}
     WHERE team_id IS NOT NULL
 ),
@@ -238,6 +241,7 @@ resolved_pre AS (
         b.match_team_id,
         b.team_number,
         b.match_date,
+        b.winning_team_id,
         b.player_one_id,
         b.player_two_id,
         b.canonical_player_pair_key,
@@ -287,6 +291,7 @@ SELECT
     match_team_id,
     team_number,
     match_date,
+    winning_team_id,
     player_one_id,
     player_two_id,
     canonical_player_pair_key,
@@ -296,6 +301,7 @@ SELECT
     team_resolution_confidence,
     CASE
         WHEN rt.team_id IS NULL THEN FALSE
+        WHEN rt.team_identity_type = 'AD_HOC' THEN FALSE
         WHEN rt.active_flag IS TRUE THEN TRUE
         WHEN rt.active_flag IS FALSE THEN FALSE
         WHEN rt.team_status = 'ACTIVE' THEN TRUE
@@ -394,6 +400,7 @@ def _resolve_match_team_row(
     team_number = match_team_row.get("team_number")
     direct_team_id = _normalize_optional_string(match_team_row.get("team_id"))
     match_date = _parse_date_value(match_team_row.get("match_date"))
+    winning_team_id = _normalize_optional_string(match_team_row.get("winning_team_id"))
     player_ids = sorted(set(player_ids_by_match_team.get(match_team_id, [])))
     pair_key = _canonical_pair_key(player_ids)
     pair_tuple = _canonical_pair_tuple(player_ids)
@@ -406,6 +413,7 @@ def _resolve_match_team_row(
                 match_team_id=match_team_id,
                 team_number=team_number,
                 match_date=match_date,
+                winning_team_id=winning_team_id,
                 canonical_player_pair_key=pair_key,
                 resolved_team_id=direct_team_id,
                 team_resolution_method=DIRECT_VALID_TEAM_ID,
@@ -420,6 +428,7 @@ def _resolve_match_team_row(
             match_team_id=match_team_id,
             team_number=team_number,
             match_date=match_date,
+            winning_team_id=winning_team_id,
             canonical_player_pair_key=pair_key,
             resolved_team_id=None,
             team_resolution_method=UNRESOLVED,
@@ -441,6 +450,7 @@ def _resolve_match_team_row(
             match_team_id=match_team_id,
             team_number=team_number,
             match_date=match_date,
+            winning_team_id=winning_team_id,
             canonical_player_pair_key=pair_key,
             resolved_team_id=resolved_team_id,
             team_resolution_method=ACTIVE_MEMBERSHIP_PAIR,
@@ -456,6 +466,7 @@ def _resolve_match_team_row(
             match_team_id=match_team_id,
             team_number=team_number,
             match_date=match_date,
+            winning_team_id=winning_team_id,
             canonical_player_pair_key=pair_key,
             resolved_team_id=None,
             team_resolution_method=AMBIGUOUS,
@@ -472,6 +483,7 @@ def _resolve_match_team_row(
             match_team_id=match_team_id,
             team_number=team_number,
             match_date=match_date,
+            winning_team_id=winning_team_id,
             canonical_player_pair_key=pair_key,
             resolved_team_id=resolved_team_id,
             team_resolution_method=UNIQUE_HISTORICAL_PAIR,
@@ -487,6 +499,7 @@ def _resolve_match_team_row(
             match_team_id=match_team_id,
             team_number=team_number,
             match_date=match_date,
+            winning_team_id=winning_team_id,
             canonical_player_pair_key=pair_key,
             resolved_team_id=None,
             team_resolution_method=AMBIGUOUS,
@@ -500,6 +513,7 @@ def _resolve_match_team_row(
         match_team_id=match_team_id,
         team_number=team_number,
         match_date=match_date,
+        winning_team_id=winning_team_id,
         canonical_player_pair_key=pair_key,
         resolved_team_id=None,
         team_resolution_method=UNRESOLVED,
@@ -515,6 +529,7 @@ def _build_resolved_row(
     match_team_id: str,
     team_number: Any,
     match_date: date | None,
+    winning_team_id: str | None,
     canonical_player_pair_key: str | None,
     resolved_team_id: str | None,
     team_resolution_method: str,
@@ -527,6 +542,7 @@ def _build_resolved_row(
         "match_team_id": match_team_id,
         "team_number": team_number,
         "match_date": match_date,
+        "winning_team_id": winning_team_id,
         "canonical_player_pair_key": canonical_player_pair_key,
         "resolved_team_id": resolved_team_id,
         "team_resolution_method": team_resolution_method,
@@ -727,6 +743,9 @@ def _team_is_valid_for_match_date(team_row: dict[str, Any], match_date: date | N
 
 def _is_candidate_attributable_team(team_row: dict[str, Any]) -> bool:
     if not team_row:
+        return False
+    team_identity_type = _normalize_optional_string(team_row.get("team_identity_type"))
+    if team_identity_type is not None and team_identity_type.upper() == "AD_HOC":
         return False
     active_flag = team_row.get("active_flag")
     if isinstance(active_flag, bool):

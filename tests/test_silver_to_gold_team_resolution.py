@@ -23,6 +23,7 @@ def _teams_rows():
             "team_id": "team-direct",
             "team_name": "Direct Team",
             "team_status": "ACTIVE",
+            "team_identity_type": "COMPETITIVE",
             "active_flag": True,
             "formation_date": "2026-01-01",
             "dissolution_date": None,
@@ -31,6 +32,7 @@ def _teams_rows():
             "team_id": "team-active-pair",
             "team_name": "Active Pair Team",
             "team_status": "ACTIVE",
+            "team_identity_type": "COMPETITIVE",
             "active_flag": True,
             "formation_date": "2026-01-01",
             "dissolution_date": None,
@@ -39,6 +41,7 @@ def _teams_rows():
             "team_id": "team-historical",
             "team_name": "Historical Team",
             "team_status": "ACTIVE",
+            "team_identity_type": "COMPETITIVE",
             "active_flag": True,
             "formation_date": "2024-01-01",
             "dissolution_date": None,
@@ -47,6 +50,7 @@ def _teams_rows():
             "team_id": "team-ambiguous-a",
             "team_name": "Ambiguous A",
             "team_status": "ACTIVE",
+            "team_identity_type": "COMPETITIVE",
             "active_flag": True,
             "formation_date": "2025-01-01",
             "dissolution_date": None,
@@ -55,6 +59,7 @@ def _teams_rows():
             "team_id": "team-ambiguous-b",
             "team_name": "Ambiguous B",
             "team_status": "ACTIVE",
+            "team_identity_type": "COMPETITIVE",
             "active_flag": True,
             "formation_date": "2025-01-01",
             "dissolution_date": None,
@@ -63,9 +68,19 @@ def _teams_rows():
             "team_id": "team-dissolved",
             "team_name": "Dissolved Team",
             "team_status": "DISSOLVED",
+            "team_identity_type": "COMPETITIVE",
             "active_flag": False,
             "formation_date": "2024-01-01",
             "dissolution_date": "2026-05-01",
+        },
+        {
+            "team_id": "team-ad-hoc",
+            "team_name": "Ad Hoc Team",
+            "team_status": "ACTIVE",
+            "team_identity_type": "AD_HOC",
+            "active_flag": True,
+            "formation_date": "2026-01-01",
+            "dissolution_date": None,
         },
     ]
 
@@ -79,6 +94,7 @@ def test_build_resolved_match_teams_direct_resolution_uses_valid_team_id() -> No
                 "team_id": "team-direct",
                 "team_number": 1,
                 "match_date": "2026-06-15",
+                "winning_team_id": "team-direct",
             }
         ],
         match_team_players_rows=[
@@ -90,6 +106,7 @@ def test_build_resolved_match_teams_direct_resolution_uses_valid_team_id() -> No
     )
 
     row = result.rows[0]
+    assert row["winning_team_id"] == "team-direct"
     assert row["canonical_player_pair_key"] == "player-1:player-2"
     assert row["resolved_team_id"] == "team-direct"
     assert row["team_resolution_method"] == DIRECT_VALID_TEAM_ID
@@ -136,6 +153,32 @@ def test_build_resolved_match_teams_uses_active_membership_pair_when_direct_team
     assert row["team_resolution_status"] == RESOLVED
     assert row["team_resolution_confidence"] == 0.9
     assert result.active_pair_resolution_count == 1
+
+
+def test_build_resolved_match_teams_blocks_ad_hoc_team_from_candidate_attribution() -> None:
+    result = build_resolved_match_teams(
+        match_teams_rows=[
+            {
+                "match_team_id": "mt-ad-hoc",
+                "match_id": "match-ad-hoc",
+                "team_id": "team-ad-hoc",
+                "team_number": 1,
+                "match_date": "2026-06-15",
+                "winning_team_id": "team-ad-hoc",
+            }
+        ],
+        match_team_players_rows=[
+            {"match_team_id": "mt-ad-hoc", "player_id": "player-31"},
+            {"match_team_id": "mt-ad-hoc", "player_id": "player-32"},
+        ],
+        team_memberships_rows=[],
+        teams_rows=_teams_rows(),
+    )
+
+    row = result.rows[0]
+    assert row["resolved_team_id"] == "team-ad-hoc"
+    assert row["team_resolution_method"] == DIRECT_VALID_TEAM_ID
+    assert row["candidate_attribution_allowed_flag"] is False
 
 
 def test_build_resolved_match_teams_uses_unique_historical_pair_when_no_active_pair_exists() -> None:
@@ -435,6 +478,9 @@ def test_build_resolved_match_teams_sql_references_required_sources() -> None:
     assert f"{environment.catalog}.{environment.silver_schema}.teams" in sql
     assert "candidate_attribution_allowed_flag" in sql
     assert "team_resolution_confidence" in sql
+    assert "winning_team_id" in sql
+    assert "team_identity_type" in sql
+    assert "team_identity_type = 'AD_HOC'" in sql
 
 
 class _FakeRow:
