@@ -480,6 +480,7 @@ def _build_match_candidate(
         "match_type": standardize_string(normalized.get("match_type"), uppercase=True),
         "competition_category": None,
         "match_status": None,
+        "winning_team_id": winner_team_id,
         "winning_team_number": winner,
         "completed_flag": completed_flag,
         "match_year": match_date.year if match_date else None,
@@ -495,9 +496,10 @@ def _build_match_candidate(
                     "batch_id": batch_id,
                     "region_id": region_id,
                     "match_date": match_date,
+                    "winning_team_id": winner_team_id,
                     "winning_team_number": winner,
                 },
-                ["match_id", "batch_id", "region_id", "match_date", "winning_team_number"],
+                ["match_id", "batch_id", "region_id", "match_date", "winning_team_id", "winning_team_number"],
             ),
         )
     )

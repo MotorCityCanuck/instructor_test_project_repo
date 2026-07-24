@@ -160,6 +160,7 @@ def test_build_matches_accepts_valid_row_and_derives_calendar_fields() -> None:
     assert row["match_id"] == "match-2"
     assert row["batch_sk"] == monthly_batches_rows[0]["batch_sk"]
     assert row["region_sk"] == regions_rows[0]["region_sk"]
+    assert row["winning_team_id"] is None
     assert row["completed_flag"] is True
     assert row["competition_category"] is None
     assert row["match_status"] is None
@@ -193,6 +194,7 @@ def test_build_matches_derives_winner_from_winning_team_id() -> None:
 
     assert result.reconciliation.status == "PASSED"
     row = result.accepted_rows[0]
+    assert row["winning_team_id"] == "team-2"
     assert row["winning_team_number"] == 2
     assert row["completed_flag"] is True
 

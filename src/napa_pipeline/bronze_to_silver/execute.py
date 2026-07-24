@@ -419,6 +419,9 @@ def run_cross_table_validation_task(
         environment,
         expected_match_team_count=int(config.data["thresholds"]["expected_match_team_count"]),
         expected_match_team_player_count=int(config.data["thresholds"]["expected_match_team_player_count"]),
+        duplicate_active_team_pair_severity=str(
+            config.data["thresholds"].get("duplicate_active_team_pair_severity", "WARNING")
+        ),
     )
     append_records(
         spark,

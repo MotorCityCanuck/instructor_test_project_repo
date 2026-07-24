@@ -62,6 +62,7 @@ def _build_matches_sql_plan(
             "sha2(concat_ws('|', coalesce(match_id, '<NULL>'), "
             "coalesce(batch_id, '<NULL>'), coalesce(region_id, '<NULL>'), "
             "coalesce(cast(match_date as string), '<NULL>'), "
+            "coalesce(winning_team_id, '<NULL>'), "
             "coalesce(cast(winning_team_number as string), '<NULL>')), 256)"
         ),
     )
@@ -226,6 +227,7 @@ valid_rows AS (
         match_type,
         competition_category,
         match_status,
+        winning_team_id,
         winning_team_number,
         completed_flag
     FROM validated_source
@@ -292,6 +294,7 @@ SELECT
     match_type,
     competition_category,
     match_status,
+    winning_team_id,
     winning_team_number,
     completed_flag,
     YEAR(match_date) AS match_year,
@@ -344,6 +347,7 @@ SELECT
             'match_type', match_type,
             'competition_category', competition_category,
             'match_status', match_status,
+            'winning_team_id', winning_team_id,
             'winning_team_number', winning_team_number
         )
     ) AS source_record_json,
@@ -357,6 +361,7 @@ SELECT
                 'match_type', match_type,
                 'competition_category', competition_category,
                 'match_status', match_status,
+                'winning_team_id', winning_team_id,
                 'winning_team_number', winning_team_number
             )
         ),
@@ -412,6 +417,7 @@ valid_rows AS (
         source.match_type,
         source.competition_category,
         source.match_status,
+        source.winning_team_id,
         CASE
             WHEN CAST(source.winning_team_number_raw AS INT) IS NOT NULL THEN CAST(source.winning_team_number_raw AS INT)
             WHEN winner_lookup.winner_team_number_count = 1 THEN winner_lookup.derived_winning_team_number
@@ -488,6 +494,7 @@ ranked_rows AS (
                         coalesce(match_type, '<NULL>'),
                         coalesce(competition_category, '<NULL>'),
                         coalesce(match_status, '<NULL>'),
+                        coalesce(winning_team_id, '<NULL>'),
                         coalesce(cast(winning_team_number as string), '<NULL>')
                     ),
                     256

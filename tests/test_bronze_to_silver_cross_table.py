@@ -100,6 +100,7 @@ def _pipeline_rows():
                 "match_date": "2026-06-15",
                 "competition_category": "mixed",
                 "status": "completed",
+                "winning_team_id": "team-1",
                 "winning_team_number": "1",
             }
         ],
@@ -179,10 +180,13 @@ def test_run_cross_table_validations_reports_expected_warnings() -> None:
 
     quality_by_rule = {row["rule_id"]: row for row in result.quality_results}
     assert quality_by_rule["CROSS_TEAM_001"]["failed_row_count"] == 1
+    assert quality_by_rule["CROSS_TEAM_002"]["failed_row_count"] == 1
     assert quality_by_rule["CROSS_MATCH_TEAM_001"]["failed_row_count"] == 1
+    assert quality_by_rule["CROSS_MATCH_TEAM_002"]["failed_row_count"] == 0
     assert quality_by_rule["CROSS_WINNER_001"]["failed_row_count"] == 0
+    assert quality_by_rule["CROSS_WINNER_002"]["failed_row_count"] == 0
     assert result.warning_count == 2
-    assert result.failure_count == 0
+    assert result.failure_count == 1
 
 
 def test_run_cross_table_validations_detects_winner_inconsistency() -> None:
@@ -206,7 +210,79 @@ def test_run_cross_table_validations_detects_winner_inconsistency() -> None:
 
     quality_by_rule = {row["rule_id"]: row for row in result.quality_results}
     assert quality_by_rule["CROSS_WINNER_001"]["failed_row_count"] == 1
-    assert result.failure_count == 1
+    assert quality_by_rule["CROSS_TEAM_002"]["failed_row_count"] == 1
+    assert result.failure_count == 2
+
+
+def test_run_cross_table_validations_detects_winning_team_reference_inconsistency() -> None:
+    rows = _pipeline_rows()
+    inconsistent_matches = [
+        {**rows["matches"][0], "winning_team_id": "team-9"},
+    ]
+
+    result = run_cross_table_validations(
+        rows["context"],
+        players_rows=rows["players"],
+        teams_rows=rows["teams"],
+        team_memberships_rows=rows["team_memberships"],
+        matches_rows=inconsistent_matches,
+        match_teams_rows=rows["match_teams"],
+        match_team_players_rows=rows["match_team_players"],
+        match_games_rows=rows["match_games"],
+        expected_match_team_count=int(rows["config"].data["thresholds"]["expected_match_team_count"]),
+        expected_match_team_player_count=int(rows["config"].data["thresholds"]["expected_match_team_player_count"]),
+    )
+
+    quality_by_rule = {row["rule_id"]: row for row in result.quality_results}
+    assert quality_by_rule["CROSS_WINNER_002"]["failed_row_count"] == 1
+
+
+def test_run_cross_table_validations_detects_duplicate_active_team_pairs() -> None:
+    rows = _pipeline_rows()
+    duplicate_teams = [
+        *rows["teams"],
+        {
+            **rows["teams"][0],
+            "team_id": "team-3",
+            "team_sk": "team-sk-3",
+            "team_name": "Mirror Duo",
+        },
+    ]
+    duplicate_memberships = [
+        *rows["team_memberships"],
+        {
+            **rows["team_memberships"][0],
+            "team_membership_id": "tm-4",
+            "team_membership_sk": "tm-sk-4",
+            "team_id": "team-3",
+            "team_sk": "team-sk-3",
+        },
+        {
+            **rows["team_memberships"][1],
+            "team_membership_id": "tm-5",
+            "team_membership_sk": "tm-sk-5",
+            "team_id": "team-3",
+            "team_sk": "team-sk-3",
+        },
+    ]
+
+    result = run_cross_table_validations(
+        rows["context"],
+        players_rows=rows["players"],
+        teams_rows=duplicate_teams,
+        team_memberships_rows=duplicate_memberships,
+        matches_rows=rows["matches"],
+        match_teams_rows=rows["match_teams"],
+        match_team_players_rows=rows["match_team_players"],
+        match_games_rows=rows["match_games"],
+        expected_match_team_count=int(rows["config"].data["thresholds"]["expected_match_team_count"]),
+        expected_match_team_player_count=int(rows["config"].data["thresholds"]["expected_match_team_player_count"]),
+        duplicate_active_team_pair_severity="ERROR",
+    )
+
+    quality_by_rule = {row["rule_id"]: row for row in result.quality_results}
+    assert quality_by_rule["CROSS_TEAM_003"]["failed_row_count"] == 2
+    assert quality_by_rule["CROSS_TEAM_003"]["severity"] == "ERROR"
 
 
 def test_build_vw_players_current_filters_active_players() -> None:

@@ -35,6 +35,7 @@ def run_cross_table_validations(
     match_games_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     expected_match_team_count: int,
     expected_match_team_player_count: int,
+    duplicate_active_team_pair_severity: str = "WARNING",
 ) -> CrossTableValidationResult:
     """Run the cross-table validations defined by the Bronze-to-Silver spec."""
     quality_results: list[dict[str, Any]] = []
@@ -66,6 +67,13 @@ def run_cross_table_validations(
         )
     )
     quality_results.extend(
+        _validate_match_team_references(
+            context,
+            teams_rows=teams_rows,
+            match_teams_rows=match_teams_rows,
+        )
+    )
+    quality_results.extend(
         _validate_referenced_players(
             context,
             players_rows=players_rows,
@@ -74,11 +82,35 @@ def run_cross_table_validations(
         )
     )
     quality_results.extend(
+        _validate_team_pair_identity(
+            context,
+            teams_rows=teams_rows,
+            team_memberships_rows=team_memberships_rows,
+            expected_player_count=expected_match_team_player_count,
+        )
+    )
+    quality_results.extend(
+        _validate_duplicate_active_team_pairs(
+            context,
+            teams_rows=teams_rows,
+            team_memberships_rows=team_memberships_rows,
+            expected_player_count=expected_match_team_player_count,
+            severity=duplicate_active_team_pair_severity,
+        )
+    )
+    quality_results.extend(
         _validate_winner_consistency(
             context,
             matches_rows=matches_rows,
             match_teams_rows=match_teams_rows,
             match_games_rows=match_games_rows,
+        )
+    )
+    quality_results.extend(
+        _validate_winning_team_references(
+            context,
+            matches_rows=matches_rows,
+            match_teams_rows=match_teams_rows,
         )
     )
 
@@ -123,6 +155,7 @@ def run_cross_table_validations_sql(
     *,
     expected_match_team_count: int,
     expected_match_team_player_count: int,
+    duplicate_active_team_pair_severity: str = "WARNING",
 ) -> CrossTableValidationResult:
     """Run the cross-table validations directly in Spark SQL."""
     teams_fqn = _silver_table_fqn(environment, "teams")
@@ -199,8 +232,23 @@ LEFT JOIN {match_team_players_fqn} mtp
     ON mt.match_team_id = mtp.match_team_id
 GROUP BY mt.match_team_id
 HAVING COUNT(mtp.match_team_player_id) <> {expected_match_team_player_count}
-""".strip(),
+            """.strip(),
             "threshold_value": str(expected_match_team_player_count),
+        },
+        {
+            "target_table": "match_teams",
+            "rule_id": "CROSS_MATCH_TEAM_002",
+            "rule_type": "foreign_key",
+            "severity": "ERROR",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {match_teams_fqn}",
+            "failed_sql": f"""
+SELECT mt.match_team_id AS business_key
+FROM {match_teams_fqn} mt
+LEFT ANTI JOIN {teams_fqn} t
+    ON mt.team_id = t.team_id
+WHERE mt.team_id IS NOT NULL
+""".strip(),
+            "threshold_value": None,
         },
         {
             "target_table": "team_memberships",
@@ -227,6 +275,56 @@ SELECT mtp.match_team_player_id AS business_key
 FROM {match_team_players_fqn} mtp
 LEFT ANTI JOIN {players_fqn} p
     ON mtp.player_id = p.player_id
+            """.strip(),
+            "threshold_value": None,
+        },
+        {
+            "target_table": "teams",
+            "rule_id": "CROSS_TEAM_002",
+            "rule_type": "consistency",
+            "severity": "ERROR",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {teams_fqn} WHERE active_flag = true",
+            "failed_sql": f"""
+SELECT t.team_id AS business_key
+FROM {teams_fqn} t
+LEFT JOIN {team_memberships_fqn} tm
+    ON t.team_id = tm.team_id
+   AND tm.current_membership_flag = true
+WHERE t.active_flag = true
+GROUP BY t.team_id
+HAVING COUNT(DISTINCT tm.player_id) <> {expected_match_team_player_count}
+""".strip(),
+            "threshold_value": str(expected_match_team_player_count),
+        },
+        {
+            "target_table": "teams",
+            "rule_id": "CROSS_TEAM_003",
+            "rule_type": "uniqueness",
+            "severity": duplicate_active_team_pair_severity.upper(),
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {teams_fqn} WHERE active_flag = true",
+            "failed_sql": f"""
+WITH active_team_pairs AS (
+    SELECT
+        t.team_id,
+        ARRAY_SORT(COLLECT_SET(tm.player_id)) AS player_pair
+    FROM {teams_fqn} t
+    LEFT JOIN {team_memberships_fqn} tm
+        ON t.team_id = tm.team_id
+       AND tm.current_membership_flag = true
+    WHERE t.active_flag = true
+    GROUP BY t.team_id
+    HAVING SIZE(ARRAY_SORT(COLLECT_SET(tm.player_id))) = {expected_match_team_player_count}
+),
+duplicate_pairs AS (
+    SELECT player_pair
+    FROM active_team_pairs
+    GROUP BY player_pair
+    HAVING COUNT(*) > 1
+)
+SELECT atp.team_id AS business_key
+FROM active_team_pairs atp
+INNER JOIN duplicate_pairs dp
+    ON atp.player_pair = dp.player_pair
 """.strip(),
             "threshold_value": None,
         },
@@ -283,7 +381,25 @@ WHERE m.winning_team_number IS NOT NULL
       OR
       (gw.winning_team_number IS NOT NULL
        AND gw.winning_team_number <> CAST(m.winning_team_number AS INT))
-  )
+            )
+""".strip(),
+            "threshold_value": None,
+        },
+        {
+            "target_table": "matches",
+            "rule_id": "CROSS_WINNER_002",
+            "rule_type": "foreign_key",
+            "severity": "ERROR",
+            "evaluated_sql": f"SELECT COUNT(*) AS value FROM {matches_fqn} WHERE winning_team_id IS NOT NULL",
+            "failed_sql": f"""
+SELECT m.match_id AS business_key
+FROM {matches_fqn} m
+LEFT JOIN {match_teams_fqn} mt
+    ON m.match_id = mt.match_id
+   AND m.winning_team_id = mt.team_id
+WHERE m.winning_team_id IS NOT NULL
+GROUP BY m.match_id
+HAVING COUNT(mt.match_team_id) = 0
 """.strip(),
             "threshold_value": None,
         },
@@ -478,6 +594,34 @@ def _validate_match_team_player_counts(
     ]
 
 
+def _validate_match_team_references(
+    context: PipelineContext,
+    *,
+    teams_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    match_teams_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> list[dict[str, Any]]:
+    known_team_ids = {str(row["team_id"]) for row in teams_rows}
+    failing_match_team_ids = sorted(
+        str(row["match_team_id"])
+        for row in match_teams_rows
+        if row.get("team_id") in (None, "") or str(row["team_id"]) not in known_team_ids
+    )
+    return [
+        build_quality_result_record(
+            context,
+            target_table="match_teams",
+            rule_id="CROSS_MATCH_TEAM_002",
+            rule_type="foreign_key",
+            severity="ERROR",
+            status="PASSED" if not failing_match_team_ids else "FAILED",
+            evaluated_row_count=len(match_teams_rows),
+            failed_row_count=len(failing_match_team_ids),
+            failure_pct=_failure_pct(len(failing_match_team_ids), len(match_teams_rows)),
+            sample_business_keys=failing_match_team_ids[:10],
+        )
+    ]
+
+
 def _validate_referenced_players(
     context: PipelineContext,
     *,
@@ -521,6 +665,84 @@ def _validate_referenced_players(
             failure_pct=_failure_pct(len(participant_orphans), len(match_team_players_rows)),
             sample_business_keys=participant_orphans[:10],
         ),
+    ]
+
+
+def _validate_team_pair_identity(
+    context: PipelineContext,
+    *,
+    teams_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    team_memberships_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    expected_player_count: int,
+) -> list[dict[str, Any]]:
+    current_players_by_team = _current_player_ids_by_team(team_memberships_rows)
+    active_team_ids = [
+        str(row["team_id"])
+        for row in teams_rows
+        if row.get("active_flag") is True
+    ]
+    failing_team_ids = sorted(
+        team_id
+        for team_id in active_team_ids
+        if len(current_players_by_team.get(team_id, set())) != expected_player_count
+    )
+    return [
+        build_quality_result_record(
+            context,
+            target_table="teams",
+            rule_id="CROSS_TEAM_002",
+            rule_type="consistency",
+            severity="ERROR",
+            status="PASSED" if not failing_team_ids else "FAILED",
+            evaluated_row_count=len(active_team_ids),
+            failed_row_count=len(failing_team_ids),
+            failure_pct=_failure_pct(len(failing_team_ids), len(active_team_ids)),
+            threshold_value=str(expected_player_count),
+            sample_business_keys=failing_team_ids[:10],
+        )
+    ]
+
+
+def _validate_duplicate_active_team_pairs(
+    context: PipelineContext,
+    *,
+    teams_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    team_memberships_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    expected_player_count: int,
+    severity: str,
+) -> list[dict[str, Any]]:
+    current_players_by_team = _current_player_ids_by_team(team_memberships_rows)
+    pair_to_team_ids: dict[tuple[str, ...], list[str]] = {}
+    active_team_ids = [
+        str(row["team_id"])
+        for row in teams_rows
+        if row.get("active_flag") is True
+    ]
+    for team_id in active_team_ids:
+        player_ids = tuple(sorted(current_players_by_team.get(team_id, set())))
+        if len(player_ids) != expected_player_count:
+            continue
+        pair_to_team_ids.setdefault(player_ids, []).append(team_id)
+
+    failing_team_ids = sorted(
+        team_id
+        for team_ids in pair_to_team_ids.values()
+        if len(team_ids) > 1
+        for team_id in team_ids
+    )
+    return [
+        build_quality_result_record(
+            context,
+            target_table="teams",
+            rule_id="CROSS_TEAM_003",
+            rule_type="uniqueness",
+            severity=severity.upper(),
+            status="PASSED" if not failing_team_ids else "FAILED",
+            evaluated_row_count=len(active_team_ids),
+            failed_row_count=len(failing_team_ids),
+            failure_pct=_failure_pct(len(failing_team_ids), len(active_team_ids)),
+            sample_business_keys=failing_team_ids[:10],
+        )
     ]
 
 
@@ -577,6 +799,61 @@ def _validate_winner_consistency(
             sample_business_keys=failing_match_ids[:10],
         )
     ]
+
+
+def _validate_winning_team_references(
+    context: PipelineContext,
+    *,
+    matches_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    match_teams_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> list[dict[str, Any]]:
+    team_ids_by_match: dict[str, set[str]] = {}
+    for row in match_teams_rows:
+        team_id = row.get("team_id")
+        if team_id in (None, ""):
+            continue
+        team_ids_by_match.setdefault(str(row["match_id"]), set()).add(str(team_id))
+
+    evaluated_match_ids = [
+        str(row["match_id"])
+        for row in matches_rows
+        if row.get("winning_team_id") not in (None, "")
+    ]
+    failing_match_ids = sorted(
+        str(row["match_id"])
+        for row in matches_rows
+        if (winner_team_id := row.get("winning_team_id")) not in (None, "")
+        and str(winner_team_id) not in team_ids_by_match.get(str(row["match_id"]), set())
+    )
+    return [
+        build_quality_result_record(
+            context,
+            target_table="matches",
+            rule_id="CROSS_WINNER_002",
+            rule_type="foreign_key",
+            severity="ERROR",
+            status="PASSED" if not failing_match_ids else "FAILED",
+            evaluated_row_count=len(evaluated_match_ids),
+            failed_row_count=len(failing_match_ids),
+            failure_pct=_failure_pct(len(failing_match_ids), len(evaluated_match_ids)),
+            sample_business_keys=failing_match_ids[:10],
+        )
+    ]
+
+
+def _current_player_ids_by_team(
+    team_memberships_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> dict[str, set[str]]:
+    grouped: dict[str, set[str]] = {}
+    for membership in team_memberships_rows:
+        if membership.get("current_membership_flag") is not True:
+            continue
+        team_id = membership.get("team_id")
+        player_id = membership.get("player_id")
+        if team_id in (None, "") or player_id in (None, ""):
+            continue
+        grouped.setdefault(str(team_id), set()).add(str(player_id))
+    return grouped
 
 
 def _failure_pct(failed_count: int, evaluated_count: int) -> float | None:

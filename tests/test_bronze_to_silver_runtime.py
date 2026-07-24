@@ -429,21 +429,31 @@ def test_run_cross_table_validations_sql_uses_sql_aggregation(monkeypatch) -> No
     def fake_scalar_count(_spark, query: str) -> int:
         if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(tm.team_membership_id) <> 2" in query:
             return 1
+        if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(DISTINCT tm.player_id) <> 2" in query:
+            return 1
         if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(mt.match_team_id) <> 2" in query:
             return 0
         if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(mg.match_game_id) < 1" in query:
             return 0
         if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(mtp.match_team_player_id) <> 2" in query:
             return 1
+        if "COUNT(*) AS value FROM (" in query and "match_team_id AS business_key" in query and "LEFT ANTI JOIN workspace.instructor_5k_silver.teams" in query:
+            return 0
         if "COUNT(*) AS value FROM (" in query and "team_membership_id" in query and "LEFT ANTI JOIN workspace.instructor_5k_silver.players" in query:
             return 0
         if "COUNT(*) AS value FROM (" in query and "match_team_player_id" in query and "LEFT ANTI JOIN workspace.instructor_5k_silver.players" in query:
             return 0
+        if "COUNT(*) AS value FROM (" in query and "duplicate_pairs AS" in query:
+            return 0
         if "COUNT(*) AS value FROM (" in query and "team_winners AS" in query:
+            return 0
+        if "COUNT(*) AS value FROM (" in query and "HAVING COUNT(mt.match_team_id) = 0" in query:
             return 0
         if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.teams WHERE active_flag = true" in query:
             return 2
         if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.matches WHERE completed_flag = true" in query:
+            return 1
+        if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.matches WHERE winning_team_id IS NOT NULL" in query:
             return 1
         if "SELECT COUNT(*) AS value FROM workspace.instructor_5k_silver.match_teams" in query:
             return 2
@@ -457,6 +467,8 @@ def test_run_cross_table_validations_sql_uses_sql_aggregation(monkeypatch) -> No
 
     def fake_sample_keys(_spark, query: str) -> list[str]:
         if "HAVING COUNT(tm.team_membership_id) <> 2" in query:
+            return ["team-2"]
+        if "HAVING COUNT(DISTINCT tm.player_id) <> 2" in query:
             return ["team-2"]
         if "HAVING COUNT(mtp.match_team_player_id) <> 2" in query:
             return ["mt-2"]
@@ -475,10 +487,13 @@ def test_run_cross_table_validations_sql_uses_sql_aggregation(monkeypatch) -> No
 
     quality_by_rule = {row["rule_id"]: row for row in result.quality_results}
     assert quality_by_rule["CROSS_TEAM_001"]["failed_row_count"] == 1
+    assert quality_by_rule["CROSS_TEAM_002"]["failed_row_count"] == 1
     assert quality_by_rule["CROSS_MATCH_TEAM_001"]["failed_row_count"] == 1
+    assert quality_by_rule["CROSS_MATCH_TEAM_002"]["failed_row_count"] == 0
     assert quality_by_rule["CROSS_WINNER_001"]["failed_row_count"] == 0
+    assert quality_by_rule["CROSS_WINNER_002"]["failed_row_count"] == 0
     assert result.warning_count == 2
-    assert result.failure_count == 0
+    assert result.failure_count == 1
 
 
 def test_publish_convenience_views_task_uses_sql_views() -> None:
