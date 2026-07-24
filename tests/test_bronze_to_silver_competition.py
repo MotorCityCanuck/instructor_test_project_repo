@@ -197,7 +197,7 @@ def test_build_matches_derives_winner_from_winning_team_id() -> None:
     assert row["completed_flag"] is True
 
 
-def test_build_matches_derives_winner_from_match_team_row_id() -> None:
+def test_build_matches_rejects_winning_team_id_that_points_to_match_team_row_id() -> None:
     config, context, monthly_batches_rows, regions_rows, *_ = _parents()
 
     result = build_matches(
@@ -221,10 +221,9 @@ def test_build_matches_derives_winner_from_match_team_row_id() -> None:
         ],
     )
 
-    assert result.reconciliation.status == "PASSED"
-    row = result.accepted_rows[0]
-    assert row["winning_team_number"] == 2
-    assert row["completed_flag"] is True
+    assert len(result.accepted_rows) == 0
+    assert result.rejected_rows[0]["rule_id"] == "MATCH_005"
+    assert "match_teams.team_id" in result.rejected_rows[0]["reject_reason_detail"]
 
 
 def test_build_matches_accepts_missing_winner_as_incomplete_match() -> None:

@@ -461,7 +461,7 @@ def _build_match_candidate(
             source_record=normalized,
             reject_reason_detail=(
                 f"winning_team_id '{winner_team_id}' could not be resolved to team_number 1 or 2 "
-                "from the match_teams source."
+                "from match_teams.team_id for the same match."
             ),
         )
 
@@ -513,22 +513,16 @@ def _index_match_team_numbers(
         match_id = standardize_string(normalized.get("match_id"), uppercase=False)
         if not match_id:
             continue
-        winner_references = [
-            standardize_string(normalized.get("match_team_id") or normalized.get("id"), uppercase=False),
-            standardize_string(normalized.get("team_id"), uppercase=False),
-        ]
+        winner_reference = standardize_string(normalized.get("team_id"), uppercase=False)
         try:
             team_number = safe_cast_int(
                 normalized.get("team_number") or normalized.get("side_number")
             )
         except Exception:
             team_number = None
-        if team_number not in (1, 2):
+        if team_number not in (1, 2) or not winner_reference:
             continue
-        for winner_reference in winner_references:
-            if not winner_reference:
-                continue
-            index.setdefault((match_id, winner_reference), set()).add(team_number)
+        index.setdefault((match_id, winner_reference), set()).add(team_number)
     return index
 
 
