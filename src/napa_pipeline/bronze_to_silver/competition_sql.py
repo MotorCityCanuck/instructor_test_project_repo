@@ -571,6 +571,7 @@ invalid_rows AS (
         CASE
             WHEN match_team_id IS NULL THEN 'MISSING_PRIMARY_KEY'
             WHEN match_id IS NULL OR match_sk IS NULL THEN 'ORPHAN_FOREIGN_KEY'
+            WHEN team_id IS NULL OR team_sk IS NULL THEN 'ORPHAN_FOREIGN_KEY'
             WHEN team_number_raw IS NULL OR team_number_raw = '' THEN 'MISSING_REQUIRED_COLUMN'
             WHEN team_number IS NULL OR team_number NOT IN (1, 2) THEN 'VALUE_OUT_OF_RANGE'
             WHEN pre_match_team_rating_raw IS NOT NULL AND pre_match_team_rating IS NULL THEN 'INVALID_DATA_TYPE'
@@ -579,6 +580,7 @@ invalid_rows AS (
         CASE
             WHEN match_team_id IS NULL THEN 'MATCH_TEAM_001'
             WHEN match_id IS NULL OR match_sk IS NULL THEN 'MATCH_TEAM_002'
+            WHEN team_id IS NULL OR team_sk IS NULL THEN 'MATCH_TEAM_006'
             WHEN team_number_raw IS NULL OR team_number_raw = '' THEN 'MATCH_TEAM_003'
             WHEN team_number IS NULL OR team_number NOT IN (1, 2) THEN 'MATCH_TEAM_003'
             WHEN pre_match_team_rating_raw IS NOT NULL AND pre_match_team_rating IS NULL THEN 'MATCH_TEAM_004'
@@ -591,6 +593,7 @@ invalid_rows AS (
         CASE
             WHEN match_team_id IS NULL THEN 'match_team_id could not be resolved.'
             WHEN match_id IS NULL OR match_sk IS NULL THEN concat('match_id ''', match_id, ''' was not found in accepted matches.')
+            WHEN team_id IS NULL OR team_sk IS NULL THEN concat('team_id ''', team_id, ''' was not found in accepted teams.')
             WHEN team_number_raw IS NULL OR team_number_raw = '' THEN 'team_number is required.'
             WHEN team_number IS NULL OR team_number NOT IN (1, 2) THEN 'team_number must be 1 or 2.'
             WHEN pre_match_team_rating_raw IS NOT NULL AND pre_match_team_rating IS NULL THEN concat('Invalid pre_match_team_rating value ''', pre_match_team_rating_raw, '''.')
@@ -615,6 +618,8 @@ invalid_rows AS (
     WHERE match_team_id IS NULL
        OR match_id IS NULL
        OR match_sk IS NULL
+       OR team_id IS NULL
+       OR team_sk IS NULL
        OR team_number_raw IS NULL
        OR team_number_raw = ''
        OR team_number IS NULL
@@ -638,6 +643,8 @@ valid_rows AS (
     WHERE match_team_id IS NOT NULL
       AND match_id IS NOT NULL
       AND match_sk IS NOT NULL
+      AND team_id IS NOT NULL
+      AND team_sk IS NOT NULL
       AND team_number IS NOT NULL
       AND team_number IN (1, 2)
       AND NOT (

@@ -143,6 +143,27 @@ def test_build_teams_normalizes_type_and_status_and_derives_age() -> None:
     assert row["team_age_days"] == 180
 
 
+def test_build_teams_does_not_use_competitive_identity_as_team_category() -> None:
+    config, context, monthly_batches_rows, _, _, _, _ = _parents()
+
+    result = build_teams(
+        [
+            {
+                "id": "team-identity-only",
+                "name": "Identity Only",
+                "team_type": "competitive",
+                "status": "active",
+            }
+        ],
+        config,
+        context,
+        monthly_batches_rows=monthly_batches_rows,
+    )
+
+    assert len(result.accepted_rows) == 0
+    assert result.rejected_rows[0]["rule_id"] == "TEAM_002"
+
+
 def test_build_teams_supports_legacy_team_type_as_category_fallback() -> None:
     config, context, monthly_batches_rows, _, _, _, _ = _parents()
 
@@ -164,6 +185,30 @@ def test_build_teams_supports_legacy_team_type_as_category_fallback() -> None:
     row = result.accepted_rows[0]
     assert row["team_category"] == "MIXED"
     assert row["team_identity_type"] is None
+
+
+def test_build_teams_preserves_ad_hoc_team_identity_type() -> None:
+    config, context, monthly_batches_rows, _, _, _, _ = _parents()
+
+    result = build_teams(
+        [
+            {
+                "id": "team-ad-hoc",
+                "name": "Ad Hoc Pair",
+                "team_type": "ad_hoc",
+                "team_division": "open_doubles",
+                "status": "active",
+            }
+        ],
+        config,
+        context,
+        monthly_batches_rows=monthly_batches_rows,
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    row = result.accepted_rows[0]
+    assert row["team_category"] == "OPEN"
+    assert row["team_identity_type"] == "AD_HOC"
 
 
 def test_build_teams_rejects_invalid_team_identity_type() -> None:

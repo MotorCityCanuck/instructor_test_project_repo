@@ -228,6 +228,34 @@ def test_build_matches_rejects_winning_team_id_that_points_to_match_team_row_id(
     assert "match_teams.team_id" in result.rejected_rows[0]["reject_reason_detail"]
 
 
+def test_build_matches_rejects_winning_team_id_from_different_match() -> None:
+    config, context, monthly_batches_rows, regions_rows, *_ = _parents()
+
+    result = build_matches(
+        [
+            {
+                "id": "match-2",
+                "batch_id": "batch-2026-06",
+                "region_id": "region-1",
+                "match_date": "2026-06-20",
+                "match_type": "league",
+                "winning_team_id": "team-1",
+            }
+        ],
+        config,
+        context,
+        monthly_batches_rows=monthly_batches_rows,
+        regions_rows=regions_rows,
+        match_teams_source_rows=[
+            {"id": "mt-3", "match_id": "match-other", "team_id": "team-1", "team_number": "1"},
+            {"id": "mt-4", "match_id": "match-other", "team_id": "team-2", "team_number": "2"},
+        ],
+    )
+
+    assert len(result.accepted_rows) == 0
+    assert result.rejected_rows[0]["rule_id"] == "MATCH_005"
+
+
 def test_build_matches_accepts_missing_winner_as_incomplete_match() -> None:
     config, context, monthly_batches_rows, regions_rows, *_ = _parents()
 
@@ -329,6 +357,36 @@ def test_build_match_teams_flags_side_cardinality_warning() -> None:
     assert len(result.accepted_rows) == 1
     assert result.warning_count == 1
     assert result.accepted_rows[0]["side_cardinality_warning_flag"] is True
+
+
+def test_build_match_teams_rejects_missing_team_id() -> None:
+    config, context, _, _, _, teams_rows, _, matches_rows, _ = _parents()
+
+    result = build_match_teams(
+        [{"id": "mt-missing-team", "match_id": "match-1", "team_number": "1"}],
+        config,
+        context,
+        matches_rows=matches_rows,
+        teams_rows=teams_rows,
+    )
+
+    assert len(result.accepted_rows) == 0
+    assert result.rejected_rows[0]["rule_id"] == "MATCH_TEAM_006"
+
+
+def test_build_match_teams_rejects_unresolved_team_id() -> None:
+    config, context, _, _, _, teams_rows, _, matches_rows, _ = _parents()
+
+    result = build_match_teams(
+        [{"id": "mt-bad-team", "match_id": "match-1", "team_id": "team-9", "team_number": "1"}],
+        config,
+        context,
+        matches_rows=matches_rows,
+        teams_rows=teams_rows,
+    )
+
+    assert len(result.accepted_rows) == 0
+    assert result.rejected_rows[0]["rule_id"] == "MATCH_TEAM_006"
 
 
 def test_build_match_team_players_rejects_player_on_both_sides() -> None:

@@ -566,6 +566,18 @@ def _build_match_team_candidate(
 
     team_id = standardize_string(normalized.get("team_id"), uppercase=False)
     team_row = teams_index.get(team_id) if team_id else None
+    if team_id is None or team_row is None:
+        return None, build_reject_record(
+            context,
+            source_table="match_teams",
+            target_table="match_teams",
+            source_business_key=match_team_id,
+            reject_reason="ORPHAN_FOREIGN_KEY",
+            rule_id="MATCH_TEAM_006",
+            rule_severity="ERROR",
+            source_record=normalized,
+            reject_reason_detail=f"team_id '{team_id}' was not found in accepted teams.",
+        )
 
     team_number, team_number_reject = _safe_optional_side_number(
         normalized.get("team_number") or normalized.get("side_number"),

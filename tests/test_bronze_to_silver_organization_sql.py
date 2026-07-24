@@ -115,6 +115,8 @@ def test_build_organization_sql_plan_for_teams_contains_expected_rules() -> None
     assert "team_age_days" in plan.accepted_sql
     assert "team_category" in plan.accepted_sql
     assert "team_identity_type" in plan.accepted_sql
+    assert "WHEN team_division_input IS NOT NULL THEN team_division" in plan.accepted_sql
+    assert "ELSE legacy_team_category" in plan.accepted_sql
 
 
 def test_build_organization_sql_plan_for_club_memberships_contains_expected_rules() -> None:
