@@ -232,3 +232,104 @@ def test_audit_report_render_includes_cross_table_findings() -> None:
 
     assert "Cross-table findings" in rendered
     assert "CROSS_MATCH_001" in rendered
+
+
+def test_run_silver_layer_audit_treats_empty_competition_tables_as_errors() -> None:
+    config = BronzeToSilverConfig(
+        data={
+            "project": {
+                "pipeline_name": "bronze_to_silver",
+                "pipeline_version": "1.0.0",
+                "processing_mode": "full_refresh",
+            },
+            "release": {"release_name": "napa_5k"},
+            "runtime": {"catalog": "workspace"},
+            "schemas": {
+                "bronze": "instructor_5k_bronze",
+                "silver": "instructor_5k_silver",
+                "silver_reject": "instructor_5k_silver_reject",
+                "operations": "instructor_ops",
+            },
+            "thresholds": {
+                "expected_match_team_count": 2,
+                "expected_match_team_player_count": 2,
+            },
+            "sources": {
+                "matches": {
+                    "enabled": True,
+                    "bronze_table": "matches",
+                    "source_file": "matches.parquet",
+                    "natural_key": ["id"],
+                }
+            },
+            "silver_tables": {
+                "matches": {
+                    "enabled": True,
+                    "source": "matches",
+                    "target": "matches",
+                    "build_order": 100,
+                    "primary_key": ["match_id"],
+                }
+            },
+        },
+        config_hash="config-hash",
+        config_root=Path("."),
+    )
+    environment = ReleaseEnvironment(
+        catalog="workspace",
+        bronze_schema="instructor_5k_bronze",
+        silver_schema="instructor_5k_silver",
+        silver_reject_schema="instructor_5k_silver_reject",
+        operations_schema="instructor_ops",
+    )
+    table_fqn = "workspace.instructor_5k_silver.matches"
+    spark = FakeSparkSession(
+        existing_tables={table_fqn},
+        table_fields={
+            table_fqn: [
+                "match_id",
+                "_pipeline_run_id",
+                "_pipeline_version",
+                "_source_dataset",
+                "_source_table",
+                "_load_ts",
+                "_record_hash",
+                "_data_quality_status",
+            ]
+        },
+        query_results={
+            f"SELECT COUNT(*) AS value FROM {table_fqn}": [{"value": 0}],
+            "SUM(CASE WHEN `match_id` IS NULL THEN 1 ELSE 0 END)": [
+                {
+                    "match_id": 0,
+                    "_pipeline_run_id": 0,
+                    "_pipeline_version": 0,
+                    "_source_dataset": 0,
+                    "_source_table": 0,
+                    "_load_ts": 0,
+                    "_record_hash": 0,
+                    "_data_quality_status": 0,
+                }
+            ],
+            f"GROUP BY `match_id` HAVING COUNT(*) > 1": [{"duplicate_key_count": 0, "duplicate_row_count": 0}],
+            f"FROM {table_fqn} WHERE `_source_dataset` IS NULL OR CAST(`_source_dataset` AS STRING) <> 'napa_5k'": [
+                {"value": 0}
+            ],
+            f"FROM {table_fqn} WHERE `_source_table` IS NULL OR CAST(`_source_table` AS STRING) <> 'matches'": [
+                {"value": 0}
+            ],
+            f"FROM {table_fqn} WHERE `_data_quality_status` IS NULL OR UPPER(CAST(`_data_quality_status` AS STRING)) NOT IN ('ACCEPTED', 'WARNING', 'INFO')": [
+                {"value": 0}
+            ],
+        },
+    )
+
+    report = run_silver_layer_audit(
+        spark,
+        config,
+        environment,
+        include_cross_table=False,
+    )
+
+    finding = next(f for f in report.findings if f.rule_id == "AUDIT_TABLE_002")
+    assert finding.severity == "ERROR"

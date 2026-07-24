@@ -13,6 +13,12 @@ from napa_pipeline.bronze_to_silver.operations import PipelineContext, create_pi
 
 
 ALLOWED_QUALITY_STATUS_VALUES = ("ACCEPTED", "WARNING", "INFO")
+DEFAULT_REQUIRED_NON_EMPTY_TABLES = (
+    "matches",
+    "match_teams",
+    "match_team_players",
+    "match_games",
+)
 
 
 @dataclass(frozen=True)
@@ -148,6 +154,7 @@ def run_silver_layer_audit(
             environment,
             table_config=table_config,
             sample_limit=sample_limit,
+            required_non_empty_tables=_required_non_empty_tables(config),
         )
         for table_config in config.silver_tables_in_build_order
     ]
@@ -246,6 +253,7 @@ def _audit_single_table(
     *,
     table_config: dict[str, Any],
     sample_limit: int,
+    required_non_empty_tables: tuple[str, ...],
 ) -> SilverTableAudit:
     table_name = str(table_config["target"])
     table_fqn = f"{environment.catalog}.{environment.silver_schema}.{table_name}"
@@ -304,7 +312,7 @@ def _audit_single_table(
             AuditFinding(
                 table_name=table_name,
                 rule_id="AUDIT_TABLE_002",
-                severity="WARNING",
+                severity="ERROR" if table_name in required_non_empty_tables else "WARNING",
                 message="published Silver table is empty",
                 failed_row_count=0,
                 evaluated_row_count=0,
@@ -621,3 +629,10 @@ def _scalar_int(spark: Any, sql_text: str) -> int:
 
 def _sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def _required_non_empty_tables(config: BronzeToSilverConfig) -> tuple[str, ...]:
+    configured = config.data.get("thresholds", {}).get("required_non_empty_tables")
+    if isinstance(configured, (list, tuple)) and configured:
+        return tuple(str(value) for value in configured)
+    return DEFAULT_REQUIRED_NON_EMPTY_TABLES
