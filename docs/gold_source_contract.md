@@ -319,6 +319,7 @@ Columns:
 - `region_sk`
 - `match_date`
 - `match_type`
+- `winning_team_id`
 - `competition_category`
 - `match_status`
 - `winning_team_number`
@@ -331,6 +332,7 @@ Gold uses:
 
 - Match chronology.
 - Match status and completion filtering.
+- Persistent winner-team lineage through `winning_team_id`.
 - Winner derivation through `winning_team_number`.
 - Region and batch joins.
 
@@ -339,8 +341,10 @@ Runtime values and limitations:
 - `match_type` values provided: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
 - Bronze `matches` does not provide `competition_category`.
 - Bronze `matches` does not provide `match_status`.
+- Bronze `matches` does provide `winning_team_id`, and the current Silver contract preserves it as persistent winner lineage.
 - `competition_category` and `match_status` exist physically in Silver but should currently be treated as nullable placeholders unless an approved derivation is introduced.
 - `winning_team_number` and `completed_flag` are derived Silver fields, not direct Bronze source fields.
+- `winning_team_number` should derive only from same-match `match_teams.team_id` resolution, never from `match_teams.id`.
 
 ### `match_teams`
 
@@ -452,6 +456,7 @@ Known implemented joins:
 - `team_memberships.team_id` to `teams.team_id`.
 - `matches.batch_id` to `monthly_batches.batch_id`.
 - `matches.region_id` to `regions.region_id`.
+- `matches.winning_team_id` to same-match `match_teams.team_id`.
 - `match_teams.match_id` to `matches.match_id`.
 - `match_teams.team_id` to `teams.team_id`.
 - `match_team_players.match_team_id` to `match_teams.match_team_id`.
@@ -477,6 +482,7 @@ Known implemented joins:
   - `team_memberships.player_position` and `match_team_players.player_position` may arrive as numeric values `1` and `2`, normalized to `LEFT` and `RIGHT`
 - Player `country_code` is expected to be populated from direct player country or from `regions.country_code` through `home_region_id`. Null values should be treated as missing home-region data or invalid region linkage.
 - Match outcome semantics should rely on the current Silver derivation of `winning_team_number` and `completed_flag`, not on any assumed Bronze `match_status`.
+- Silver now preserves `matches.winning_team_id` as the persistent winner-team lineage field alongside derived `winning_team_number`.
 - `region_type` is requested by Phase 0, but the implemented `regions` Silver plan does not expose a `region_type` column.
 - Player status is exposed as `active_flag`, not `player_status`.
 - Team identity class and team category are separate source concepts in schema `1.5`.

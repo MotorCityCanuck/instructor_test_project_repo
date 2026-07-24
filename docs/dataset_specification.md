@@ -42,6 +42,14 @@
 - Matches, participating teams, participating players, and games
 - Monthly batch or release tracking
 
+## Schema 1.5 Team Identity Notes
+
+- Student export schema `1.5` separates team identity class from analytical team category.
+- In `teams.parquet`, `team_type` represents identity class such as `COMPETITIVE` or `AD_HOC`.
+- In `teams.parquet`, `team_division` carries the analytical doubles category such as men's, women's, mixed, or open.
+- In `match_teams.parquet`, `team_id` should carry the persistent participating team identifier for each match side.
+- In `matches.parquet`, `winning_team_id` is the persistent winning team identifier and should align to one of the same match's `match_teams.team_id` values.
+
 ## Conceptual Relationship Paths
 
 - Region to club to athlete development context
@@ -50,6 +58,14 @@
 - Team to match participation
 - Match to participating teams and players
 - Match to game-level results
+
+## Key Relationship Contracts
+
+- `team_memberships.team_id` joins to `teams.id`.
+- `match_teams.match_id` joins to `matches.id`.
+- `match_teams.team_id` joins to `teams.id`.
+- `match_team_players.match_team_id` joins to `match_teams.id`.
+- `matches.winning_team_id` should match the winning side's `match_teams.team_id`, not the `match_teams.id` row identifier.
 
 ## Suggested Configuration Pattern
 

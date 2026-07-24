@@ -21,3 +21,13 @@
 | DQ-009 | Referential integrity | Confirm keys resolve across major entities. |  |  |  |  |  |
 | DQ-010 | Duplicate detection | Identify possible duplicate records. |  |  |  |  |  |
 | DQ-011 | Temporal consistency | Confirm key dates progress logically. |  |  |  |  |  |
+
+## Schema 1.5 Team Identity Emphasis
+
+- `DQ-004` should explicitly separate team identity class from analytical team category:
+  - `teams.team_type` should be validated as an identity-class field such as `COMPETITIVE` or `AD_HOC`.
+  - `teams.team_division` should be validated as the analytical category field used for men's, women's, mixed, and open doubles.
+- `DQ-006` should confirm `match_teams.team_id` is populated for accepted match sides and resolves to a valid `teams` record.
+- `DQ-007` should confirm `matches.winning_team_id` resolves to one of the same match's `match_teams.team_id` values rather than a `match_teams.id` row identifier.
+- `DQ-009` should include cross-table checks for `match_teams.team_id -> teams.id` and `matches.winning_team_id -> same-match match_teams.team_id`.
+- `DQ-010` should include duplicate active team-pair detection so the same active player pairing does not appear as multiple concurrent structured teams without review.

@@ -2,6 +2,16 @@
 
 This document records the Silver-to-Gold schema audit performed on July 23, 2026 against the Databricks-exported file [napa_5k_bronze_silver_columns.csv](D:/@repos/instructor_test_project_repo/docs/napa_5k_bronze_silver_columns.csv). The CSV is the authoritative Bronze and Silver contract for this repository until replaced by a newer export.
 
+## Post-Refactor Note (July 24, 2026)
+
+This audit captures the July 23 exported contract. The local repository implementation has since been tightened so that:
+
+- Silver `matches` preserves `winning_team_id` as a lineage field in addition to derived `winning_team_number`.
+- Silver winner derivation resolves only through same-match `match_teams.team_id`.
+- Silver `teams.team_category` derives from `team_division` for schema `1.5`, with legacy fallback for older division-valued `team_type` exports.
+
+Use this audit as the Databricks export baseline, but read the local docs and code for the current post-refactor contract where they differ.
+
 ## Authoritative Source
 
 Use the Databricks export, not the earlier inferred contract, as the source of truth for Bronze and Silver field names and data types.
@@ -96,6 +106,7 @@ Present columns:
 - `region_sk`
 - `match_date`
 - `match_type`
+- `winning_team_id`
 - `competition_category`
 - `match_status`
 - `winning_team_number`
@@ -107,6 +118,7 @@ Important interpretation:
 
 - `competition_category` and `match_status` exist physically in Silver, but the Bronze contract does not provide source fields for them.
 - Until approved derivation logic is added, these columns should be treated as currently nullable analytical placeholders, not trusted source facts.
+- `winning_team_id` is the persisted winner-team lineage field.
 - `winning_team_number` is a derived Silver field.
 - `completed_flag` is a derived Silver field.
 
@@ -176,6 +188,7 @@ Present columns:
 
 - `matches.match_date` is available and should drive chronology.
 - `matches.winning_team_number` is the current winner-side field after Bronze-to-Silver derivation.
+- `matches.winning_team_id` is the current persistent winner-team lineage field.
 - `matches.completed_flag` is a Silver-derived field and can be used only with the understanding that it depends on winner derivation quality.
 - `match_teams.team_number` is the authoritative side number field.
 - `match_teams.team_id` is the persistent team identifier when populated.
@@ -199,7 +212,7 @@ Present columns:
 Implications:
 
 - Competition chronology is supported by `matches.match_date`.
-- Winner-side logic should use `matches.winning_team_number`.
+- Winner-side logic should use `matches.winning_team_number`, but lineage and validation should anchor on `matches.winning_team_id`.
 - Any filtering based on `match_status` should be treated as untrusted until explicit derivation logic exists.
 - Any category-specific branching should not depend on `matches.competition_category` without an approved derivation.
 

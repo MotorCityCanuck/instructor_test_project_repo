@@ -547,7 +547,7 @@ The code shall not invent a field merely because it appears in a conceptual docu
 
 Examples:
 
-- `match_teams` may not contain a persistent `team_id`;
+- `match_teams` should contain a persistent `team_id`, and Gold should fail or quarantine records when that contract is broken;
 - player country may require joining `players.home_region_id` to `regions`;
 - category may be encoded in `teams.team_division` in schema `1.5`, or in legacy division-valued `teams.team_type` for older exports;
 - active status may require interpreting `team_status`, membership dates, or player status;
@@ -1324,13 +1324,13 @@ Example only:
 ```yaml
 category_mapping:
   mens_doubles:
-    team_type_values: ["MENS", "MEN", "MD"]
+    team_category_values: ["MENS", "MEN", "MD"]
     required_player_genders: ["M", "M"]
   womens_doubles:
-    team_type_values: ["WOMENS", "WOMEN", "WD"]
+    team_category_values: ["WOMENS", "WOMEN", "WD"]
     required_player_genders: ["F", "F"]
   mixed_doubles:
-    team_type_values: ["MIXED", "XD"]
+    team_category_values: ["MIXED", "XD"]
     required_player_genders: ["F", "M"]
 ```
 

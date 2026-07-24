@@ -4,6 +4,19 @@
 
 This document records Phase 0 repository and Silver contract discovery for the NAPA Silver-to-Gold build. It does not implement Gold transformations. As of July 23, 2026, the Databricks-exported schema file [docs/napa_5k_bronze_silver_columns.csv](D:/@repos/instructor_test_project_repo/docs/napa_5k_bronze_silver_columns.csv) is the authoritative Bronze and Silver contract, with the resulting audit recorded in [docs/gold_schema_audit_from_databricks_csv.md](D:/@repos/instructor_test_project_repo/docs/gold_schema_audit_from_databricks_csv.md).
 
+## Post-Refactor Addendum (July 24, 2026)
+
+The findings below preserve the July 22 and July 23 discovery evidence, but parts of the local repository contract have since been refactored to align with student export schema `1.5`.
+
+Current local implementation status:
+
+- Silver `teams` now treats `team_type` as team identity class and normalizes analytical category from `team_division`, with legacy fallback only for older exports.
+- Silver `matches` now preserves `winning_team_id` as persistent winner lineage in addition to derived `winning_team_number`.
+- Silver winner derivation now resolves only through same-match `match_teams.team_id`, not `match_teams.id`.
+- Gold candidate attribution now treats `team_identity_type = AD_HOC` as ineligible for structured competitive attribution.
+
+Read the older July 22 and July 23 findings below as pre-refactor discovery evidence unless this addendum overrides them.
+
 ## Repository State
 
 - Current branch: `main`.
@@ -155,7 +168,9 @@ Configured accepted domain values are:
 - Gender: `M`, `F`.
 - Player status: `ACTIVE`, `INACTIVE`.
 - Team status: `ACTIVE`, `INACTIVE`, `DISSOLVED`.
-- Team type/category: `MENS`, `WOMENS`, `MIXED`, `OPEN`.
+- Team identity/category split requires updated handling:
+  - source `team_type` is the identity-class field in schema `1.5`
+  - analytical team category should come from `team_division` and normalize to `MENS`, `WOMENS`, `MIXED`, `OPEN`
 - Player position: `LEFT`, `RIGHT`.
 
 Runtime-only values still need Databricks inspection:
@@ -170,7 +185,7 @@ Runtime-only values still need Databricks inspection:
 - `players.country_code` is derived from direct player country where present, otherwise from `regions.country_code` through `players.home_region_id`.
 - `team_memberships` includes `membership_start_date`, `membership_end_date`, and `current_membership_flag`, supporting as-of membership logic.
 - `club_memberships` includes equivalent membership dates and flags.
-- `matches` includes `winning_team_number` and `completed_flag` as Silver-derived fields.
+- `matches` includes persisted `winning_team_id` plus Silver-derived `winning_team_number` and `completed_flag`.
 - `match_games` includes game-level scores and winning side, supporting winner validation and point metrics.
 - Provided `matches` profiling shows `match_type` values: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
 - The Databricks schema export confirms Bronze `matches` does not contain `competition_category`, `match_status`, or `winning_team_number`.
@@ -197,7 +212,7 @@ Runtime-only values still need Databricks inspection:
   - `match_teams = 156,148`
   - `match_team_players = 306,300`
   - `match_games = 117,439`
-- Databricks domain validation on July 22, 2026 confirmed delivered Bronze-to-Silver mappings now handle:
+- Databricks domain validation on July 22, 2026 confirmed the pre-refactor Bronze-to-Silver mapping handled division-valued `team_type` inputs such as:
   - `team_type`: `MENS_DOUBLES`, `WOMENS_DOUBLES`, `MIXED_DOUBLES`, `OPEN_DOUBLES`
   - `team_status`: `ACTIVE`, `DORMANT`, `RETIRED`
   - `player_position`: numeric values `1` and `2`, normalized to `LEFT` and `RIGHT`
@@ -210,7 +225,7 @@ Runtime-only values still need Databricks inspection:
 - Player `country_code` should not be null when `home_region_id` resolves to a valid region with `country_code`. Any remaining null player country values should be investigated as missing home-region data or invalid region linkage.
 - Any Gold assumption that Bronze `matches` directly provides `competition_category` or `match_status` is incorrect against the exported Databricks contract.
 - Any Gold assumption that Bronze `match_teams` provides `side_number` is incorrect against the exported Databricks contract.
-- Category-specific Gold products still require an approved derivation because `competition_category` is not present in Bronze `matches`.
+- Category-specific Gold products should use normalized `teams.team_category` unless an approved match-level derivation is introduced later; they should not depend on Bronze `matches.competition_category`.
 - No local Delta/Spark Silver tables are available in this repository. Physical schemas and profiling output were provided externally, but row counts and source correction must occur in Databricks.
 - The current repo is on `main`; `AGENTS.md` and the implementation plan recommend using a feature branch for implementation.
 - `README.md` describes the repository as a student scaffold with no completed pipeline logic, while the current repository already contains instructor pipeline code and the new docs specify an instructor reference implementation. This should be treated as instructor-facing work and kept clearly separate from student-facing scaffolding.
@@ -253,7 +268,7 @@ UNION ALL SELECT 'match_games', COUNT(*) FROM workspace.instructor_5k_silver.mat
 - Confirm whether `workspace` is the intended instructor-test catalog for all three releases.
 - Confirm corrected `players.country_code` profiling output shows no null values after rerunning Bronze-to-Silver.
 - Confirm accepted `match_type` values: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
-- Confirm whether `competition_category` should be sourced from `matches.competition_category`, `teams.team_category`, or another approved derivation.
+- Confirm whether any future match-level `competition_category` derivation is still needed beyond `teams.team_category`.
 - Confirm whether Gold should introduce a derived `match_status` vocabulary at all, or continue to treat the field as nullable.
 - Confirm whether current team membership as-of logic should use `matches.match_date` or release `analysis_as_of_date` when reconstructing historical rosters.
 

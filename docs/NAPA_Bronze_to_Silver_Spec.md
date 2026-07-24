@@ -2042,8 +2042,9 @@ region_id → regions.region_id
 | `region_sk` | Conformed region key |
 | `match_date` | Match date |
 | `match_type` | Match type where supplied |
-| `competition_category` | Men's, women's, or mixed |
-| `match_status` | Standardized status |
+| `winning_team_id` | Persistent winning team identifier from Bronze source |
+| `competition_category` | Nullable category placeholder unless an approved derivation is added |
+| `match_status` | Nullable status placeholder unless an approved derivation is added |
 | `winning_team_number` | Winning side number where supplied |
 | `completed_flag` | Derived completion indicator |
 | `match_year` | Derived year |
@@ -2053,6 +2054,7 @@ region_id → regions.region_id
 
 - `match_sk`;
 - conformed foreign keys;
+- `winning_team_number`;
 - `completed_flag`;
 - year and month fields.
 
@@ -2061,10 +2063,8 @@ region_id → regions.region_id
 - unique identifier;
 - valid batch where required;
 - valid region where required;
-- valid status;
-- completed match has a valid winner where required;
+- same-match winning team resolves through `match_teams.team_id` where required;
 - winner side is valid;
-- cancelled match is not presented as completed;
 - match date is consistent with the batch period where required.
 
 ## Reject Conditions
@@ -2074,7 +2074,6 @@ Reject when:
 - identifier is missing;
 - required batch is orphaned;
 - required region is orphaned;
-- required status is invalid;
 - completed match winner is impossible;
 - duplicate business key cannot be resolved.
 
@@ -3055,7 +3054,10 @@ domains:
     allowed: [ACTIVE, INACTIVE, DISSOLVED]
 
   team_type:
-    allowed: [MENS, WOMENS, MIXED]
+    allowed: [COMPETITIVE, AD_HOC]
+
+  team_division:
+    allowed: [MENS, WOMENS, MIXED, OPEN]
 
   player_position:
     allowed: [LEFT, RIGHT]

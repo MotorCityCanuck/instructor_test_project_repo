@@ -1,4 +1,4 @@
-"""Diagnose whether persistent team identity loss occurs before or during Raw-to-Bronze."""
+"""Temporary migration diagnostic for raw-versus-bronze team identity coverage."""
 
 from __future__ import annotations
 
@@ -23,15 +23,15 @@ from napa_pipeline.raw_to_bronze.environment import resolve_release_environment
 from napa_pipeline.raw_to_bronze.inventory import validate_raw_inventory_and_readiness
 
 
-SCRIPT_VERSION = "2026.07.23.1"
+SCRIPT_VERSION = "2026.07.24.1"
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for the raw-versus-bronze diagnosis."""
     parser = argparse.ArgumentParser(
         description=(
-            "Diagnose whether team identity loss for match_teams occurs in Raw input "
-            "or during Raw-to-Bronze publication."
+            "Temporary migration diagnostic to compare raw and bronze match-team identity "
+            "coverage during schema 1.5 rollout."
         )
     )
     add_release_type_argument(parser)
@@ -46,7 +46,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    """Compare raw parquet and Bronze tables for matches and match_teams identity coverage."""
+    """Compare raw parquet and Bronze tables for migration-only identity diagnostics."""
     args = parse_args()
     spark = get_databricks_global("spark")
     dbutils = get_databricks_global("dbutils")
@@ -206,6 +206,7 @@ LIMIT {int(args.sample_limit)}
     diagnosis = classify_identity_loss(raw_row_stats, bronze_row_stats)
 
     print(f"Script version: {SCRIPT_VERSION}")
+    print("Notebook status: temporary migration diagnostic; not part of the steady-state contract.")
     print(f"Release type: {args.release_type}")
     print(f"Release name: {release_name}")
     print(f"Raw volume path: {environment.raw_volume_path}")
@@ -228,7 +229,7 @@ LIMIT {int(args.sample_limit)}
     print("Bronze populated team_id count per match:")
     _print_rows(bronze_cardinality_distribution)
     print("")
-    print("Raw winner join diagnostics:")
+    print("Raw winner join diagnostics (legacy comparison only):")
     _print_mapping(winner_join_stats)
     print("")
     print("Diagnosis:")
