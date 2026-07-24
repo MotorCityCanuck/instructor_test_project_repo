@@ -50,6 +50,7 @@ silver_tables:
     source: teams
     target: teams
     stage: partnership
+    # Current contract: analytical team_category should derive from source team_division.
     build_order: 50
     transform: build_teams
     primary_key: [team_id]

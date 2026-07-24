@@ -549,7 +549,7 @@ Examples:
 
 - `match_teams` may not contain a persistent `team_id`;
 - player country may require joining `players.home_region_id` to `regions`;
-- category may be encoded in `teams.team_type`;
+- category may be encoded in `teams.team_division` in schema `1.5`, or in legacy division-valued `teams.team_type` for older exports;
 - active status may require interpreting `team_status`, membership dates, or player status;
 - supplied rating fields may exist only in `players`.
 
@@ -3026,7 +3026,7 @@ Conflicting country evidence shall make the candidate ineligible until resolved.
 
 ## 53.3 Category
 
-Use `teams.team_type` or equivalent configured field.
+Use `teams.team_division` or the downstream normalized equivalent field.
 
 Validate player composition where gender exists.
 

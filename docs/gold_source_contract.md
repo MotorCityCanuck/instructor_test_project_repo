@@ -270,7 +270,7 @@ Gold uses:
 
 Known domains from config:
 
-- Team category: `MENS`, `WOMENS`, `MIXED`.
+- Team category: `MENS`, `WOMENS`, `MIXED`, `OPEN`.
 - Team status: `ACTIVE`, `INACTIVE`, `DISSOLVED`.
 
 ### `team_memberships`
@@ -471,14 +471,16 @@ Known implemented joins:
   - `match_teams = 156,148`
   - `match_team_players = 306,300`
 - Delivered Bronze values now confirmed through rerun and reject-triage:
-  - `teams.team_category` derives from Bronze `team_type` values `MENS_DOUBLES`, `WOMENS_DOUBLES`, `MIXED_DOUBLES`, `OPEN_DOUBLES`
+  - `teams.team_category` should derive from Bronze `team_division` under schema `1.5`
+  - legacy compatibility may still derive `teams.team_category` from division-valued Bronze `team_type` in pre-`1.5` exports
   - `teams.team_status` derives from Bronze `team_status` values including `ACTIVE`, `DORMANT`, and `RETIRED`
   - `team_memberships.player_position` and `match_team_players.player_position` may arrive as numeric values `1` and `2`, normalized to `LEFT` and `RIGHT`
 - Player `country_code` is expected to be populated from direct player country or from `regions.country_code` through `home_region_id`. Null values should be treated as missing home-region data or invalid region linkage.
 - Match outcome semantics should rely on the current Silver derivation of `winning_team_number` and `completed_flag`, not on any assumed Bronze `match_status`.
 - `region_type` is requested by Phase 0, but the implemented `regions` Silver plan does not expose a `region_type` column.
 - Player status is exposed as `active_flag`, not `player_status`.
-- Team type is exposed as `team_category`, not `team_type`.
+- Team identity class and team category are separate source concepts in schema `1.5`.
+- Gold should treat `teams.team_category` as the analytical category field and avoid reading source `team_type` as a division field.
 - Gold-required metadata names are not fully aligned with current accepted Silver metadata.
 - Exact Olympic eligibility rules remain out of scope until instructor configuration is approved.
 
@@ -489,5 +491,6 @@ Known implemented joins:
 - Use `players.active_flag` and `teams.active_flag` as status booleans, while preserving `teams.team_status` where categorical status is needed.
 - Use `match_teams.team_id` for persistent historical team attribution.
 - Use `team_memberships` date ranges for as-of roster reconstruction.
+- When Bronze schema `1.5` is the source contract, derive `teams.team_category` from `team_division`, not `team_type`.
 
 These fallbacks should be approved before Phase 1 implementation.
