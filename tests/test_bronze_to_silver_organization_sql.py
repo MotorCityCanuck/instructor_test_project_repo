@@ -110,9 +110,11 @@ def test_build_organization_sql_plan_for_teams_contains_expected_rules() -> None
 
     assert "TEAM_001" in plan.rejected_sql
     assert "TEAM_007" in plan.rejected_sql
+    assert "TEAM_008" in plan.rejected_sql
     assert "TEAM_DUPLICATE" in plan.rejected_sql
     assert "team_age_days" in plan.accepted_sql
     assert "team_category" in plan.accepted_sql
+    assert "team_identity_type" in plan.accepted_sql
 
 
 def test_build_organization_sql_plan_for_club_memberships_contains_expected_rules() -> None:

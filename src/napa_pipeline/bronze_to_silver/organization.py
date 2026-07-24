@@ -122,7 +122,9 @@ def build_teams(
     """Build the Silver teams table from Bronze rows."""
     table_name = "teams"
     exact_deduped, exact_duplicate_count = _dedupe_exact_rows(source_rows)
-    team_type_domain = config.data["domains"]["team_type"]
+    team_identity_type_domain = config.data["domains"]["team_identity_type"]
+    team_division_domain = config.data["domains"]["team_division"]
+    legacy_team_type_domain = config.data["domains"]["team_type"]
     team_status_domain = config.data["domains"]["team_status"]
     country_domain = config.data["domains"]["country_code"]
     as_of_date = _resolve_release_as_of_date(monthly_batches_rows)
@@ -153,7 +155,9 @@ def build_teams(
         candidate, reject = _build_team_candidate(
             normalized,
             team_id=team_id,
-            team_type_domain=team_type_domain,
+            team_identity_type_domain=team_identity_type_domain,
+            team_division_domain=team_division_domain,
+            legacy_team_type_domain=legacy_team_type_domain,
             team_status_domain=team_status_domain,
             country_domain=country_domain,
             as_of_date=as_of_date,
@@ -500,22 +504,52 @@ def _build_team_candidate(
     normalized: dict[str, Any],
     *,
     team_id: str,
-    team_type_domain: dict[str, Any],
+    team_identity_type_domain: dict[str, Any],
+    team_division_domain: dict[str, Any],
+    legacy_team_type_domain: dict[str, Any],
     team_status_domain: dict[str, Any],
     country_domain: dict[str, Any],
     as_of_date: date | None,
     context: PipelineContext,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    team_category_raw = normalized.get("team_category") or normalized.get("category") or normalized.get("team_type")
-    team_category = normalize_domain_value(team_category_raw, team_type_domain)
-    if team_category_raw not in (None, "") and team_category is None:
+    team_division_raw = normalized.get("team_division")
+    team_category_raw = normalized.get("team_category") or normalized.get("category")
+    legacy_team_type_raw = normalized.get("team_type")
+
+    team_category_source = team_division_raw or team_category_raw or legacy_team_type_raw
+    if team_division_raw not in (None, ""):
+        team_category = normalize_domain_value(team_division_raw, team_division_domain)
+    elif team_category_raw not in (None, ""):
+        team_category = normalize_domain_value(team_category_raw, team_division_domain)
+    else:
+        team_category = normalize_domain_value(legacy_team_type_raw, legacy_team_type_domain)
+
+    legacy_team_type_category = normalize_domain_value(legacy_team_type_raw, legacy_team_type_domain)
+    team_identity_type = _normalize_optional_domain_value(legacy_team_type_raw, team_identity_type_domain)
+
+    if (
+        legacy_team_type_raw not in (None, "")
+        and team_identity_type is None
+        and legacy_team_type_category is None
+    ):
+        return None, _invalid_domain_reject(
+            context=context,
+            source_table="teams",
+            target_table="teams",
+            source_business_key=team_id,
+            rule_id="TEAM_008",
+            detail=f"Invalid team identity type '{legacy_team_type_raw}'.",
+            source_record=normalized,
+        )
+
+    if team_category_source not in (None, "") and team_category is None:
         return None, _invalid_domain_reject(
             context=context,
             source_table="teams",
             target_table="teams",
             source_business_key=team_id,
             rule_id="TEAM_002",
-            detail=f"Invalid team category '{team_category_raw}'.",
+            detail=f"Invalid team category '{team_category_source}'.",
             source_record=normalized,
         )
 
@@ -593,6 +627,7 @@ def _build_team_candidate(
         "team_sk": build_record_hash({"team_id": team_id}, ["team_id"]),
         "team_name": standardize_string(normalized.get("team_name") or normalized.get("name"), uppercase=False),
         "team_category": team_category,
+        "team_identity_type": team_identity_type,
         "country_code": country_code,
         "team_status": team_status,
         "formation_date": formation_date,
@@ -609,9 +644,10 @@ def _build_team_candidate(
                     "team_id": team_id,
                     "team_name": candidate["team_name"],
                     "team_category": team_category,
+                    "team_identity_type": team_identity_type,
                     "country_code": country_code,
                 },
-                ["team_id", "team_name", "team_category", "country_code"],
+                ["team_id", "team_name", "team_category", "team_identity_type", "country_code"],
             ),
         )
     )

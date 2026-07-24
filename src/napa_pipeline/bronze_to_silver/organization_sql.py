@@ -329,13 +329,18 @@ def _build_teams_sql_plan(
     monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
     team_id_expr = _source_nullif_string_expr(source_columns, ["team_id", "id"])
     team_name_expr = _source_nullif_string_expr(source_columns, ["team_name", "name"])
-    team_category_input_expr = _source_upper_string_expr(source_columns, ["team_category", "category", "team_type"])
+    team_division_input_expr = _source_upper_string_expr(source_columns, ["team_division"])
+    team_category_input_expr = _source_upper_string_expr(source_columns, ["team_category", "category"])
+    team_type_input_expr = _source_upper_string_expr(source_columns, ["team_type"])
     team_status_input_expr = _source_upper_string_expr(source_columns, ["team_status", "status"])
     country_input_expr = _source_upper_string_expr(source_columns, ["country_code", "country"])
     formation_date_expr = _source_string_expr(source_columns, ["formation_date", "start_date"])
     dissolution_date_expr = _source_string_expr(source_columns, ["dissolution_date", "end_date"])
     status_input_expr = _source_upper_string_expr(source_columns, ["active_flag", "status"])
-    team_category_expr = _domain_case_expression("team_category_input", config.data["domains"]["team_type"])
+    team_division_expr = _domain_case_expression("team_division_input", config.data["domains"]["team_division"])
+    explicit_team_category_expr = _domain_case_expression("team_category_input", config.data["domains"]["team_division"])
+    legacy_team_category_expr = _domain_case_expression("team_type_input", config.data["domains"]["team_type"])
+    team_identity_type_expr = _domain_case_expression("team_type_input", config.data["domains"]["team_identity_type"])
     team_status_expr = _domain_case_expression("team_status_input", config.data["domains"]["team_status"])
     country_expr = _domain_case_expression("country_input", config.data["domains"]["country_code"])
     metadata_sql = _metadata_sql(
@@ -344,6 +349,7 @@ def _build_teams_sql_plan(
         record_hash_expr=(
             "sha2(concat_ws('|', coalesce(team_id, '<NULL>'), "
             "coalesce(team_name, '<NULL>'), coalesce(team_category, '<NULL>'), "
+            "coalesce(team_identity_type, '<NULL>'), "
             "coalesce(country_code, '<NULL>')), 256)"
         ),
     )
@@ -356,7 +362,9 @@ normalized_source AS (
     SELECT
         {team_id_expr} AS team_id,
         {team_name_expr} AS team_name,
+        {team_division_input_expr} AS team_division_input,
         {team_category_input_expr} AS team_category_input,
+        {team_type_input_expr} AS team_type_input,
         {team_status_input_expr} AS team_status_input,
         {country_input_expr} AS country_input,
         {formation_date_expr} AS formation_date_raw,
@@ -372,7 +380,10 @@ typed_source AS (
         source.*,
         TO_DATE(source.formation_date_raw) AS formation_date,
         TO_DATE(source.dissolution_date_raw) AS dissolution_date,
-        {team_category_expr} AS team_category,
+        {team_division_expr} AS team_division,
+        {explicit_team_category_expr} AS explicit_team_category,
+        {legacy_team_category_expr} AS legacy_team_category,
+        {team_identity_type_expr} AS team_identity_type,
         {team_status_expr} AS team_status,
         {country_expr} AS country_code
     FROM deduped_source source
@@ -380,6 +391,11 @@ typed_source AS (
 validated_source AS (
     SELECT
         source.*,
+        CASE
+            WHEN team_division_input IS NOT NULL THEN team_division
+            WHEN team_category_input IS NOT NULL THEN explicit_team_category
+            ELSE legacy_team_category
+        END AS team_category,
         release_context.as_of_date
     FROM typed_source source
     CROSS JOIN release_context
@@ -391,7 +407,8 @@ invalid_rows AS (
         COALESCE(team_id, '<NULL>') AS source_business_key,
         CASE
             WHEN team_id IS NULL THEN 'MISSING_PRIMARY_KEY'
-            WHEN team_category_input IS NOT NULL AND team_category IS NULL THEN 'INVALID_DOMAIN_VALUE'
+            WHEN COALESCE(team_division_input, team_category_input, team_type_input) IS NOT NULL AND team_category IS NULL THEN 'INVALID_DOMAIN_VALUE'
+            WHEN team_type_input IS NOT NULL AND team_identity_type IS NULL AND legacy_team_category IS NULL THEN 'INVALID_DOMAIN_VALUE'
             WHEN team_status_input IS NOT NULL AND team_status IS NULL THEN 'INVALID_DOMAIN_VALUE'
             WHEN country_input IS NOT NULL AND country_code IS NULL THEN 'INVALID_DOMAIN_VALUE'
             WHEN formation_date_raw IS NOT NULL AND formation_date_raw <> '' AND formation_date IS NULL THEN 'INVALID_DATE'
@@ -400,7 +417,8 @@ invalid_rows AS (
         END AS reject_reason,
         CASE
             WHEN team_id IS NULL THEN 'TEAM_001'
-            WHEN team_category_input IS NOT NULL AND team_category IS NULL THEN 'TEAM_002'
+            WHEN COALESCE(team_division_input, team_category_input, team_type_input) IS NOT NULL AND team_category IS NULL THEN 'TEAM_002'
+            WHEN team_type_input IS NOT NULL AND team_identity_type IS NULL AND legacy_team_category IS NULL THEN 'TEAM_008'
             WHEN team_status_input IS NOT NULL AND team_status IS NULL THEN 'TEAM_003'
             WHEN country_input IS NOT NULL AND country_code IS NULL THEN 'TEAM_004'
             WHEN formation_date_raw IS NOT NULL AND formation_date_raw <> '' AND formation_date IS NULL THEN 'TEAM_005'
@@ -413,7 +431,8 @@ invalid_rows AS (
         END AS rule_severity,
         CASE
             WHEN team_id IS NULL THEN 'team_id could not be resolved.'
-            WHEN team_category_input IS NOT NULL AND team_category IS NULL THEN concat('Invalid team category ''', team_category_input, '''.')
+            WHEN COALESCE(team_division_input, team_category_input, team_type_input) IS NOT NULL AND team_category IS NULL THEN concat('Invalid team category ''', COALESCE(team_division_input, team_category_input, team_type_input), '''.')
+            WHEN team_type_input IS NOT NULL AND team_identity_type IS NULL AND legacy_team_category IS NULL THEN concat('Invalid team identity type ''', team_type_input, '''.')
             WHEN team_status_input IS NOT NULL AND team_status IS NULL THEN concat('Invalid team status ''', team_status_input, '''.')
             WHEN country_input IS NOT NULL AND country_code IS NULL THEN concat('Invalid country value ''', country_input, '''.')
             WHEN formation_date_raw IS NOT NULL AND formation_date_raw <> '' AND formation_date IS NULL THEN concat('Invalid formation_date value ''', formation_date_raw, '''.')
@@ -429,7 +448,9 @@ invalid_rows AS (
             NAMED_STRUCT(
                 'team_id', team_id,
                 'team_name', team_name,
+                'team_division_input', team_division_input,
                 'team_category_input', team_category_input,
+                'team_type_input', team_type_input,
                 'team_status_input', team_status_input,
                 'country_input', country_input,
                 'formation_date_raw', formation_date_raw,
@@ -439,7 +460,8 @@ invalid_rows AS (
         ) AS source_record_json
     FROM validated_source
     WHERE team_id IS NULL
-       OR (team_category_input IS NOT NULL AND team_category IS NULL)
+       OR (COALESCE(team_division_input, team_category_input, team_type_input) IS NOT NULL AND team_category IS NULL)
+       OR (team_type_input IS NOT NULL AND team_identity_type IS NULL AND legacy_team_category IS NULL)
        OR (team_status_input IS NOT NULL AND team_status IS NULL)
        OR (country_input IS NOT NULL AND country_code IS NULL)
        OR (formation_date_raw IS NOT NULL AND formation_date_raw <> '' AND formation_date IS NULL)
@@ -451,6 +473,7 @@ valid_rows AS (
         team_id,
         team_name,
         team_category,
+        team_identity_type,
         country_code,
         team_status,
         formation_date,
@@ -469,7 +492,8 @@ valid_rows AS (
     FROM validated_source
     WHERE team_id IS NOT NULL
       AND NOT (
-          (team_category_input IS NOT NULL AND team_category IS NULL)
+          (COALESCE(team_division_input, team_category_input, team_type_input) IS NOT NULL AND team_category IS NULL)
+          OR (team_type_input IS NOT NULL AND team_identity_type IS NULL AND legacy_team_category IS NULL)
           OR (team_status_input IS NOT NULL AND team_status IS NULL)
           OR (country_input IS NOT NULL AND country_code IS NULL)
           OR (formation_date_raw IS NOT NULL AND formation_date_raw <> '' AND formation_date IS NULL)
@@ -486,6 +510,7 @@ ranked_rows AS (
                 (
                     CASE WHEN team_name IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN team_category IS NOT NULL THEN 1 ELSE 0 END
+                  + CASE WHEN team_identity_type IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN country_code IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN team_status IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN formation_date IS NOT NULL THEN 1 ELSE 0 END
@@ -496,6 +521,7 @@ ranked_rows AS (
                         coalesce(team_id, '<NULL>'),
                         coalesce(team_name, '<NULL>'),
                         coalesce(team_category, '<NULL>'),
+                        coalesce(team_identity_type, '<NULL>'),
                         coalesce(country_code, '<NULL>'),
                         coalesce(team_status, '<NULL>'),
                         coalesce(cast(formation_date as string), '<NULL>'),
@@ -514,6 +540,7 @@ SELECT
     sha2(coalesce(team_id, '<NULL>'), 256) AS team_sk,
     team_name,
     team_category,
+    team_identity_type,
     country_code,
     team_status,
     formation_date,
@@ -563,6 +590,7 @@ SELECT
             'team_id', team_id,
             'team_name', team_name,
             'team_category', team_category,
+            'team_identity_type', team_identity_type,
             'country_code', country_code,
             'team_status', team_status,
             'formation_date', formation_date,
@@ -575,6 +603,7 @@ SELECT
                 'team_id', team_id,
                 'team_name', team_name,
                 'team_category', team_category,
+                'team_identity_type', team_identity_type,
                 'country_code', country_code,
                 'team_status', team_status,
                 'formation_date', formation_date,
@@ -595,7 +624,9 @@ WHERE duplicate_rank > 1
             [
                 f"{team_id_expr} AS team_id",
                 f"{team_name_expr} AS team_name",
+                f"{team_division_input_expr} AS team_division_input",
                 f"{team_category_input_expr} AS team_category_input",
+                f"{team_type_input_expr} AS team_type_input",
                 f"{team_status_input_expr} AS team_status_input",
                 f"{country_input_expr} AS country_input",
                 f"{formation_date_expr} AS formation_date_raw",

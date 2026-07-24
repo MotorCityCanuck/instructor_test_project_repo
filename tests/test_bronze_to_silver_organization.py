@@ -48,7 +48,15 @@ def _parents():
         regions_rows=regions.accepted_rows,
     )
     teams = build_teams(
-        [{"id": "team-1", "name": "Northern Duo", "team_type": "mixed", "status": "active"}],
+        [
+            {
+                "id": "team-1",
+                "name": "Northern Duo",
+                "team_type": "competitive",
+                "team_division": "mixed_doubles",
+                "status": "active",
+            }
+        ],
         config,
         context,
         monthly_batches_rows=monthly_batches.accepted_rows,
@@ -113,7 +121,8 @@ def test_build_teams_normalizes_type_and_status_and_derives_age() -> None:
             {
                 "id": "team-2",
                 "name": "Maple Pair",
-                "team_type": "womens",
+                "team_type": "competitive",
+                "team_division": "womens_doubles",
                 "country": "Canada",
                 "status": "active",
                 "formation_date": "2026-01-01",
@@ -127,10 +136,55 @@ def test_build_teams_normalizes_type_and_status_and_derives_age() -> None:
     assert result.reconciliation.status == "PASSED"
     row = result.accepted_rows[0]
     assert row["team_category"] == "WOMENS"
+    assert row["team_identity_type"] == "COMPETITIVE"
     assert row["team_status"] == "ACTIVE"
     assert row["country_code"] == "CAN"
     assert row["active_flag"] is True
     assert row["team_age_days"] == 180
+
+
+def test_build_teams_supports_legacy_team_type_as_category_fallback() -> None:
+    config, context, monthly_batches_rows, _, _, _, _ = _parents()
+
+    result = build_teams(
+        [
+            {
+                "id": "team-legacy",
+                "name": "Legacy Pair",
+                "team_type": "mixed",
+                "status": "active",
+            }
+        ],
+        config,
+        context,
+        monthly_batches_rows=monthly_batches_rows,
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    row = result.accepted_rows[0]
+    assert row["team_category"] == "MIXED"
+    assert row["team_identity_type"] is None
+
+
+def test_build_teams_rejects_invalid_team_identity_type() -> None:
+    config, context, monthly_batches_rows, _, _, _, _ = _parents()
+
+    result = build_teams(
+        [
+            {
+                "id": "team-2",
+                "name": "Broken Identity",
+                "team_type": "club_team",
+                "team_division": "mixed_doubles",
+            }
+        ],
+        config,
+        context,
+        monthly_batches_rows=monthly_batches_rows,
+    )
+
+    assert len(result.accepted_rows) == 0
+    assert result.rejected_rows[0]["rule_id"] == "TEAM_008"
 
 
 def test_build_teams_rejects_invalid_date_range() -> None:
@@ -140,7 +194,8 @@ def test_build_teams_rejects_invalid_date_range() -> None:
         [
             {
                 "id": "team-2",
-                "team_type": "mixed",
+                "team_type": "competitive",
+                "team_division": "mixed_doubles",
                 "formation_date": "2026-06-10",
                 "dissolution_date": "2026-06-01",
             }

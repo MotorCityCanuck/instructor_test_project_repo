@@ -51,8 +51,20 @@ def _parents():
     )
     teams = build_teams(
         [
-            {"id": "team-1", "name": "Northern Duo", "team_type": "mixed", "status": "active"},
-            {"id": "team-2", "name": "Southern Duo", "team_type": "mixed", "status": "active"},
+            {
+                "id": "team-1",
+                "name": "Northern Duo",
+                "team_type": "competitive",
+                "team_division": "mixed_doubles",
+                "status": "active",
+            },
+            {
+                "id": "team-2",
+                "name": "Southern Duo",
+                "team_type": "competitive",
+                "team_division": "mixed_doubles",
+                "status": "active",
+            },
         ],
         config,
         context,
