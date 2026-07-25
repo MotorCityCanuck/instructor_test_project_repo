@@ -188,6 +188,38 @@ def test_build_player_registrations_derives_current_flag_and_sequence() -> None:
     assert ordered[1]["batch_sk"] == monthly_batches_rows[0]["batch_sk"]
 
 
+def test_build_player_registrations_maps_registration_month_to_effective_start_date() -> None:
+    config, context, monthly_batches_rows, regions_rows = _parents()
+    players = build_players(
+        [{"id": "player-1", "home_region_id": "region-1"}],
+        config,
+        context,
+        regions_rows=regions_rows,
+        monthly_batches_rows=monthly_batches_rows,
+    )
+
+    result = build_player_registrations(
+        [
+            {
+                "id": "reg-month-1",
+                "player_id": "player-1",
+                "batch_id": "batch-2026-06",
+                "registration_month": "2026-04",
+                "registration_status": "active",
+            }
+        ],
+        config,
+        context,
+        players_rows=players.accepted_rows,
+        monthly_batches_rows=monthly_batches_rows,
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    row = result.accepted_rows[0]
+    assert str(row["effective_start_date"]) == "2026-04-01"
+    assert row["effective_start_date"] is not None
+
+
 def test_build_player_registrations_rejects_invalid_date_range() -> None:
     config, context, monthly_batches_rows, regions_rows = _parents()
     players = build_players(

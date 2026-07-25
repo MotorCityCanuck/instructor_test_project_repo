@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 from typing import Any
 
 from napa_pipeline.bronze_to_silver.config import BronzeToSilverConfig
@@ -541,7 +542,9 @@ def _build_registration_candidate(
         return None, date_reject
 
     effective_start_date, start_reject = _safe_optional_date(
-        normalized.get("effective_start_date") or normalized.get("start_date"),
+        normalized.get("effective_start_date")
+        or normalized.get("start_date")
+        or _first_day_of_month_value(normalized.get("registration_month")),
         context=context,
         source_table="player_registrations",
         target_table="player_registrations",
@@ -860,6 +863,15 @@ def _safe_optional_date(
             source_record=source_record,
             reject_reason_detail=f"Invalid {field_name} value '{value}'.",
         )
+
+
+def _first_day_of_month_value(value: Any) -> Any:
+    if value in (None, ""):
+        return value
+    text = str(value).strip()
+    if re.fullmatch(r"\d{4}-\d{2}", text):
+        return f"{text}-01"
+    return value
 
 
 def _safe_optional_float(

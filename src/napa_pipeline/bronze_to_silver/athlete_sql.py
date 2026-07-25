@@ -563,7 +563,11 @@ def _build_player_registrations_sql_plan(
         date_candidates=["registration_date"],
         month_candidates=["registration_month"],
     )
-    effective_start_date_expr = _source_string_expr(source_columns, ["effective_start_date", "start_date"])
+    effective_start_date_expr = _source_date_or_month_string_expr(
+        source_columns,
+        date_candidates=["effective_start_date", "start_date"],
+        month_candidates=["registration_month"],
+    )
     effective_end_date_expr = _source_string_expr(source_columns, ["effective_end_date", "end_date"])
     registration_type_expr = _source_upper_string_expr(
         source_columns,
