@@ -13,7 +13,10 @@ from napa_pipeline.silver_to_gold.io import (
     get_gold_target_table_fqn,
     get_silver_source_table_fqn,
 )
-from napa_pipeline.silver_to_gold.publish import publish_stage_records_to_gold_table
+from napa_pipeline.silver_to_gold.publish import (
+    publish_stage_records_to_gold_table,
+    publish_stage_to_gold_table,
+)
 from napa_pipeline.silver_to_gold.ratings import expected_win_probability
 
 
@@ -485,24 +488,19 @@ def publish_player_performance_features(
     evidence_windows_config: dict[str, Any],
 ) -> PlayerPerformanceFeaturesPublicationSummary:
     """Build and publish player_performance_features."""
-    competition_matches_fqn = get_gold_target_table_fqn(environment, "competition_player_matches")
     current_ratings_fqn = get_gold_target_table_fqn(environment, "player_current_ratings")
-    players_fqn = get_silver_source_table_fqn(environment, "players")
     stage_table_fqn = get_gold_stage_table_fqn(environment, "player_performance_features")
     target_table_fqn = get_gold_target_table_fqn(environment, "player_performance_features")
-    result = build_player_performance_features(
-        _collect_table_rows(spark, competition_matches_fqn),
-        _collect_table_rows(spark, current_ratings_fqn),
-        _collect_table_rows(spark, players_fqn),
-        analysis_as_of_date=analysis_as_of_date,
-        features_config=features_config,
-        evidence_windows_config=evidence_windows_config,
-    )
-    publish_stage_records_to_gold_table(
+    publish_stage_to_gold_table(
         spark,
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
-        records=result.rows,
+        stage_sql=build_player_performance_features_sql(
+            environment,
+            analysis_as_of_date=analysis_as_of_date,
+            features_config=features_config,
+            evidence_windows_config=evidence_windows_config,
+        ),
         validation_fn=lambda _spark, table_fqn: _validate_key_constraints(
             _spark,
             table_fqn,
@@ -560,6 +558,258 @@ def publish_player_development_features(
         input_row_count=int(spark.table(players_fqn).count()),
         output_row_count=int(spark.table(target_table_fqn).count()),
     )
+
+
+def build_player_performance_features_sql(
+    environment: ReleaseEnvironment,
+    *,
+    analysis_as_of_date: date,
+    features_config: dict[str, Any],
+    evidence_windows_config: dict[str, Any],
+) -> str:
+    """Return the Spark SQL used to build player_performance_features."""
+    matches_fqn = get_gold_target_table_fqn(environment, "competition_player_matches")
+    current_ratings_fqn = get_gold_target_table_fqn(environment, "player_current_ratings")
+    players_fqn = get_silver_source_table_fqn(environment, "players")
+    recency_half_life_days = float(features_config.get("recency_half_life_days", 60))
+    minimum_matches_for_consistency = int(features_config.get("minimum_matches_for_consistency", 5))
+    trailing_365 = int(evidence_windows_config.get("primary_window_days", 365))
+    trailing_180 = int(evidence_windows_config.get("trend_window_days", 180))
+    trailing_90 = int(evidence_windows_config.get("recent_window_days", 90))
+    analysis_date_literal = analysis_as_of_date.isoformat()
+
+    return f"""
+WITH windows AS (
+    SELECT 'career' AS evidence_window, CAST(NULL AS INT) AS window_days
+    UNION ALL
+    SELECT 'trailing_365' AS evidence_window, {trailing_365} AS window_days
+    UNION ALL
+    SELECT 'trailing_180' AS evidence_window, {trailing_180} AS window_days
+    UNION ALL
+    SELECT 'trailing_90' AS evidence_window, {trailing_90} AS window_days
+),
+base_players AS (
+    SELECT
+        cr.player_id,
+        p.display_name,
+        p.country_code,
+        p.active_flag,
+        cr.analytical_rating_value,
+        cr.rated_match_count AS rated_match_count_current
+    FROM {current_ratings_fqn} AS cr
+    LEFT JOIN {players_fqn} AS p
+        ON p.player_id = cr.player_id
+),
+eligible_matches AS (
+    SELECT
+        player_id,
+        partner_player_id,
+        CAST(match_date AS DATE) AS match_date,
+        won_flag,
+        lost_flag,
+        CAST(games_won AS DOUBLE) AS games_won,
+        CAST(games_lost AS DOUBLE) AS games_lost,
+        CAST(point_share AS DOUBLE) AS point_share,
+        CAST(point_differential AS DOUBLE) AS point_differential,
+        CAST(pre_match_team_rating AS DOUBLE) AS pre_match_team_rating,
+        CAST(pre_match_opponent_team_rating AS DOUBLE) AS pre_match_opponent_team_rating
+    FROM {matches_fqn}
+    WHERE CAST(match_date AS DATE) <= DATE('{analysis_date_literal}')
+),
+windowed_matches AS (
+    SELECT
+        w.evidence_window,
+        em.*
+    FROM windows AS w
+    INNER JOIN eligible_matches AS em
+        ON w.window_days IS NULL
+        OR DATEDIFF(DATE('{analysis_date_literal}'), em.match_date) <= w.window_days
+),
+match_enriched AS (
+    SELECT
+        evidence_window,
+        player_id,
+        partner_player_id,
+        match_date,
+        won_flag,
+        lost_flag,
+        games_won,
+        games_lost,
+        point_share,
+        point_differential,
+        pre_match_opponent_team_rating,
+        CASE
+            WHEN pre_match_team_rating IS NULL OR pre_match_opponent_team_rating IS NULL THEN NULL
+            ELSE 1.0 / (
+                1.0 + POWER(10.0, ((pre_match_opponent_team_rating - pre_match_team_rating) / 400.0))
+            )
+        END AS expected_win_probability,
+        POWER(
+            0.5,
+            CAST(DATEDIFF(DATE('{analysis_date_literal}'), match_date) AS DOUBLE) / {recency_half_life_days}
+        ) AS recency_weight
+    FROM windowed_matches
+),
+partner_frequency AS (
+    SELECT
+        evidence_window,
+        player_id,
+        partner_player_id,
+        COUNT(*) AS partner_match_count
+    FROM match_enriched
+    WHERE partner_player_id IS NOT NULL
+    GROUP BY evidence_window, player_id, partner_player_id
+),
+partner_rollup AS (
+    SELECT
+        evidence_window,
+        player_id,
+        COUNT(*) AS distinct_partner_count,
+        MAX(partner_match_count) AS primary_partner_match_count
+    FROM partner_frequency
+    GROUP BY evidence_window, player_id
+),
+point_share_quartiles AS (
+    SELECT
+        evidence_window,
+        player_id,
+        point_share,
+        NTILE(4) OVER (
+            PARTITION BY evidence_window, player_id
+            ORDER BY point_share ASC
+        ) AS quartile_rank
+    FROM match_enriched
+    WHERE point_share IS NOT NULL
+),
+worst_quartile AS (
+    SELECT
+        evidence_window,
+        player_id,
+        AVG(point_share) AS worst_quartile_point_share
+    FROM point_share_quartiles
+    WHERE quartile_rank = 1
+    GROUP BY evidence_window, player_id
+),
+window_aggregates AS (
+    SELECT
+        evidence_window,
+        player_id,
+        COUNT(*) AS match_count,
+        SUM(CASE WHEN won_flag THEN 1 ELSE 0 END) AS win_count,
+        SUM(CASE WHEN lost_flag THEN 1 ELSE 0 END) AS loss_count,
+        SUM(COALESCE(games_won, 0.0)) AS total_games_won,
+        SUM(COALESCE(games_lost, 0.0)) AS total_games_lost,
+        AVG(point_share) AS avg_point_share,
+        AVG(point_differential) AS avg_point_differential,
+        AVG(expected_win_probability) AS avg_expected_win_probability,
+        AVG(pre_match_opponent_team_rating) AS avg_opponent_analytical_rating,
+        AVG(pre_match_opponent_team_rating) AS strength_of_schedule,
+        SUM(
+            CASE
+                WHEN won_flag AND expected_win_probability IS NOT NULL AND expected_win_probability < 0.5
+                    THEN 1 ELSE 0
+            END
+        ) AS upset_wins,
+        SUM(
+            CASE
+                WHEN lost_flag AND expected_win_probability IS NOT NULL AND expected_win_probability > 0.5
+                    THEN 1 ELSE 0
+            END
+        ) AS favorite_losses,
+        SUM(recency_weight) AS weighted_match_total,
+        SUM(CASE WHEN won_flag THEN recency_weight ELSE 0.0 END) AS weighted_win_total,
+        STDDEV_POP(point_share) AS point_share_stddev,
+        STDDEV_POP(point_differential) AS point_differential_stddev
+    FROM match_enriched
+    GROUP BY evidence_window, player_id
+)
+SELECT
+    bp.player_id,
+    w.evidence_window,
+    DATE('{analysis_date_literal}') AS analysis_as_of_date,
+    bp.display_name,
+    bp.country_code,
+    bp.active_flag,
+    bp.analytical_rating_value,
+    COALESCE(bp.rated_match_count_current, 0) AS rated_match_count_current,
+    COALESCE(wa.match_count, 0) AS match_count,
+    COALESCE(wa.win_count, 0) AS win_count,
+    COALESCE(wa.loss_count, 0) AS loss_count,
+    CASE
+        WHEN COALESCE(wa.match_count, 0) = 0 THEN NULL
+        ELSE wa.win_count / wa.match_count
+    END AS win_pct,
+    CASE
+        WHEN COALESCE(wa.total_games_won, 0.0) + COALESCE(wa.total_games_lost, 0.0) = 0.0 THEN NULL
+        ELSE wa.total_games_won / (wa.total_games_won + wa.total_games_lost)
+    END AS game_win_pct,
+    wa.avg_point_share,
+    wa.avg_point_differential,
+    wa.avg_expected_win_probability,
+    CASE
+        WHEN COALESCE(wa.match_count, 0) = 0 THEN NULL
+        ELSE (wa.win_count / wa.match_count) - COALESCE(wa.avg_expected_win_probability, 0.0)
+    END AS performance_above_expectation,
+    wa.avg_opponent_analytical_rating,
+    wa.strength_of_schedule,
+    CASE
+        WHEN COALESCE(wa.win_count, 0) = 0 THEN NULL
+        ELSE wa.upset_wins / wa.win_count
+    END AS upset_win_pct,
+    CASE
+        WHEN COALESCE(wa.loss_count, 0) = 0 THEN NULL
+        ELSE wa.favorite_losses / wa.loss_count
+    END AS favorite_loss_pct,
+    CASE
+        WHEN COALESCE(wa.weighted_match_total, 0.0) = 0.0 THEN NULL
+        ELSE wa.weighted_win_total / wa.weighted_match_total
+    END AS recency_weighted_win_pct,
+    COALESCE(pr.distinct_partner_count, 0) AS distinct_partner_count,
+    CASE
+        WHEN COALESCE(wa.match_count, 0) = 0 THEN NULL
+        ELSE COALESCE(pr.primary_partner_match_count, 0) / wa.match_count
+    END AS primary_partner_match_pct,
+    COALESCE(pr.distinct_partner_count, 0) > 1 AS performance_with_multiple_partners_flag,
+    CASE
+        WHEN COALESCE(pr.distinct_partner_count, 0) <= 1 OR COALESCE(wa.match_count, 0) = 0 THEN NULL
+        ELSE (wa.win_count / wa.match_count) * LEAST(1.0, pr.distinct_partner_count / 3.0)
+    END AS partner_adjusted_performance,
+    wa.point_share_stddev,
+    wa.point_differential_stddev,
+    wq.worst_quartile_point_share,
+    CASE
+        WHEN COALESCE(wa.match_count, 0) < {minimum_matches_for_consistency} THEN NULL
+        ELSE ROUND(
+            100.0 * (
+                0.45 * (wa.win_count / wa.match_count)
+                + 0.35 * GREATEST(0.0, LEAST(1.0, 1.0 - (COALESCE(wa.point_share_stddev, 0.25) / 0.25)))
+                + 0.20 * GREATEST(0.0, LEAST(1.0, COALESCE(wq.worst_quartile_point_share, 0.0)))
+            ),
+            4
+        )
+    END AS consistency_score,
+    CASE
+        WHEN COALESCE(wa.match_count, 0) = 0 THEN '{NO_EVIDENCE}'
+        WHEN COALESCE(wa.match_count, 0) < {minimum_matches_for_consistency} THEN '{LIMITED_EVIDENCE}'
+        ELSE '{SUFFICIENT_EVIDENCE}'
+    END AS consistency_evidence_status,
+    CASE
+        WHEN COALESCE(wa.match_count, 0) = 0 THEN '{NO_EVIDENCE}'
+        WHEN COALESCE(wa.match_count, 0) < {minimum_matches_for_consistency} THEN '{LIMITED_EVIDENCE}'
+        ELSE '{SUFFICIENT_EVIDENCE}'
+    END AS feature_evidence_status
+FROM base_players AS bp
+CROSS JOIN windows AS w
+LEFT JOIN window_aggregates AS wa
+    ON wa.player_id = bp.player_id
+   AND wa.evidence_window = w.evidence_window
+LEFT JOIN partner_rollup AS pr
+    ON pr.player_id = bp.player_id
+   AND pr.evidence_window = w.evidence_window
+LEFT JOIN worst_quartile AS wq
+    ON wq.player_id = bp.player_id
+   AND wq.evidence_window = w.evidence_window
+""".strip()
 
 
 def _resolve_evidence_windows(evidence_windows_config: dict[str, Any]) -> dict[str, int | None]:

@@ -5,6 +5,7 @@ from datetime import date
 from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
 from napa_pipeline.silver_to_gold.environment import resolve_release_environment
 from napa_pipeline.silver_to_gold.features import (
+    build_player_performance_features_sql,
     build_player_development_features,
     build_player_performance_features,
     get_player_feature_registry,
@@ -308,23 +309,23 @@ def test_publish_player_performance_features_returns_summary(monkeypatch) -> Non
     )
     published = {}
 
-    def _fake_publish_stage_records_to_gold_table(
+    def _fake_publish_stage_to_gold_table(
         _spark,
         *,
         stage_table_fqn: str,
         target_table_fqn: str,
-        records,
+        stage_sql: str,
         validation_fn=None,
         count_fn=None,
     ):
         published["stage_table_fqn"] = stage_table_fqn
         published["target_table_fqn"] = target_table_fqn
-        published["row_count"] = len(records)
-        return len(records), len(records)
+        published["stage_sql"] = stage_sql
+        return 12, 12
 
     monkeypatch.setattr(
-        "napa_pipeline.silver_to_gold.features.publish_stage_records_to_gold_table",
-        _fake_publish_stage_records_to_gold_table,
+        "napa_pipeline.silver_to_gold.features.publish_stage_to_gold_table",
+        _fake_publish_stage_to_gold_table,
     )
 
     summary = publish_player_performance_features(
@@ -339,7 +340,25 @@ def test_publish_player_performance_features_returns_summary(monkeypatch) -> Non
     assert summary.target_table_fqn == target_fqn
     assert summary.input_row_count == 3
     assert summary.output_row_count == 12
-    assert published["row_count"] == 12
+    assert "competition_player_matches" in published["stage_sql"]
+    assert "trailing_365" in published["stage_sql"]
+
+
+def test_build_player_performance_features_sql_uses_spark_window_aggregations() -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+
+    sql = build_player_performance_features_sql(
+        environment,
+        analysis_as_of_date=date(2026, 6, 30),
+        features_config=_features_config(),
+        evidence_windows_config=_evidence_windows_config(),
+    )
+
+    assert "NTILE(4) OVER" in sql
+    assert "STDDEV_POP(point_share)" in sql
+    assert "CROSS JOIN windows" in sql
+    assert "toLocalIterator" not in sql
 
 
 def test_publish_phase6_feature_tables_returns_two_summaries(monkeypatch) -> None:
