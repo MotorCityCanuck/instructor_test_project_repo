@@ -712,7 +712,9 @@ def _build_assessment_candidate(
         return None, value_reject
 
     assessment_confidence, confidence_reject = _safe_optional_float(
-        normalized.get("assessment_confidence") or normalized.get("confidence"),
+        normalized.get("assessment_confidence")
+        or normalized.get("confidence")
+        or normalized.get("confidence_score"),
         context=context,
         source_table="player_assessment_history",
         target_table="player_assessment_history",

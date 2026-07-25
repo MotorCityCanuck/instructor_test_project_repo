@@ -198,6 +198,11 @@ Gold uses:
 - Longitudinal player assessments.
 - Rating comparison and trend inputs where assessment semantics are approved.
 
+Runtime values and limitations:
+
+- Bronze/export `player_assessment_history` does not provide `assessment_confidence` directly.
+- Silver `assessment_confidence` maps from source `confidence_score`.
+
 ### `clubs`
 
 Primary key: `club_id`.

@@ -274,7 +274,7 @@ def test_build_player_assessment_history_accepts_valid_row() -> None:
                 "assessment_date": "2026-06-15",
                 "assessment_type": "rating",
                 "assessment_value": "4.25",
-                "assessment_confidence": "0.9",
+                "confidence_score": "0.9",
                 "assessor_source": "coach",
             }
         ],

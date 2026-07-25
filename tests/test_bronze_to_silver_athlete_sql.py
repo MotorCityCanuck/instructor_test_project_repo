@@ -216,7 +216,7 @@ def test_build_athlete_sql_plan_for_player_assessment_history_uses_actual_bronze
             "assessment_month",
             "assessment_type",
             "value",
-            "confidence",
+            "confidence_score",
             "_pipeline_run_id",
             "_pipeline_name",
             "_pipeline_version",
@@ -242,11 +242,12 @@ def test_build_athlete_sql_plan_for_player_assessment_history_uses_actual_bronze
     assert "COALESCE(batch_id, monthly_batch_id)" not in combined_sql
     assert "COALESCE(assessment_value, value)" not in combined_sql
     assert "COALESCE(assessment_confidence, confidence)" not in combined_sql
+    assert "COALESCE(assessment_confidence, confidence, confidence_score)" not in combined_sql
     assert "CAST(id AS STRING)" in combined_sql
     assert "CAST(batch_id AS STRING)" in combined_sql
     assert "CAST(assessment_month AS STRING)" in combined_sql
     assert "CAST(value AS STRING)" in combined_sql
-    assert "CAST(confidence AS STRING)" in combined_sql
+    assert "CAST(confidence_score AS STRING)" in combined_sql
 
 
 def test_execute_single_table_sql_publishes_player_outputs(monkeypatch) -> None:

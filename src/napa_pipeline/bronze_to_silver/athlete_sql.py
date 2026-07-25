@@ -962,7 +962,7 @@ def _build_player_assessment_history_sql_plan(
     )
     assessment_confidence_expr = _source_nullif_string_expr(
         source_columns,
-        ["assessment_confidence", "confidence"],
+        ["assessment_confidence", "confidence", "confidence_score"],
     )
     assessor_source_expr = _source_nullif_string_expr(source_columns, ["assessor_source"])
     metadata_sql = _metadata_sql(

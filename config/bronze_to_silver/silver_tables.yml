@@ -78,6 +78,7 @@ silver_tables:
     build_order: 70
     transform: build_player_assessment_history
     primary_key: [assessment_id]
+    required_contract_columns: [assessment_confidence]
     source_key_mapping:
       id: assessment_id
     reject_table: player_assessment_history_exceptions
