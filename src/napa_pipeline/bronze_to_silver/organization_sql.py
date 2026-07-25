@@ -96,7 +96,8 @@ typed_source AS (
 validated_source AS (
     SELECT
         source.*,
-        region.region_sk
+        region.region_sk,
+        region.country_code AS region_country_code
     FROM typed_source source
     LEFT JOIN {regions_fqn} region
         ON source.region_id = region.region_id
@@ -169,7 +170,7 @@ valid_rows AS (
         club_name,
         region_id,
         region_sk,
-        country_code,
+        COALESCE(country_code, region_country_code) AS country_code,
         open_date,
         close_date
     FROM validated_source

@@ -100,6 +100,27 @@ def test_build_clubs_accepts_valid_row_and_derives_region_key() -> None:
     assert "active_flag" not in row
 
 
+def test_build_clubs_derives_country_code_from_region_when_source_country_is_missing() -> None:
+    config, context, _, regions_rows, _, _, _ = _parents()
+
+    result = build_clubs(
+        [
+            {
+                "id": "club-region-country",
+                "name": "Region Derived Club",
+                "region_id": "region-1",
+            }
+        ],
+        config,
+        context,
+        regions_rows=regions_rows,
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    row = result.accepted_rows[0]
+    assert row["country_code"] == "CAN"
+
+
 def test_build_clubs_rejects_orphan_region() -> None:
     config, context, _, _, _, _, _ = _parents()
 

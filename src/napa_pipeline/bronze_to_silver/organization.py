@@ -477,7 +477,7 @@ def _build_club_candidate(
         "club_name": club_name,
         "region_id": region_id,
         "region_sk": region_row["region_sk"],
-        "country_code": country_code,
+        "country_code": country_code or region_row["country_code"],
         "open_date": open_date,
         "close_date": close_date,
     }

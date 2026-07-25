@@ -44,6 +44,7 @@ def test_build_organization_sql_plan_for_clubs_contains_expected_rules() -> None
     assert "CLUB_007" in plan.rejected_sql
     assert "CLUB_DUPLICATE" in plan.rejected_sql
     assert "region_sk" in plan.accepted_sql
+    assert "region_country_code" in plan.accepted_sql
     assert "'CANADA'" in plan.accepted_sql
     assert "active_flag" not in plan.accepted_sql
 
@@ -96,6 +97,7 @@ def test_build_organization_sql_plan_for_clubs_uses_actual_bronze_columns() -> N
     assert "CAST(club_name AS STRING)" in combined_sql
     assert "CAST(region_id AS STRING)" in combined_sql
     assert "CAST(founding_date AS STRING)" in combined_sql
+    assert "COALESCE(country_code, region_country_code) AS country_code" in combined_sql
 
 
 def test_build_organization_sql_plan_for_teams_contains_expected_rules() -> None:

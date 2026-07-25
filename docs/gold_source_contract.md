@@ -219,6 +219,7 @@ Columns:
 Gold uses:
 
 - Club context and optional player development context.
+- Club country is derived through `clubs.region_id -> regions.country_code`.
 
 ### `club_memberships`
 
