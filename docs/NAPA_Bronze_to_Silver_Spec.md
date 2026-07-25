@@ -1690,7 +1690,6 @@ batch_id  → monthly_batches.batch_id
 | `assessment_type` | Assessment type where supplied |
 | `assessment_value` | Assessment value where supplied |
 | `assessment_confidence` | Silver rename of source `confidence_score` |
-| `assessor_source` | Assessment source where supplied |
 
 If the physical source stores assessments as multiple columns rather than type/value rows, preserve a wide Silver structure unless there is a documented business reason to normalize it.
 

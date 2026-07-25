@@ -964,7 +964,6 @@ def _build_player_assessment_history_sql_plan(
         source_columns,
         ["assessment_confidence", "confidence", "confidence_score"],
     )
-    assessor_source_expr = _source_nullif_string_expr(source_columns, ["assessor_source"])
     metadata_sql = _metadata_sql(
         context,
         source_table="player_assessment_history",
@@ -989,8 +988,7 @@ normalized_source AS (
         {assessment_date_expr} AS assessment_date_raw,
         {assessment_type_expr} AS assessment_type,
         {assessment_value_expr} AS assessment_value_raw,
-        {assessment_confidence_expr} AS assessment_confidence_raw,
-        {assessor_source_expr} AS assessor_source
+        {assessment_confidence_expr} AS assessment_confidence_raw
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -1067,8 +1065,7 @@ invalid_rows AS (
                 'assessment_date_raw', assessment_date_raw,
                 'assessment_type', assessment_type,
                 'assessment_value_raw', assessment_value_raw,
-                'assessment_confidence_raw', assessment_confidence_raw,
-                'assessor_source', assessor_source
+                'assessment_confidence_raw', assessment_confidence_raw
             )
         ) AS source_record_json
     FROM validated_source
@@ -1091,8 +1088,7 @@ valid_rows AS (
         assessment_date,
         assessment_type,
         assessment_value,
-        assessment_confidence,
-        assessor_source
+        assessment_confidence
     FROM validated_source
     WHERE assessment_id IS NOT NULL
       AND player_id IS NOT NULL
@@ -1149,7 +1145,6 @@ SELECT
     assessment_type,
     assessment_value,
     assessment_confidence,
-    assessor_source,
     {metadata_sql}
 FROM ranked_rows
 WHERE duplicate_rank = 1
@@ -1197,8 +1192,7 @@ SELECT
             'assessment_date', assessment_date,
             'assessment_type', assessment_type,
             'assessment_value', assessment_value,
-            'assessment_confidence', assessment_confidence,
-            'assessor_source', assessor_source
+            'assessment_confidence', assessment_confidence
         )
     ) AS source_record_json,
     sha2(
@@ -1210,8 +1204,7 @@ SELECT
                 'assessment_date', assessment_date,
                 'assessment_type', assessment_type,
                 'assessment_value', assessment_value,
-                'assessment_confidence', assessment_confidence,
-                'assessor_source', assessor_source
+                'assessment_confidence', assessment_confidence
             )
         ),
         256
@@ -1233,8 +1226,7 @@ WITH normalized_source AS (
         {assessment_date_expr} AS assessment_date_raw,
         {assessment_type_expr} AS assessment_type,
         {assessment_value_expr} AS assessment_value_raw,
-        {assessment_confidence_expr} AS assessment_confidence_raw,
-        {assessor_source_expr} AS assessor_source
+        {assessment_confidence_expr} AS assessment_confidence_raw
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -1257,8 +1249,7 @@ valid_rows AS (
         TO_DATE(source.assessment_date_raw) AS assessment_date,
         source.assessment_type,
         CAST(source.assessment_value_raw AS DOUBLE) AS assessment_value,
-        CAST(source.assessment_confidence_raw AS DOUBLE) AS assessment_confidence,
-        source.assessor_source
+        CAST(source.assessment_confidence_raw AS DOUBLE) AS assessment_confidence
     FROM (
         SELECT
             {assessment_id_expr} AS assessment_id,
@@ -1267,8 +1258,7 @@ valid_rows AS (
             {assessment_date_expr} AS assessment_date_raw,
             {assessment_type_expr} AS assessment_type,
             {assessment_value_expr} AS assessment_value_raw,
-            {assessment_confidence_expr} AS assessment_confidence_raw,
-            {assessor_source_expr} AS assessor_source
+            {assessment_confidence_expr} AS assessment_confidence_raw
         FROM {source_table_fqn}
     ) source
     CROSS JOIN release_context

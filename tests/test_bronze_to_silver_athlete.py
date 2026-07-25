@@ -275,7 +275,6 @@ def test_build_player_assessment_history_accepts_valid_row() -> None:
                 "assessment_type": "rating",
                 "assessment_value": "4.25",
                 "confidence_score": "0.9",
-                "assessor_source": "coach",
             }
         ],
         config,
@@ -293,7 +292,7 @@ def test_build_player_assessment_history_accepts_valid_row() -> None:
     assert row["assessment_type"] == "RATING"
     assert row["assessment_value"] == 4.25
     assert row["assessment_confidence"] == 0.9
-    assert row["assessor_source"] == "coach"
+    assert "assessor_source" not in row
 
 
 def test_build_player_assessment_history_rejects_orphan_player() -> None:

@@ -190,7 +190,6 @@ Columns:
 - `assessment_type`
 - `assessment_value`
 - `assessment_confidence`
-- `assessor_source`
 - common metadata columns
 
 Gold uses:

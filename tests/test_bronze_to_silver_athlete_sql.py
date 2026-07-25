@@ -197,7 +197,7 @@ def test_build_athlete_sql_plan_for_player_assessment_history_contains_expected_
     assert "ASSESS_006" in plan.rejected_sql
     assert "ASSESS_DUPLICATE" in plan.rejected_sql
     assert "assessment_confidence" in plan.accepted_sql
-    assert "assessor_source" in plan.accepted_sql
+    assert "assessor_source" not in plan.accepted_sql
 
 
 def test_build_athlete_sql_plan_for_player_assessment_history_uses_actual_bronze_columns() -> None:

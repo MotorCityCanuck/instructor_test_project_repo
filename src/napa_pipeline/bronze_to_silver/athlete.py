@@ -745,10 +745,6 @@ def _build_assessment_candidate(
         ),
         "assessment_value": assessment_value,
         "assessment_confidence": assessment_confidence,
-        "assessor_source": standardize_string(
-            normalized.get("assessor_source"),
-            uppercase=False,
-        ),
     }
     candidate.update(
         build_metadata_payload(
