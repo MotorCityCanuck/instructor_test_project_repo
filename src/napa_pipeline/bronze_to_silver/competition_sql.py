@@ -522,7 +522,7 @@ WITH normalized_source AS (
         NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
         NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
         TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS team_number_raw,
-        NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before) AS STRING)), '') AS pre_match_team_rating_raw,
+        NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before, average_team_rating) AS STRING)), '') AS pre_match_team_rating_raw,
         NULLIF(TRIM(CAST(COALESCE(post_match_team_rating, team_rating_after) AS STRING)), '') AS post_match_team_rating_raw
     FROM {source_table_fqn}
 ),
@@ -789,7 +789,7 @@ WHERE duplicate_rank > 1
                 "NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id",
                 "NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id",
                 "TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS team_number_raw",
-                "NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before) AS STRING)), '') AS pre_match_team_rating_raw",
+                "NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before, average_team_rating) AS STRING)), '') AS pre_match_team_rating_raw",
                 "NULLIF(TRIM(CAST(COALESCE(post_match_team_rating, team_rating_after) AS STRING)), '') AS post_match_team_rating_raw",
             ],
         ),
@@ -812,7 +812,7 @@ WITH valid_rows AS (
             NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
             NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
             TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS team_number_raw,
-            NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before) AS STRING)), '') AS pre_match_team_rating_raw,
+            NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before, average_team_rating) AS STRING)), '') AS pre_match_team_rating_raw,
             NULLIF(TRIM(CAST(COALESCE(post_match_team_rating, team_rating_after) AS STRING)), '') AS post_match_team_rating_raw
         FROM {source_table_fqn}
     ) source

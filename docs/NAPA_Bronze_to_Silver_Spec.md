@@ -2125,7 +2125,7 @@ team_id  → teams.team_id
 | `team_sk` | Conformed team key |
 | `team_number` | Side number |
 | `winner_flag` | Derived winner indicator |
-| `pre_match_team_rating` | Rating before match where supplied |
+| `pre_match_team_rating` | Silver rename of source `average_team_rating`, representing the side's average player rating at match time |
 | `post_match_team_rating` | Rating after match where supplied |
 | `rating_change` | Objective change where derivable |
 

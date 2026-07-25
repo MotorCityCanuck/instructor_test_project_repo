@@ -389,6 +389,12 @@ Gold uses:
 - Source-provided pre/post match team ratings, if used only as visible comparison inputs.
 - Side cardinality warning signal.
 
+Runtime values and limitations:
+
+- Bronze/export `match_teams` does not provide `pre_match_team_rating` directly.
+- Silver `pre_match_team_rating` maps from source `average_team_rating`, which represents the average of the two player ratings on that side at match time.
+- `pre_match_team_rating` should be interpreted as a match-time side average, not as a separately maintained persistent team rating.
+
 Phase 0 answer: historical match sides do contain persistent `team_id` in the implemented Silver SQL plan.
 
 ### `match_team_players`

@@ -343,6 +343,32 @@ def test_build_match_teams_accepts_valid_rows_and_derives_winner_flag() -> None:
     assert winners[0]["rating_change"] == 0.09999999999999964
 
 
+def test_build_match_teams_maps_average_team_rating_to_pre_match_team_rating() -> None:
+    config, context, _, _, _, teams_rows, _, matches_rows, _ = _parents()
+
+    result = build_match_teams(
+        [
+            {
+                "id": "mt-3",
+                "match_id": "match-1",
+                "team_id": "team-1",
+                "team_number": "1",
+                "average_team_rating": "4.2",
+                "post_match_team_rating": "4.3",
+            }
+        ],
+        config,
+        context,
+        matches_rows=matches_rows,
+        teams_rows=teams_rows,
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    row = result.accepted_rows[0]
+    assert row["pre_match_team_rating"] == 4.2
+    assert row["rating_change"] == 0.09999999999999964
+
+
 def test_build_match_teams_flags_side_cardinality_warning() -> None:
     config, context, _, _, _, teams_rows, _, matches_rows, _ = _parents()
 

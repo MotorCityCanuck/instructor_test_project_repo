@@ -593,7 +593,9 @@ def _build_match_team_candidate(
         return None, team_number_reject
 
     pre_rating, pre_rating_reject = _safe_optional_float(
-        normalized.get("pre_match_team_rating") or normalized.get("team_rating_before"),
+        normalized.get("pre_match_team_rating")
+        or normalized.get("team_rating_before")
+        or normalized.get("average_team_rating"),
         context=context,
         source_table="match_teams",
         target_table="match_teams",
