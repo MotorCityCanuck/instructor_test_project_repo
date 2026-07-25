@@ -162,7 +162,7 @@ def test_build_matches_accepts_valid_row_and_derives_calendar_fields() -> None:
     assert row["region_sk"] == regions_rows[0]["region_sk"]
     assert row["winning_team_id"] is None
     assert row["completed_flag"] is True
-    assert row["competition_category"] is None
+    assert row["competition_category"] == "LEAGUE"
     assert row["match_status"] is None
     assert row["match_year"] == 2026
     assert row["match_month"] == 6

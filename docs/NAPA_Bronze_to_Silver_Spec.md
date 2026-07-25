@@ -2038,7 +2038,7 @@ region_id → regions.region_id
 | `match_date` | Match date |
 | `match_type` | Match type where supplied |
 | `winning_team_id` | Persistent winning team identifier from Bronze source |
-| `competition_category` | Nullable category placeholder unless an approved derivation is added |
+| `competition_category` | Derived Silver rename of source `match_type`; required when `match_type` is present |
 | `match_status` | Nullable status placeholder unless an approved derivation is added |
 | `winning_team_number` | Winning side number where supplied |
 | `completed_flag` | Derived completion indicator |

@@ -354,10 +354,11 @@ Gold uses:
 Runtime values and limitations:
 
 - `match_type` values provided: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
-- Bronze `matches` does not provide `competition_category`.
+- Bronze `matches` does not provide `competition_category` directly; Silver derives it by renaming source `match_type`.
 - Bronze `matches` does not provide `match_status`.
 - Bronze `matches` does provide `winning_team_id`, and the current Silver contract preserves it as persistent winner lineage.
-- `competition_category` and `match_status` exist physically in Silver but should currently be treated as nullable placeholders unless an approved derivation is introduced.
+- `competition_category` is a required Silver contract column derived from source `match_type`.
+- `match_status` exists physically in Silver but should currently be treated as a nullable placeholder unless an approved derivation is introduced.
 - `winning_team_number` and `completed_flag` are derived Silver fields, not direct Bronze source fields.
 - `winning_team_number` should derive only from same-match `match_teams.team_id` resolution, never from `match_teams.id`.
 

@@ -478,7 +478,7 @@ def _build_match_candidate(
         "region_sk": region_row.get("region_sk") if region_row else None,
         "match_date": match_date,
         "match_type": standardize_string(normalized.get("match_type"), uppercase=True),
-        "competition_category": None,
+        "competition_category": standardize_string(normalized.get("match_type"), uppercase=True),
         "match_status": None,
         "winning_team_id": winner_team_id,
         "winning_team_number": winner,

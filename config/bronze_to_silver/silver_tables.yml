@@ -115,6 +115,7 @@ silver_tables:
     build_order: 100
     transform: build_matches
     primary_key: [match_id]
+    required_contract_columns: [competition_category]
     source_key_mapping:
       id: match_id
     reject_table: matches_exceptions

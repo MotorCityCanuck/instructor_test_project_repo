@@ -74,7 +74,7 @@ WITH normalized_source AS (
         NULLIF(TRIM(CAST(region_id AS STRING)), '') AS region_id,
         TRIM(CAST(COALESCE(match_date, date) AS STRING)) AS match_date_raw,
         NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS match_type,
-        CAST(NULL AS STRING) AS competition_category,
+        NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS competition_category,
         CAST(NULL AS STRING) AS match_status,
         TRIM(CAST(COALESCE(winning_team_number, winner_team_number) AS STRING)) AS winning_team_number_raw,
         NULLIF(TRIM(CAST(COALESCE(winning_team_id, winner_team_id) AS STRING)), '') AS winning_team_id
@@ -440,7 +440,7 @@ valid_rows AS (
             NULLIF(TRIM(CAST(region_id AS STRING)), '') AS region_id,
             TRIM(CAST(COALESCE(match_date, date) AS STRING)) AS match_date_raw,
             NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS match_type,
-            CAST(NULL AS STRING) AS competition_category,
+            NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS competition_category,
             CAST(NULL AS STRING) AS match_status,
             TRIM(CAST(COALESCE(winning_team_number, winner_team_number) AS STRING)) AS winning_team_number_raw,
             NULLIF(TRIM(CAST(COALESCE(winning_team_id, winner_team_id) AS STRING)), '') AS winning_team_id
