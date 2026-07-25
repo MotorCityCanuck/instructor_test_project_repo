@@ -270,18 +270,54 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 
 ### `player_match_features`
 
-- Status: `planned`
-- Phase: `6+`
-- Intended purpose: player-level feature table for modeling and evaluation
+- Status: `implemented`
+- Phase: `6`
+- Intended purpose: player-level performance feature table for modeling and evaluation
 - Expected Silver / Gold dependencies:
   - `competition_player_matches`
   - `player_current_ratings`
   - `players`
-  - `player_assessment_history`
-- Gold columns:
-  - pending
+  - current contract is implemented as `player_performance_features`
+- Current contract notes:
+  - current implementation publishes one row per `player_id` and evidence window
+  - four windows are currently emitted: `career`, `trailing_365`, `trailing_180`, `trailing_90`
+  - zero-evidence rows remain visible so downstream scorecards can distinguish `NONE` from `LIMITED`
+- Current implemented columns:
+  - `player_id`
+  - `evidence_window`
+  - `analysis_as_of_date`
+  - `display_name`
+  - `country_code`
+  - `active_flag`
+  - `analytical_rating_value`
+  - `rated_match_count_current`
+  - `match_count`
+  - `win_count`
+  - `loss_count`
+  - `win_pct`
+  - `game_win_pct`
+  - `avg_point_share`
+  - `avg_point_differential`
+  - `avg_expected_win_probability`
+  - `performance_above_expectation`
+  - `avg_opponent_analytical_rating`
+  - `strength_of_schedule`
+  - `upset_win_pct`
+  - `favorite_loss_pct`
+  - `recency_weighted_win_pct`
+  - `distinct_partner_count`
+  - `primary_partner_match_pct`
+  - `performance_with_multiple_partners_flag`
+  - `partner_adjusted_performance`
+  - `point_share_stddev`
+  - `point_differential_stddev`
+  - `worst_quartile_point_share`
+  - `consistency_score`
+  - `consistency_evidence_status`
+  - `feature_evidence_status`
 - Unresolved items:
-  - exact feature set should be documented only when approved for implementation
+  - player performance currently uses the match-side opponent team rating as the strength-of-schedule proxy; later phases may replace this with richer opponent rollups
+  - additional windowed features can be added without changing the published grain
 
 ### `team_performance_features`
 
@@ -296,6 +332,45 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
   - pending
 - Unresolved items:
   - depends on acceptable confidence in persistent team resolution
+
+### `player_development_features`
+
+- Status: `implemented`
+- Phase: `6`
+- Intended purpose: as-of-date player trend and future-potential feature table
+- Expected Silver / Gold dependencies:
+  - `player_rating_history`
+  - `player_assessment_history`
+  - `player_registrations`
+  - `players`
+- Current contract notes:
+  - one row is published per `player_id` as of `analysis_as_of_date`
+  - trend features currently use deterministic linear slopes over the trailing configured trend window
+- Current implemented columns:
+  - `player_id`
+  - `analysis_as_of_date`
+  - `display_name`
+  - `country_code`
+  - `active_flag`
+  - `latest_analytical_rating_value`
+  - `latest_assessment_value`
+  - `latest_assessment_confidence`
+  - `rating_change_90`
+  - `rating_change_180`
+  - `rating_change_total`
+  - `rating_slope_per_30_days`
+  - `assessment_change_180`
+  - `assessment_slope_per_30_days`
+  - `confidence_change_180`
+  - `rated_match_count`
+  - `experience_growth_180`
+  - `days_since_registration`
+  - `current_registration_flag`
+  - `development_momentum_score`
+  - `feature_evidence_status`
+- Unresolved items:
+  - development momentum is currently a transparent bounded weighted composite rather than an instructor-approved final scorecard component
+  - volatility-related development measures remain unimplemented because no separate Silver volatility field is currently available
 
 ### `recommendation_scorecards`
 

@@ -53,7 +53,7 @@ gold_tables:
     stage: player_features
     target: player_performance_features
     transform: build_player_performance_features
-    primary_key: [player_id]
+    primary_key: [player_id, evidence_window]
 
   player_development_features:
     enabled: true
