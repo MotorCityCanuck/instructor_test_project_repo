@@ -23,7 +23,6 @@ from napa_pipeline.silver_to_gold.environment import (
 )
 from napa_pipeline.silver_to_gold.io import (
     get_gold_target_table_fqn,
-    get_operations_table_fqn,
 )
 from napa_pipeline.silver_to_gold.operations import (
     RECONCILIATION_RESULTS_TABLE,
@@ -34,6 +33,7 @@ from napa_pipeline.silver_to_gold.operations import (
     build_table_run_start_record,
     complete_pipeline_run,
     create_pipeline_context,
+    get_operations_table_fqn,
     utc_now,
 )
 from napa_pipeline.silver_to_gold.ratings_validation import (
