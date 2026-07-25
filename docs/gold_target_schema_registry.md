@@ -133,7 +133,7 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 
 ### `resolved_match_teams`
 
-- Status: `in_progress`
+- Status: `implemented`
 - Phase: `4`
 - Intended purpose: resolve historical match sides to persistent team identities
 - Expected Silver dependencies:
@@ -162,24 +162,111 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 - Unresolved items:
   - observed resolution rate needs further evaluation before downstream team products rely on it heavily
 
-### `team_match_ratings`
+### `player_rating_events`
 
-- Status: `planned`
+- Status: `implemented`
 - Phase: `5`
-- Intended purpose: team-level chronological rating table
+- Intended purpose: deterministic chronological analytical rating-event table at the player-match grain
 - Expected Silver / Gold dependencies:
-  - `matches`
-  - `match_teams`
-  - `resolved_match_teams`
+  - `competition_player_matches`
 - Current contract notes:
-  - Should use deployed Silver rating field names:
-    - `pre_match_team_rating`
-    - `post_match_team_rating`
-  - Must not assume spec-only names such as `average_team_rating_at_match`
-- Gold columns:
-  - pending phase design finalization
+  - analytical ratings currently initialize at the configured default rating rather than from source player ratings
+  - event ordering is deterministic by `match_date`, `batch_sequence`, `batch_id`, and `match_id`
+  - each player on a match side receives the same team delta
+  - the current implementation is a Python-built reference engine intended for validation and instructor review; large-release scalability still needs a distributed implementation path
+- Current implemented columns:
+  - `match_id`
+  - `match_date`
+  - `batch_id`
+  - `batch_sequence`
+  - `batch_date`
+  - `team_number`
+  - `player_id`
+  - `partner_player_id`
+  - `opponent_player_one_id`
+  - `opponent_player_two_id`
+  - `source_pre_match_player_rating`
+  - `pre_match_rating`
+  - `team_pre_match_rating`
+  - `opponent_team_pre_match_rating`
+  - `expected_win_probability`
+  - `actual_result`
+  - `won_flag`
+  - `lost_flag`
+  - `k_factor`
+  - `margin_multiplier`
+  - `rating_delta`
+  - `post_match_rating`
+  - `prior_match_count`
+  - `post_match_count`
+  - `wins_to_date`
+  - `losses_to_date`
+  - `event_sequence`
 - Unresolved items:
-  - whether source-provided pre/post ratings are used as baseline, audit signal, or not at all
+  - whether future releases should initialize from registration-era priors or another instructor-approved cold-start strategy
+  - whether the large-release implementation should migrate from Python driver logic to distributed chronological batch processing
+
+### `player_rating_history`
+
+- Status: `implemented`
+- Phase: `5`
+- Intended purpose: end-of-day analytical rating snapshots per player
+- Expected Silver / Gold dependencies:
+  - `players`
+  - `player_rating_events`
+- Current contract notes:
+  - current history rows are one per `player_id` and `rating_effective_date`, using the latest event on that date when a player has multiple same-day matches
+- Current implemented columns:
+  - `player_id`
+  - `rating_effective_date`
+  - `latest_match_id`
+  - `latest_event_sequence`
+  - `batch_id`
+  - `batch_sequence`
+  - `batch_date`
+  - `analytical_rating_value`
+  - `rating_change_from_prior`
+  - `rated_match_count`
+  - `wins_to_date`
+  - `losses_to_date`
+  - `last_rated_match_date`
+  - `rating_reliability_score`
+  - `rating_evidence_band`
+  - `rating_uncertainty_proxy`
+  - `is_current_flag`
+- Unresolved items:
+  - whether monthly snapshot rows should eventually supplement or replace the current end-of-day history grain
+
+### `player_current_ratings`
+
+- Status: `implemented`
+- Phase: `5`
+- Intended purpose: latest analytical rating row for every player in the Silver player universe
+- Expected Silver / Gold dependencies:
+  - `players`
+  - `player_rating_history`
+- Current contract notes:
+  - players without any analytical rating events currently remain in the table with the configured default analytical rating and zero rated matches
+- Current implemented columns:
+  - `player_id`
+  - `display_name`
+  - `country_code`
+  - `active_flag`
+  - `source_rating_value`
+  - `source_confidence_score`
+  - `analytical_rating_value`
+  - `analytical_rating_rank_overall`
+  - `rating_difference_from_source`
+  - `rating_reliability_score`
+  - `rating_evidence_band`
+  - `rating_uncertainty_proxy`
+  - `rated_match_count`
+  - `wins_to_date`
+  - `losses_to_date`
+  - `last_rated_match_date`
+  - `current_rating_effective_date`
+- Unresolved items:
+  - the source-versus-analytical comparison is currently a direct numeric difference and may need a scale-aware alternative if instructor review confirms source and analytical ratings intentionally use different scales
 
 ### `player_match_features`
 
@@ -188,9 +275,9 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 - Intended purpose: player-level feature table for modeling and evaluation
 - Expected Silver / Gold dependencies:
   - `competition_player_matches`
+  - `player_current_ratings`
   - `players`
   - `player_assessment_history`
-  - `player_registrations`
 - Gold columns:
   - pending
 - Unresolved items:
@@ -203,7 +290,6 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 - Intended purpose: team-level feature table
 - Expected Silver / Gold dependencies:
   - `resolved_match_teams`
-  - `team_match_ratings`
   - `match_games`
   - `teams`
 - Gold columns:

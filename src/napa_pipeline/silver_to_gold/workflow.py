@@ -41,6 +41,12 @@ PHASE4_TARGET_TABLES = (
     "resolved_match_teams",
 )
 
+PHASE5_TARGET_TABLES = (
+    "player_rating_events",
+    "player_rating_history",
+    "player_current_ratings",
+)
+
 
 class UpstreamSilverRunNotFoundError(RuntimeError):
     """Raised when no successful upstream Bronze-to-Silver run can be resolved."""

@@ -10,6 +10,7 @@ from napa_pipeline.silver_to_gold.operations import PIPELINE_RUNS_TABLE, create_
 from napa_pipeline.silver_to_gold.workflow import (
     PHASE3_TARGET_TABLES,
     PHASE4_TARGET_TABLES,
+    PHASE5_TARGET_TABLES,
     REQUIRED_SILVER_SOURCE_TABLES,
     SilverSourceValidationError,
     UpstreamSilverRunNotFoundError,
@@ -126,6 +127,14 @@ def test_phase3_target_table_inventory_is_expected() -> None:
 
 def test_phase4_target_table_inventory_is_expected() -> None:
     assert PHASE4_TARGET_TABLES == ("resolved_match_teams",)
+
+
+def test_phase5_target_table_inventory_is_expected() -> None:
+    assert PHASE5_TARGET_TABLES == (
+        "player_rating_events",
+        "player_rating_history",
+        "player_current_ratings",
+    )
 
 
 def test_validate_required_silver_source_tables_returns_existing_and_missing() -> None:

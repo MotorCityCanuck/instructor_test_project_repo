@@ -64,5 +64,73 @@ def publish_stage_to_gold_table(
     return stage_row_count, verified_row_count
 
 
+def publish_records_table(
+    spark: Any,
+    table_fqn: str,
+    records: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+) -> int:
+    """Publish Python-built records to a Delta table and return the verified row count."""
+    try:
+        if records:
+            dataframe = spark.createDataFrame(list(records))
+            dataframe.write.format("delta").mode("overwrite").saveAsTable(table_fqn)
+        elif spark.catalog.tableExists(table_fqn):
+            spark.table(table_fqn).limit(0).write.format("delta").mode("overwrite").saveAsTable(
+                table_fqn
+            )
+        else:
+            raise PublicationError(
+                f"Could not publish empty table {table_fqn} because no existing schema is available."
+            )
+
+        try:
+            return int(spark.table(table_fqn).count())
+        except Exception:
+            return 0
+    except Exception as exc:
+        if isinstance(exc, PublicationError):
+            raise
+        raise PublicationError(f"Could not publish table {table_fqn}.") from exc
+
+
+def publish_stage_records_to_gold_table(
+    spark: Any,
+    *,
+    stage_table_fqn: str,
+    target_table_fqn: str,
+    records: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    validation_fn: Callable[[Any, str], None] | None = None,
+    count_fn: Callable[[Any, str], int] | None = None,
+) -> tuple[int, int]:
+    """Build a Gold target from Python records, validate stage output, then overwrite target."""
+    source_count_fn = count_fn or _count_rows
+
+    try:
+        stage_row_count = publish_records_table(spark, stage_table_fqn, records)
+        if validation_fn is not None:
+            validation_fn(spark, stage_table_fqn)
+
+        target_row_count = publish_sql_table(
+            spark,
+            target_table_fqn,
+            f"SELECT * FROM {stage_table_fqn}",
+        )
+        verified_row_count = source_count_fn(spark, target_table_fqn)
+    except Exception as exc:
+        if isinstance(exc, PublicationError):
+            raise
+        raise PublicationError(
+            f"Could not stage and publish Gold table {target_table_fqn} from {stage_table_fqn}."
+        ) from exc
+
+    if target_row_count != verified_row_count:
+        raise PublicationError(
+            f"Published Gold table {target_table_fqn} did not verify: "
+            f"published_row_count={target_row_count}, verified_row_count={verified_row_count}."
+        )
+
+    return stage_row_count, verified_row_count
+
+
 def _count_rows(spark: Any, table_fqn: str) -> int:
     return int(spark.table(table_fqn).count())
