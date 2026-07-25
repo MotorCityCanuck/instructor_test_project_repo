@@ -246,6 +246,8 @@ Current-generation export behavior:
 - Null `membership_end_date` is expected for active or open-ended club memberships.
 - Current 5K, 50K, and 250K release patterns may produce 100% null `end_date` when no club membership churn is modeled.
 - If downstream analytics require a closed period, derive an as-of end date downstream without overwriting the source-derived null.
+- `membership_duration_days` is a downstream-derived as-of metric: `date_diff('day', membership_start_date, coalesce(membership_end_date, snapshot_end_exclusive))`.
+- In the Silver layer, `snapshot_end_exclusive` is represented by the release snapshot date resolved from `monthly_batches`.
 
 ### `teams`
 

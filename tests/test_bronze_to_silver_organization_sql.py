@@ -166,6 +166,7 @@ def test_build_organization_sql_plan_for_club_memberships_uses_end_date_when_sou
     assert "CAST(start_date AS STRING)" in combined_sql
     assert "CAST(end_date AS STRING)" in combined_sql
     assert "CAST(left_date AS STRING)" not in combined_sql
+    assert "DATEDIFF(COALESCE(membership_end_date, as_of_date), membership_start_date)" in combined_sql
 
 
 def test_build_organization_sql_plan_for_team_memberships_contains_expected_rules() -> None:

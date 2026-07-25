@@ -777,8 +777,9 @@ valid_rows AS (
         membership_start_date,
         membership_end_date,
         CASE
-            WHEN membership_start_date IS NOT NULL AND membership_end_date IS NOT NULL
-                THEN DATEDIFF(membership_end_date, membership_start_date)
+            WHEN membership_start_date IS NOT NULL
+                 AND COALESCE(membership_end_date, as_of_date) IS NOT NULL
+                THEN DATEDIFF(COALESCE(membership_end_date, as_of_date), membership_start_date)
             ELSE NULL
         END AS membership_duration_days,
         CASE

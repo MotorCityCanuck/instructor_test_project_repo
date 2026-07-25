@@ -741,7 +741,7 @@ def _build_club_membership_candidate(
         "club_sk": club_row["club_sk"],
         "membership_start_date": start_date,
         "membership_end_date": end_date,
-        "membership_duration_days": _duration_days(start_date, end_date),
+        "membership_duration_days": _duration_days(start_date, end_date or as_of_date),
         "current_membership_flag": _is_current_period(
             effective_start_date=start_date,
             effective_end_date=end_date,

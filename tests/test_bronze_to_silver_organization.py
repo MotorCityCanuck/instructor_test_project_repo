@@ -314,6 +314,7 @@ def test_build_club_memberships_maps_source_native_end_date_and_keeps_open_ended
     row = result.accepted_rows[0]
     assert str(row["membership_start_date"]) == "2026-01-01"
     assert row["membership_end_date"] is None
+    assert row["membership_duration_days"] == 180
     assert row["current_membership_flag"] is True
 
 
