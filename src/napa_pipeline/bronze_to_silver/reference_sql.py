@@ -458,7 +458,7 @@ valid_rows AS (
         region_id,
         region_name,
         province_state,
-        country_code,
+        country_code
     FROM typed_source
     WHERE region_id IS NOT NULL
       AND region_id <> ''
