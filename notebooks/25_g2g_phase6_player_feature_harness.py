@@ -27,7 +27,7 @@ from napa_pipeline.silver_to_gold.features_validation import (
     publish_phase6_feature_tables,
     validate_phase6_source_contract,
 )
-from napa_pipeline.silver_to_gold.io import get_gold_target_table_fqn, get_operations_table_fqn
+from napa_pipeline.silver_to_gold.io import get_gold_target_table_fqn
 from napa_pipeline.silver_to_gold.operations import (
     RECONCILIATION_RESULTS_TABLE,
     TABLE_RUNS_TABLE,
@@ -37,6 +37,7 @@ from napa_pipeline.silver_to_gold.operations import (
     build_table_run_start_record,
     complete_pipeline_run,
     create_pipeline_context,
+    get_operations_table_fqn,
     utc_now,
 )
 from napa_pipeline.silver_to_gold.workflow import (
