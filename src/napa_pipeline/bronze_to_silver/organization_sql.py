@@ -657,11 +657,11 @@ def _build_club_memberships_sql_plan(
     club_id_expr = _source_nullif_string_expr(source_columns, ["club_id"])
     membership_start_date_expr = _source_string_expr(
         source_columns,
-        ["membership_start_date", "joined_date", "start_date"],
+        ["membership_start_date", "start_date"],
     )
     membership_end_date_expr = _source_string_expr(
         source_columns,
-        ["membership_end_date", "left_date", "end_date"],
+        ["membership_end_date", "end_date"],
     )
     metadata_sql = _metadata_sql(
         context,

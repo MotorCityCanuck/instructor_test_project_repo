@@ -290,6 +290,33 @@ def test_build_club_memberships_derives_current_flag_and_overlap_warning() -> No
     assert current_rows[0]["club_membership_id"] == "club-mem-2"
 
 
+def test_build_club_memberships_maps_source_native_end_date_and_keeps_open_ended_memberships_active() -> None:
+    config, context, monthly_batches_rows, _, players_rows, clubs_rows, _ = _parents()
+
+    result = build_club_memberships(
+        [
+            {
+                "id": "club-mem-open-ended",
+                "player_id": "player-1",
+                "club_id": "club-1",
+                "start_date": "2026-01-01",
+                "end_date": None,
+            }
+        ],
+        config,
+        context,
+        players_rows=players_rows,
+        clubs_rows=clubs_rows,
+        monthly_batches_rows=monthly_batches_rows,
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    row = result.accepted_rows[0]
+    assert str(row["membership_start_date"]) == "2026-01-01"
+    assert row["membership_end_date"] is None
+    assert row["current_membership_flag"] is True
+
+
 def test_build_club_memberships_rejects_orphan_player() -> None:
     config, context, monthly_batches_rows, _, _, clubs_rows, _ = _parents()
 

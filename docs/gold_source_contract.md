@@ -240,6 +240,13 @@ Gold uses:
 - Club affiliation and development context.
 - Membership overlap warning signal.
 
+Current-generation export behavior:
+
+- `membership_end_date` maps from source/export `end_date`.
+- Null `membership_end_date` is expected for active or open-ended club memberships.
+- Current 5K, 50K, and 250K release patterns may produce 100% null `end_date` when no club membership churn is modeled.
+- If downstream analytics require a closed period, derive an as-of end date downstream without overwriting the source-derived null.
+
 ### `teams`
 
 Primary key: `team_id`.
