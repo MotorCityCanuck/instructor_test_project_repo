@@ -321,17 +321,99 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 
 ### `team_performance_features`
 
-- Status: `planned`
-- Phase: `7+`
+- Status: `implemented`
+- Phase: `7`
 - Intended purpose: team-level feature table
 - Expected Silver / Gold dependencies:
   - `resolved_match_teams`
-  - `match_games`
+  - `competition_match_sides`
   - `teams`
-- Gold columns:
-  - pending
+-  - `team_memberships`
+- Current contract notes:
+  - current implementation publishes one row per `team_id` and evidence window
+  - four windows are currently emitted: `career`, `trailing_365`, `trailing_180`, `trailing_90`
+  - only resolved historical match sides contribute observed performance, but all Silver teams remain visible in the table so downstream scorecards can distinguish `NONE` from `LIMITED`
+- Current implemented columns:
+  - `team_id`
+  - `evidence_window`
+  - `analysis_as_of_date`
+  - `team_category`
+  - `country_code`
+  - `team_status`
+  - `active_flag`
+  - `formation_date`
+  - `dissolution_date`
+  - `candidate_attribution_allowed_flag`
+  - `match_count`
+  - `win_count`
+  - `loss_count`
+  - `win_pct`
+  - `shrinkage_adjusted_win_rate`
+  - `game_win_pct`
+  - `avg_point_share`
+  - `avg_point_differential`
+  - `avg_expected_win_probability`
+  - `performance_above_expectation`
+  - `strength_of_schedule`
+  - `recent_form_win_pct`
+  - `close_match_win_pct`
+  - `deciding_game_win_pct`
+  - `point_share_stddev`
+  - `worst_quartile_point_share`
+  - `consistency_score`
+  - `partnership_duration_days`
+  - `membership_overlap_warning_flag`
+  - `evidence_reliability_score`
+  - `feature_evidence_status`
 - Unresolved items:
-  - depends on acceptable confidence in persistent team resolution
+  - current strength-of-schedule still uses match-side opponent pre-match team rating as the proxy
+  - current continuity is an observed match-history duration rather than a separate instructor-approved roster-stability score
+
+### `partnership_effectiveness`
+
+- Status: `implemented`
+- Phase: `7`
+- Intended purpose: partnership-level performance and continuity table spanning both persistent teams and unresolved historical pairs
+- Expected Silver / Gold dependencies:
+  - `resolved_match_teams`
+  - `competition_match_sides`
+  - `player_current_ratings`
+  - `player_performance_features`
+  - `teams`
+- Current contract notes:
+  - current implementation publishes one row per `partnership_key`, where `partnership_key = coalesce(team_id, canonical_player_pair_key)`
+  - unresolved historical pairs remain visible for analytics with `team_id = null`, but they are explicitly marked as not candidate-attributable
+  - partnership synergy is currently a transparent proxy based on shared observed win rate versus average individual player career win rate
+- Current implemented columns:
+  - `partnership_key`
+  - `team_id`
+  - `analysis_as_of_date`
+  - `canonical_player_pair_key`
+  - `player_one_id`
+  - `player_two_id`
+  - `team_category`
+  - `country_code`
+  - `candidate_attribution_allowed_flag`
+  - `unresolved_partnership_flag`
+  - `shared_match_count`
+  - `shared_win_count`
+  - `shared_loss_count`
+  - `shared_win_pct`
+  - `recent_shared_match_count`
+  - `recent_shared_win_pct`
+  - `team_adjusted_win_rate`
+  - `team_performance_above_expectation`
+  - `combined_player_current_rating`
+  - `average_player_win_pct`
+  - `average_player_recent_win_pct`
+  - `synergy_proxy`
+  - `partnership_duration_days`
+  - `days_since_last_shared_match`
+  - `evidence_reliability_score`
+  - `feature_evidence_status`
+- Unresolved items:
+  - synergy remains a bounded analytical proxy, not an instructor-approved final selection component
+  - unresolved pairs are intentionally visible for analysis, so downstream scorecards must continue filtering on `candidate_attribution_allowed_flag`
 
 ### `player_development_features`
 
