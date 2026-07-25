@@ -255,6 +255,9 @@ def test_build_competition_match_sides_sql_references_required_sources_and_as_of
     assert "DATE('2026-06-30')" in sql
     assert "canonical_player_pair_key" in sql
     assert "opponent_pre_match_team_rating" in sql
+    assert "COUNT(DISTINCT ms.team_number) OVER" not in sql
+    assert "COUNT(DISTINCT team_number) OVER" not in sql
+    assert "collect_list(ms.player_ids) OVER" not in sql
 
 
 def test_build_competition_player_matches_sql_reads_phase3_target() -> None:

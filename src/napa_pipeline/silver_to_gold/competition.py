@@ -373,22 +373,33 @@ match_sides AS (
     INNER JOIN side_players AS sp
       ON CAST(mt.match_team_id AS STRING) = sp.match_team_id
 ),
-side_quality AS (
+side_stats AS (
     SELECT
-        ms.*,
-        COUNT(*) OVER (PARTITION BY ms.match_id) AS side_row_count,
-        COUNT(DISTINCT ms.team_number) OVER (PARTITION BY ms.match_id) AS distinct_team_number_count,
-        array_distinct(flatten(collect_list(ms.player_ids) OVER (PARTITION BY ms.match_id))) AS match_player_ids
-    FROM match_sides AS ms
+        match_id,
+        COUNT(*) AS side_row_count,
+        COUNT(DISTINCT team_number) AS distinct_team_number_count,
+        array_distinct(flatten(collect_list(player_ids))) AS match_player_ids
+    FROM match_sides
+    GROUP BY match_id
 ),
 valid_sides AS (
     SELECT
-        *
-    FROM side_quality
-    WHERE side_row_count = 2
-      AND distinct_team_number_count = 2
-      AND player_count = 2
-      AND size(match_player_ids) = 4
+        ms.match_id,
+        ms.match_team_id,
+        ms.team_id,
+        ms.team_number,
+        ms.pre_match_team_rating,
+        ms.side_cardinality_warning_flag,
+        ms.player_ids,
+        ms.player_count,
+        ms.membership_history_warning_flag
+    FROM match_sides AS ms
+    INNER JOIN side_stats AS ss
+      ON ms.match_id = ss.match_id
+    WHERE ss.side_row_count = 2
+      AND ss.distinct_team_number_count = 2
+      AND ms.player_count = 2
+      AND size(ss.match_player_ids) = 4
 ),
 game_base AS (
     SELECT
