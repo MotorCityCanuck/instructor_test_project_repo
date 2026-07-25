@@ -85,7 +85,6 @@ Columns:
 - `region_name`
 - `province_state`
 - `country_code`
-- `active_flag`
 - common metadata columns
 
 Gold uses:
@@ -215,7 +214,6 @@ Columns:
 - `country_code`
 - `open_date`
 - `close_date`
-- `active_flag`
 - common metadata columns
 
 Gold uses:

@@ -88,6 +88,7 @@ def test_build_reference_sql_plan_for_regions_contains_country_normalization() -
     assert "REGION_003" in plan.rejected_sql
     assert "'CANADA'" in plan.accepted_sql
     assert "'CAN'" in plan.accepted_sql
+    assert "active_flag" not in plan.accepted_sql
 
 
 def test_execute_single_table_sql_publishes_reference_outputs(monkeypatch) -> None:

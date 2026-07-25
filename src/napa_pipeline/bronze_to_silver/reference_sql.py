@@ -350,7 +350,6 @@ def _build_regions_sql_plan(
     region_name_expr = _source_nullif_string_expr(source_columns, ["region_name", "name"])
     country_input_expr = _source_upper_string_expr(source_columns, ["country_code", "country", "country_name"])
     province_state_expr = _source_upper_string_expr(source_columns, ["province_state", "province", "state"])
-    status_input_expr = _source_upper_string_expr(source_columns, ["active_flag", "status"])
     country_expr = _domain_case_expression(
         "country_input",
         config.data["domains"]["country_code"],
@@ -370,7 +369,7 @@ WITH normalized_source AS (
         {region_name_expr} AS region_name,
         {country_input_expr} AS country_input,
         {province_state_expr} AS province_state,
-        {status_input_expr} AS status_input
+        CAST(NULL AS STRING) AS status_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -388,11 +387,6 @@ typed_source AS (
         region_name,
         country_input,
         province_state,
-        CASE
-            WHEN status_input IN ('TRUE', 'T', 'YES', 'Y', '1', 'ACTIVE') THEN true
-            WHEN status_input IN ('FALSE', 'F', 'NO', 'N', '0', 'INACTIVE') THEN false
-            ELSE NULL
-        END AS active_flag,
         {country_expr} AS country_code
     FROM deduped_source
 ),
@@ -449,11 +443,6 @@ invalid_rows AS (
                 region_name,
                 country_input,
                 province_state,
-                CASE
-                    WHEN status_input IN ('TRUE', 'T', 'YES', 'Y', '1', 'ACTIVE') THEN true
-                    WHEN status_input IN ('FALSE', 'F', 'NO', 'N', '0', 'INACTIVE') THEN false
-                    ELSE NULL
-                END AS active_flag,
                 status_input,
                 {country_expr} AS country_code
             FROM deduped_source
@@ -470,7 +459,6 @@ valid_rows AS (
         region_name,
         province_state,
         country_code,
-        active_flag
     FROM typed_source
     WHERE region_id IS NOT NULL
       AND region_id <> ''
@@ -487,15 +475,13 @@ ranked_rows AS (
                     CASE WHEN region_name IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN province_state IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN country_code IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN active_flag IS NOT NULL THEN 1 ELSE 0 END
                 ) DESC,
                 sha2(
                     concat_ws('|',
                         coalesce(region_id, '<NULL>'),
                         coalesce(region_name, '<NULL>'),
                         coalesce(country_code, '<NULL>'),
-                        coalesce(province_state, '<NULL>'),
-                        coalesce(cast(active_flag as string), '<NULL>')
+                        coalesce(province_state, '<NULL>')
                     ),
                     256
                 ) ASC
@@ -512,7 +498,6 @@ SELECT
     region_name,
     province_state,
     country_code,
-    active_flag,
     {metadata_sql}
 FROM ranked_rows
 WHERE duplicate_rank = 1
@@ -557,8 +542,7 @@ SELECT
             'region_id', region_id,
             'region_name', region_name,
             'province_state', province_state,
-            'country_code', country_code,
-            'active_flag', active_flag
+            'country_code', country_code
         )
     ) AS source_record_json,
     sha2(
@@ -567,8 +551,7 @@ SELECT
                 'region_id', region_id,
                 'region_name', region_name,
                 'province_state', province_state,
-                'country_code', country_code,
-                'active_flag', active_flag
+                'country_code', country_code
             )
         ),
         256
@@ -588,7 +571,7 @@ WITH normalized_source AS (
         {region_name_expr} AS region_name,
         {country_input_expr} AS country_input,
         {province_state_expr} AS province_state,
-        {status_input_expr} AS status_input
+        CAST(NULL AS STRING) AS status_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -610,7 +593,7 @@ WITH normalized_source AS (
         {region_name_expr} AS region_name,
         {country_input_expr} AS country_input,
         {province_state_expr} AS province_state,
-        {status_input_expr} AS status_input
+        CAST(NULL AS STRING) AS status_input
     FROM {source_table_fqn}
 ),
 valid_rows AS (
@@ -618,11 +601,6 @@ valid_rows AS (
         region_id,
         region_name,
         province_state,
-        CASE
-            WHEN status_input IN ('TRUE', 'T', 'YES', 'Y', '1', 'ACTIVE') THEN true
-            WHEN status_input IN ('FALSE', 'F', 'NO', 'N', '0', 'INACTIVE') THEN false
-            ELSE NULL
-        END AS active_flag,
         {country_expr} AS country_code
     FROM normalized_source
     WHERE region_id IS NOT NULL
@@ -640,15 +618,13 @@ ranked_rows AS (
                     CASE WHEN region_name IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN province_state IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN country_code IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN active_flag IS NOT NULL THEN 1 ELSE 0 END
                 ) DESC,
                 sha2(
                     concat_ws('|',
                         coalesce(region_id, '<NULL>'),
                         coalesce(region_name, '<NULL>'),
                         coalesce(country_code, '<NULL>'),
-                        coalesce(province_state, '<NULL>'),
-                        coalesce(cast(active_flag as string), '<NULL>')
+                        coalesce(province_state, '<NULL>')
                     ),
                     256
                 ) ASC

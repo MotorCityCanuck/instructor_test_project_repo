@@ -97,6 +97,7 @@ def test_build_clubs_accepts_valid_row_and_derives_region_key() -> None:
     assert row["club_name"] == "Ontario East Club"
     assert row["region_sk"] == regions_rows[0]["region_sk"]
     assert row["country_code"] == "CAN"
+    assert "active_flag" not in row
 
 
 def test_build_clubs_rejects_orphan_region() -> None:
@@ -139,7 +140,6 @@ def test_build_teams_normalizes_type_and_status_and_derives_age() -> None:
     assert row["team_identity_type"] == "COMPETITIVE"
     assert row["team_status"] == "ACTIVE"
     assert row["country_code"] == "CAN"
-    assert row["active_flag"] is True
     assert row["team_age_days"] == 180
 
 

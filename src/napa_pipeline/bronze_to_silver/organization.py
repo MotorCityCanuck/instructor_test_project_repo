@@ -480,7 +480,6 @@ def _build_club_candidate(
         "country_code": country_code,
         "open_date": open_date,
         "close_date": close_date,
-        "active_flag": _derive_active_flag(normalized),
     }
     candidate.update(
         build_metadata_payload(

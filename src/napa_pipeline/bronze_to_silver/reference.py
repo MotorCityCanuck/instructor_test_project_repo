@@ -324,15 +324,12 @@ def _build_region_candidate(
         or normalized.get("state"),
         uppercase=True,
     )
-    active_flag = _derive_active_flag(normalized)
-
     candidate = {
         "region_id": region_id,
         "region_sk": build_record_hash({"region_id": region_id}, ["region_id"]),
         "region_name": region_name,
         "province_state": province_state,
         "country_code": country_code,
-        "active_flag": active_flag,
     }
     candidate.update(
         build_metadata_payload(

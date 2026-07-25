@@ -1252,13 +1252,11 @@ Referenced by:
 | `region_name` | Display name |
 | `province_state` | Province or state |
 | `country_code` | `CAN` or `USA` |
-| `active_flag` | Active indicator where supported |
 
 ## Derived Columns
 
 - `region_sk`;
 - standardized country fields;
-- `active_flag` where supported by source status or dates.
 
 ## Validation Rules
 
@@ -1341,7 +1339,6 @@ region_id → regions.region_id
 | `region_id` | Geographic region |
 | `region_sk` | Conformed region key |
 | `country_code` | Country where present |
-| `active_flag` | Active status where supported |
 
 ## Derived Columns
 

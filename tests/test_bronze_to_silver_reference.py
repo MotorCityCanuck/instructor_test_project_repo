@@ -105,7 +105,7 @@ def test_build_regions_accepts_valid_row_and_normalizes_country() -> None:
     assert row["region_name"] == "Ontario West"
     assert row["province_state"] == "ON"
     assert row["country_code"] == "CAN"
-    assert row["active_flag"] is True
+    assert "active_flag" not in row
     assert row["_source_table"] == "regions"
 
 

@@ -60,7 +60,6 @@ def _build_clubs_sql_plan(
     country_input_expr = _source_upper_string_expr(source_columns, ["country_code", "country"])
     open_date_expr = _source_string_expr(source_columns, ["open_date", "start_date", "formation_date", "founding_date"])
     close_date_expr = _source_string_expr(source_columns, ["close_date", "end_date", "dissolution_date"])
-    status_input_expr = _source_upper_string_expr(source_columns, ["active_flag", "status"])
     country_expr = _domain_case_expression("country_input", config.data["domains"]["country_code"])
     metadata_sql = _metadata_sql(
         context,
@@ -80,7 +79,7 @@ WITH normalized_source AS (
         {country_input_expr} AS country_input,
         {open_date_expr} AS open_date_raw,
         {close_date_expr} AS close_date_raw,
-        {status_input_expr} AS status_input
+        CAST(NULL AS STRING) AS status_input
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -172,12 +171,7 @@ valid_rows AS (
         region_sk,
         country_code,
         open_date,
-        close_date,
-        CASE
-            WHEN status_input IN ('TRUE', 'T', 'YES', 'Y', '1', 'ACTIVE') THEN true
-            WHEN status_input IN ('FALSE', 'F', 'NO', 'N', '0', 'INACTIVE') THEN false
-            ELSE NULL
-        END AS active_flag
+        close_date
     FROM validated_source
     WHERE club_id IS NOT NULL
       AND club_name IS NOT NULL
@@ -229,7 +223,6 @@ SELECT
     country_code,
     open_date,
     close_date,
-    active_flag,
     {metadata_sql}
 FROM ranked_rows
 WHERE duplicate_rank = 1
@@ -307,7 +300,7 @@ WHERE duplicate_rank > 1
                 f"{country_input_expr} AS country_input",
                 f"{open_date_expr} AS open_date_raw",
                 f"{close_date_expr} AS close_date_raw",
-                f"{status_input_expr} AS status_input",
+                "CAST(NULL AS STRING) AS status_input",
             ],
         ),
         business_key_duplicate_count_sql=f"""
