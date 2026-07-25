@@ -165,6 +165,13 @@ Gold uses:
 - Registration timing and status.
 - Current registration eligibility signal, if approved by instructor.
 
+Current-generation source semantics:
+
+- `player_registrations` is an intake event table, not a slowly changing interval table.
+- `effective_start_date` is derived from `registration_month` as the first day of that month when needed for Silver period semantics.
+- `effective_end_date` is intentionally unavailable from the source/export contract and remains null by design for current active registration events.
+- If downstream interval semantics are required, derive an end date from lifecycle or status logic downstream rather than inferring it from the intake event itself.
+
 ### `player_assessment_history`
 
 Primary key: `assessment_id`.

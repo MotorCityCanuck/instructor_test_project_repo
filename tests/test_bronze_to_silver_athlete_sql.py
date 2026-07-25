@@ -172,6 +172,7 @@ def test_build_athlete_sql_plan_for_player_registrations_uses_actual_bronze_colu
     assert "CAST(registration_month AS STRING)" in combined_sql
     assert "CAST(registration_source AS STRING)" in combined_sql
     assert "concat(TRIM(CAST(registration_month AS STRING)), '-01')" in combined_sql
+    assert "CAST(end_date AS STRING)" not in combined_sql
 
 
 def test_build_athlete_sql_plan_for_player_assessment_history_contains_expected_rules() -> None:

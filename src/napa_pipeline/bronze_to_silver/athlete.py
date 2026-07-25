@@ -557,7 +557,7 @@ def _build_registration_candidate(
         return None, start_reject
 
     effective_end_date, end_reject = _safe_optional_date(
-        normalized.get("effective_end_date") or normalized.get("end_date"),
+        normalized.get("effective_end_date"),
         context=context,
         source_table="player_registrations",
         target_table="player_registrations",

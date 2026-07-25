@@ -218,6 +218,8 @@ def test_build_player_registrations_maps_registration_month_to_effective_start_d
     row = result.accepted_rows[0]
     assert str(row["effective_start_date"]) == "2026-04-01"
     assert row["effective_start_date"] is not None
+    assert row["effective_end_date"] is None
+    assert row["current_registration_flag"] is True
 
 
 def test_build_player_registrations_rejects_invalid_date_range() -> None:
