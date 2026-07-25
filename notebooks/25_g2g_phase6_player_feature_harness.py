@@ -37,7 +37,6 @@ from napa_pipeline.silver_to_gold.operations import (
     build_table_run_start_record,
     complete_pipeline_run,
     create_pipeline_context,
-    get_operations_table_fqn,
     utc_now,
 )
 from napa_pipeline.silver_to_gold.workflow import (
@@ -112,13 +111,19 @@ def main() -> None:
         validated_columns = validate_phase6_source_contract(spark, environment)
         feature_registry = get_player_feature_registry()
         evidence_windows_count = 4
+        table_runs_fqn = (
+            f"{pipeline_context.operations_schema_fqn}.{TABLE_RUNS_TABLE}"
+        )
+        reconciliation_results_fqn = (
+            f"{pipeline_context.operations_schema_fqn}.{RECONCILIATION_RESULTS_TABLE}"
+        )
 
         for table_name in PHASE6_TARGET_TABLES:
             started_ts = utc_now()
             table_run_started_ts_by_target[table_name] = started_ts
             append_records(
                 spark,
-                get_operations_table_fqn(pipeline_context, TABLE_RUNS_TABLE),
+                table_runs_fqn,
                 [
                     build_table_run_start_record(
                         pipeline_context,
@@ -170,7 +175,7 @@ def main() -> None:
 
         append_records(
             spark,
-            get_operations_table_fqn(pipeline_context, TABLE_RUNS_TABLE),
+            table_runs_fqn,
             [
                 build_table_run_end_record(
                     pipeline_context,
@@ -188,7 +193,7 @@ def main() -> None:
         )
         append_records(
             spark,
-            get_operations_table_fqn(pipeline_context, RECONCILIATION_RESULTS_TABLE),
+            reconciliation_results_fqn,
             [
                 build_reconciliation_record(
                     pipeline_context,
@@ -287,7 +292,7 @@ def main() -> None:
             if failed_records:
                 append_records(
                     spark,
-                    get_operations_table_fqn(pipeline_context, TABLE_RUNS_TABLE),
+                    f"{pipeline_context.operations_schema_fqn}.{TABLE_RUNS_TABLE}",
                     failed_records,
                 )
         if pipeline_context is not None:
