@@ -167,12 +167,16 @@ def test_build_athlete_sql_plan_for_player_registrations_uses_actual_bronze_colu
     assert "COALESCE(effective_start_date, start_date)" not in combined_sql
     assert "COALESCE(effective_end_date, end_date)" not in combined_sql
     assert "COALESCE(registration_status, status)" not in combined_sql
+    assert "CAST(status AS STRING)" not in combined_sql
     assert "CAST(id AS STRING)" in combined_sql
     assert "CAST(batch_id AS STRING)" in combined_sql
     assert "CAST(registration_month AS STRING)" in combined_sql
     assert "CAST(registration_source AS STRING)" in combined_sql
     assert "concat(TRIM(CAST(registration_month AS STRING)), '-01')" in combined_sql
     assert "CAST(end_date AS STRING)" not in combined_sql
+    assert "DATEDIFF(as_of_date, effective_start_date)" in combined_sql
+    assert "THEN 'ACTIVE'" in combined_sql
+    assert "ELSE 'INACTIVE'" in combined_sql
 
 
 def test_build_athlete_sql_plan_for_player_assessment_history_contains_expected_rules() -> None:

@@ -573,10 +573,6 @@ def _build_player_registrations_sql_plan(
         source_columns,
         ["registration_type", "registration_source"],
     )
-    registration_status_expr = _source_upper_string_expr(
-        source_columns,
-        ["registration_status", "status"],
-    )
     metadata_sql = _metadata_sql(
         context,
         source_table="player_registrations",
@@ -601,8 +597,7 @@ normalized_source AS (
         {registration_date_expr} AS registration_date_raw,
         {effective_start_date_expr} AS effective_start_date_raw,
         {effective_end_date_expr} AS effective_end_date_raw,
-        {registration_type_expr} AS registration_type,
-        {registration_status_expr} AS registration_status
+        {registration_type_expr} AS registration_type
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -679,8 +674,7 @@ invalid_rows AS (
                 'registration_date_raw', registration_date_raw,
                 'effective_start_date_raw', effective_start_date_raw,
                 'effective_end_date_raw', effective_end_date_raw,
-                'registration_type', registration_type,
-                'registration_status', registration_status
+                'registration_type', registration_type
             )
         ) AS source_record_json
     FROM validated_source
@@ -702,7 +696,11 @@ valid_rows AS (
         batch_sk,
         registration_date,
         registration_type,
-        registration_status,
+        CASE
+            WHEN COALESCE(as_of_date, registration_date) IS NULL THEN NULL
+            WHEN effective_end_date IS NULL OR effective_end_date >= COALESCE(as_of_date, registration_date) THEN 'ACTIVE'
+            ELSE 'INACTIVE'
+        END AS registration_status,
         effective_start_date,
         effective_end_date,
         CASE
@@ -712,8 +710,8 @@ valid_rows AS (
             ELSE true
         END AS current_registration_flag,
         CASE
-            WHEN effective_start_date IS NOT NULL AND effective_end_date IS NOT NULL
-                THEN DATEDIFF(effective_end_date, effective_start_date)
+            WHEN effective_start_date IS NOT NULL AND as_of_date IS NOT NULL
+                THEN DATEDIFF(as_of_date, effective_start_date)
             ELSE NULL
         END AS registration_duration_days
     FROM validated_source
@@ -877,8 +875,7 @@ WITH normalized_source AS (
         {registration_date_expr} AS registration_date_raw,
         {effective_start_date_expr} AS effective_start_date_raw,
         {effective_end_date_expr} AS effective_end_date_raw,
-        {registration_type_expr} AS registration_type,
-        {registration_status_expr} AS registration_status
+        {registration_type_expr} AS registration_type
     FROM {source_table_fqn}
 ),
 deduped_source AS (

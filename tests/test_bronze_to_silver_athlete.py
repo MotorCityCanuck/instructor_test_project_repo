@@ -180,9 +180,11 @@ def test_build_player_registrations_derives_current_flag_and_sequence() -> None:
     ordered = sorted(result.accepted_rows, key=lambda row: row["registration_sequence"])
     assert ordered[0]["registration_id"] == "reg-1"
     assert ordered[0]["current_registration_flag"] is False
+    assert ordered[0]["registration_status"] == "INACTIVE"
     assert ordered[0]["registration_sequence"] == 1
     assert ordered[1]["registration_id"] == "reg-2"
     assert ordered[1]["current_registration_flag"] is True
+    assert ordered[1]["registration_status"] == "ACTIVE"
     assert ordered[1]["registration_sequence"] == 2
     assert ordered[1]["player_sk"] == players.accepted_rows[0]["player_sk"]
     assert ordered[1]["batch_sk"] == monthly_batches_rows[0]["batch_sk"]
@@ -220,6 +222,8 @@ def test_build_player_registrations_maps_registration_month_to_effective_start_d
     assert row["effective_start_date"] is not None
     assert row["effective_end_date"] is None
     assert row["current_registration_flag"] is True
+    assert row["registration_status"] == "ACTIVE"
+    assert row["registration_duration_days"] == 90
 
 
 def test_build_player_registrations_rejects_invalid_date_range() -> None:

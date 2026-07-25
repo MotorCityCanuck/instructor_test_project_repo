@@ -609,16 +609,16 @@ def _build_registration_candidate(
             normalized.get("registration_type"),
             uppercase=True,
         ),
-        "registration_status": standardize_string(
-            normalized.get("registration_status") or normalized.get("status"),
-            uppercase=True,
+        "registration_status": _derive_registration_status(
+            effective_end_date=effective_end_date,
+            as_of_date=as_of_date or registration_date,
         ),
         "effective_start_date": effective_start_date,
         "effective_end_date": effective_end_date,
         "current_registration_flag": current_registration_flag,
         "registration_duration_days": _duration_days(
             effective_start_date,
-            effective_end_date,
+            as_of_date,
         ),
         "registration_sequence": None,
     }
@@ -872,6 +872,18 @@ def _first_day_of_month_value(value: Any) -> Any:
     if re.fullmatch(r"\d{4}-\d{2}", text):
         return f"{text}-01"
     return value
+
+
+def _derive_registration_status(
+    *,
+    effective_end_date: date | None,
+    as_of_date: date | None,
+) -> str | None:
+    if as_of_date is None:
+        return None
+    if effective_end_date is None or effective_end_date >= as_of_date:
+        return "ACTIVE"
+    return "INACTIVE"
 
 
 def _safe_optional_float(

@@ -168,8 +168,11 @@ Gold uses:
 Current-generation source semantics:
 
 - `player_registrations` is an intake event table, not a slowly changing interval table.
+- `registration_source` is the source field that exists and should be treated as provenance/type context, not as a registration lifecycle status.
 - `effective_start_date` is derived from `registration_month` as the first day of that month when needed for Silver period semantics.
 - `effective_end_date` is intentionally unavailable from the source/export contract and remains null by design for current active registration events.
+- `registration_status` is a downstream-derived as-of field. In the current Silver logic, rows are `ACTIVE` when `effective_end_date` is null or on/after the release snapshot date; otherwise they are `INACTIVE`.
+- `registration_duration_days` is a downstream-derived as-of metric representing the age of the registration record at the release snapshot date, not active-player tenure.
 - If downstream interval semantics are required, derive an end date from lifecycle or status logic downstream rather than inferring it from the intake event itself.
 
 ### `player_assessment_history`
