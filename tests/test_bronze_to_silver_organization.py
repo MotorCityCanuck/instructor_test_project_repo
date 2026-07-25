@@ -157,6 +157,7 @@ def test_build_teams_normalizes_type_and_status_and_derives_age() -> None:
 
     assert result.reconciliation.status == "PASSED"
     row = result.accepted_rows[0]
+    assert "team_name" not in row
     assert row["team_category"] == "WOMENS"
     assert row["team_identity_type"] == "COMPETITIVE"
     assert row["team_status"] == "ACTIVE"
@@ -204,6 +205,7 @@ def test_build_teams_supports_legacy_team_type_as_category_fallback() -> None:
 
     assert result.reconciliation.status == "PASSED"
     row = result.accepted_rows[0]
+    assert "team_name" not in row
     assert row["team_category"] == "MIXED"
     assert row["team_identity_type"] is None
 
@@ -228,6 +230,7 @@ def test_build_teams_preserves_ad_hoc_team_identity_type() -> None:
 
     assert result.reconciliation.status == "PASSED"
     row = result.accepted_rows[0]
+    assert "team_name" not in row
     assert row["team_category"] == "OPEN"
     assert row["team_identity_type"] == "AD_HOC"
 

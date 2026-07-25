@@ -127,7 +127,6 @@ def build_vw_team_rosters(
             {
                 "team_id": team_id,
                 "team_sk": team_row["team_sk"],
-                "team_name": team_row.get("team_name"),
                 "team_category": team_row.get("team_category"),
                 "team_status": team_row.get("team_status"),
                 "current_roster_count": roster_count,
@@ -192,7 +191,6 @@ roster_players AS (
 SELECT
     t.team_id,
     t.team_sk,
-    t.team_name,
     t.team_category,
     t.team_status,
     COALESCE(rc.current_roster_count, 0) AS current_roster_count,
@@ -244,8 +242,6 @@ def build_vw_match_results(
         batch_row = batches_index.get(str(match_row["batch_id"])) if match_row.get("batch_id") else None
         side_one = sides[0] if len(sides) > 0 else None
         side_two = sides[1] if len(sides) > 1 else None
-        team_one = teams_index.get(str(side_one["team_id"])) if side_one and side_one.get("team_id") else None
-        team_two = teams_index.get(str(side_two["team_id"])) if side_two and side_two.get("team_id") else None
         results.append(
             {
                 "match_id": match_id,
@@ -255,9 +251,7 @@ def build_vw_match_results(
                 "match_status": match_row.get("match_status"),
                 "winning_team_number": match_row.get("winning_team_number"),
                 "team_one_id": side_one.get("team_id") if side_one else None,
-                "team_one_name": team_one.get("team_name") if team_one else None,
                 "team_two_id": side_two.get("team_id") if side_two else None,
-                "team_two_name": team_two.get("team_name") if team_two else None,
                 "team_one_total_score": aggregate_scores["team_one_total_score"],
                 "team_two_total_score": aggregate_scores["team_two_total_score"],
                 "game_count": len(games),
@@ -282,21 +276,15 @@ def build_vw_match_results_sql(environment: ReleaseEnvironment) -> str:
 WITH side_one AS (
     SELECT
         mt.match_id,
-        mt.team_id AS team_one_id,
-        t.team_name AS team_one_name
+        mt.team_id AS team_one_id
     FROM {match_teams_fqn} mt
-    LEFT JOIN {teams_fqn} t
-        ON mt.team_id = t.team_id
     WHERE mt.team_number = 1
 ),
 side_two AS (
     SELECT
         mt.match_id,
-        mt.team_id AS team_two_id,
-        t.team_name AS team_two_name
+        mt.team_id AS team_two_id
     FROM {match_teams_fqn} mt
-    LEFT JOIN {teams_fqn} t
-        ON mt.team_id = t.team_id
     WHERE mt.team_number = 2
 ),
 game_scores AS (
@@ -316,9 +304,7 @@ SELECT
     m.match_status,
     m.winning_team_number,
     s1.team_one_id,
-    s1.team_one_name,
     s2.team_two_id,
-    s2.team_two_name,
     COALESCE(gs.team_one_total_score, 0) AS team_one_total_score,
     COALESCE(gs.team_two_total_score, 0) AS team_two_total_score,
     COALESCE(gs.game_count, 0) AS game_count,
@@ -369,14 +355,12 @@ def build_vw_player_match_history(
         match_team_row = match_teams_index[str(row["match_team_id"])]
         match_row = matches_index[str(row["match_id"])]
         player_row = players_index[str(row["player_id"])]
-        team_row = teams_index.get(str(row["team_id"])) if row.get("team_id") else None
         region_row = regions_index.get(str(match_row["region_id"])) if match_row.get("region_id") else None
         batch_row = batches_index.get(str(match_row["batch_id"])) if match_row.get("batch_id") else None
         opponent_team_id = _resolve_opponent_team_id(
             sides_by_match.get(str(row["match_id"]), []),
             current_match_team_id=str(row["match_team_id"]),
         )
-        opponent_team = teams_index.get(opponent_team_id) if opponent_team_id else None
         results.append(
             {
                 "player_id": row["player_id"],
@@ -387,9 +371,7 @@ def build_vw_player_match_history(
                 "match_date": match_row.get("match_date"),
                 "competition_category": match_row.get("competition_category"),
                 "team_id": row.get("team_id"),
-                "team_name": team_row.get("team_name") if team_row else None,
                 "opponent_team_id": opponent_team_id,
-                "opponent_team_name": opponent_team.get("team_name") if opponent_team else None,
                 "result": _resolve_player_match_result(match_row.get("winning_team_number"), match_team_row.get("team_number")),
                 "player_rating_at_match": row.get("player_rating_at_match"),
                 "region_id": match_row.get("region_id"),
@@ -407,7 +389,6 @@ def build_vw_player_match_history_sql(environment: ReleaseEnvironment) -> str:
     match_teams_fqn = _silver_table_fqn(environment, "match_teams")
     matches_fqn = _silver_table_fqn(environment, "matches")
     players_fqn = _silver_table_fqn(environment, "players")
-    teams_fqn = _silver_table_fqn(environment, "teams")
     regions_fqn = _silver_table_fqn(environment, "regions")
     batches_fqn = _silver_table_fqn(environment, "monthly_batches")
     return f"""
@@ -429,9 +410,7 @@ SELECT
     m.match_date,
     m.competition_category,
     mtp.team_id,
-    t.team_name,
     ot.opponent_team_id,
-    ot_team.team_name AS opponent_team_name,
     CASE
         WHEN m.winning_team_number IS NULL OR mt.team_number IS NULL THEN NULL
         WHEN m.winning_team_number = mt.team_number THEN 'WIN'
@@ -449,12 +428,8 @@ INNER JOIN {matches_fqn} m
     ON mtp.match_id = m.match_id
 LEFT JOIN {players_fqn} p
     ON mtp.player_id = p.player_id
-LEFT JOIN {teams_fqn} t
-    ON mtp.team_id = t.team_id
 LEFT JOIN opponent_teams ot
     ON mtp.match_team_id = ot.match_team_id
-LEFT JOIN {teams_fqn} ot_team
-    ON ot.opponent_team_id = ot_team.team_id
 LEFT JOIN {regions_fqn} r
     ON m.region_id = r.region_id
 LEFT JOIN {batches_fqn} b

@@ -322,7 +322,6 @@ def _build_teams_sql_plan(
 ) -> SqlReferenceBuildPlan:
     monthly_batches_fqn = f"{silver_schema_fqn}.monthly_batches"
     team_id_expr = _source_nullif_string_expr(source_columns, ["team_id", "id"])
-    team_name_expr = _source_nullif_string_expr(source_columns, ["team_name", "name"])
     team_division_input_expr = _source_upper_string_expr(source_columns, ["team_division"])
     team_category_input_expr = _source_upper_string_expr(source_columns, ["team_category", "category"])
     team_type_input_expr = _source_upper_string_expr(source_columns, ["team_type"])
@@ -342,7 +341,7 @@ def _build_teams_sql_plan(
         source_table="teams",
         record_hash_expr=(
             "sha2(concat_ws('|', coalesce(team_id, '<NULL>'), "
-            "coalesce(team_name, '<NULL>'), coalesce(team_category, '<NULL>'), "
+            "coalesce(team_category, '<NULL>'), "
             "coalesce(team_identity_type, '<NULL>'), "
             "coalesce(country_code, '<NULL>')), 256)"
         ),
@@ -355,7 +354,6 @@ WITH release_context AS (
 normalized_source AS (
     SELECT
         {team_id_expr} AS team_id,
-        {team_name_expr} AS team_name,
         {team_division_input_expr} AS team_division_input,
         {team_category_input_expr} AS team_category_input,
         {team_type_input_expr} AS team_type_input,
@@ -441,7 +439,6 @@ invalid_rows AS (
         TO_JSON(
             NAMED_STRUCT(
                 'team_id', team_id,
-                'team_name', team_name,
                 'team_division_input', team_division_input,
                 'team_category_input', team_category_input,
                 'team_type_input', team_type_input,
@@ -465,7 +462,6 @@ invalid_rows AS (
 valid_rows AS (
     SELECT
         team_id,
-        team_name,
         team_category,
         team_identity_type,
         country_code,
@@ -502,8 +498,7 @@ ranked_rows AS (
             PARTITION BY team_id
             ORDER BY
                 (
-                    CASE WHEN team_name IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN team_category IS NOT NULL THEN 1 ELSE 0 END
+                    CASE WHEN team_category IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN team_identity_type IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN country_code IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN team_status IS NOT NULL THEN 1 ELSE 0 END
@@ -513,7 +508,6 @@ ranked_rows AS (
                 sha2(
                     concat_ws('|',
                         coalesce(team_id, '<NULL>'),
-                        coalesce(team_name, '<NULL>'),
                         coalesce(team_category, '<NULL>'),
                         coalesce(team_identity_type, '<NULL>'),
                         coalesce(country_code, '<NULL>'),
@@ -529,11 +523,10 @@ ranked_rows AS (
 """.strip()
     accepted_sql = f"""
 {base_ctes}
-SELECT
-    team_id,
-    sha2(coalesce(team_id, '<NULL>'), 256) AS team_sk,
-    team_name,
-    team_category,
+    SELECT
+        team_id,
+        sha2(coalesce(team_id, '<NULL>'), 256) AS team_sk,
+        team_category,
     team_identity_type,
     country_code,
     team_status,
@@ -582,7 +575,6 @@ SELECT
     TO_JSON(
         NAMED_STRUCT(
             'team_id', team_id,
-            'team_name', team_name,
             'team_category', team_category,
             'team_identity_type', team_identity_type,
             'country_code', country_code,
@@ -595,7 +587,6 @@ SELECT
         TO_JSON(
             NAMED_STRUCT(
                 'team_id', team_id,
-                'team_name', team_name,
                 'team_category', team_category,
                 'team_identity_type', team_identity_type,
                 'country_code', country_code,
@@ -617,7 +608,6 @@ WHERE duplicate_rank > 1
             source_table_fqn,
             [
                 f"{team_id_expr} AS team_id",
-                f"{team_name_expr} AS team_name",
                 f"{team_division_input_expr} AS team_division_input",
                 f"{team_category_input_expr} AS team_category_input",
                 f"{team_type_input_expr} AS team_type_input",

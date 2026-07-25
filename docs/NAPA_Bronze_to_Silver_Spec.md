@@ -1780,7 +1780,6 @@ None, unless the physical schema contains required conformed references.
 |---|---|
 | `team_id` | Natural team identifier |
 | `team_sk` | Deterministic surrogate key |
-| `team_name` | Display name where supplied |
 | `team_category` | Men's, women's, or mixed category |
 | `country_code` | Country where supplied |
 | `team_status` | Standardized status |

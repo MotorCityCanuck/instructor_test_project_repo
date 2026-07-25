@@ -245,7 +245,6 @@ def test_run_cross_table_validations_detects_duplicate_active_team_pairs() -> No
             **rows["teams"][0],
             "team_id": "team-3",
             "team_sk": "team-sk-3",
-            "team_name": "Mirror Duo",
         },
     ]
     duplicate_memberships = [
@@ -327,6 +326,7 @@ def test_build_vw_team_rosters_exposes_roster_status() -> None:
     roster_by_team = {row["team_id"]: row for row in view_rows}
     assert roster_by_team["team-1"]["roster_cardinality_status"] == "OK"
     assert roster_by_team["team-1"]["current_roster_count"] == 2
+    assert "team_name" not in roster_by_team["team-1"]
     assert roster_by_team["team-2"]["roster_cardinality_status"] == "WARNING"
 
 
@@ -343,8 +343,8 @@ def test_build_vw_match_results_aggregates_match_scores() -> None:
 
     assert len(view_rows) == 1
     row = view_rows[0]
-    assert row["team_one_name"] == "Northern Duo"
-    assert row["team_two_name"] == "Southern Duo"
+    assert "team_one_name" not in row
+    assert "team_two_name" not in row
     assert row["team_one_total_score"] == 11
     assert row["team_two_total_score"] == 9
     assert row["game_count"] == 1
@@ -366,7 +366,7 @@ def test_build_vw_player_match_history_exposes_opponent_and_result() -> None:
     player_one_rows = [row for row in view_rows if row["player_id"] == "player-1"]
     assert len(player_one_rows) == 1
     row = player_one_rows[0]
-    assert row["team_name"] == "Northern Duo"
-    assert row["opponent_team_name"] == "Southern Duo"
+    assert "team_name" not in row
+    assert "opponent_team_name" not in row
     assert row["result"] == "WIN"
     assert row["region_name"] == "Ontario West"

@@ -624,7 +624,6 @@ def _build_team_candidate(
     candidate = {
         "team_id": team_id,
         "team_sk": build_record_hash({"team_id": team_id}, ["team_id"]),
-        "team_name": standardize_string(normalized.get("team_name") or normalized.get("name"), uppercase=False),
         "team_category": team_category,
         "team_identity_type": team_identity_type,
         "country_code": country_code,
@@ -641,12 +640,11 @@ def _build_team_candidate(
             build_record_hash(
                 {
                     "team_id": team_id,
-                    "team_name": candidate["team_name"],
                     "team_category": team_category,
                     "team_identity_type": team_identity_type,
                     "country_code": country_code,
                 },
-                ["team_id", "team_name", "team_category", "team_identity_type", "country_code"],
+                ["team_id", "team_category", "team_identity_type", "country_code"],
             ),
         )
     )

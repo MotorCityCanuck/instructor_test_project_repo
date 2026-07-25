@@ -266,7 +266,6 @@ Columns:
 
 - `team_id`
 - `team_sk`
-- `team_name`
 - `team_category`
 - `country_code`
 - `team_status`
