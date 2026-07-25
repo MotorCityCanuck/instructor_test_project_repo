@@ -62,6 +62,8 @@ def build_resolved_match_teams(
     match_team_players_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     team_memberships_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     teams_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    *,
+    analysis_as_of_date: date | None = None,
 ) -> ResolvedMatchTeamsResult:
     """Resolve persistent teams for historical match sides without fabricating team IDs."""
     teams_by_id = {
@@ -81,6 +83,9 @@ def build_resolved_match_teams(
     unresolved_count = 0
 
     for match_team_row in match_teams_rows:
+        match_date = _parse_date_value(match_team_row.get("match_date"))
+        if analysis_as_of_date is not None and match_date is not None and match_date > analysis_as_of_date:
+            continue
         resolved_row = _resolve_match_team_row(
             match_team_row,
             teams_by_id=teams_by_id,
@@ -125,11 +130,23 @@ def build_resolved_match_teams(
 
 def build_resolved_match_teams_sql(environment: ReleaseEnvironment) -> str:
     """Return the Spark SQL used to build the Gold resolved_match_teams table."""
+    return _build_resolved_match_teams_sql(environment, analysis_as_of_date=None)
+
+
+def _build_resolved_match_teams_sql(
+    environment: ReleaseEnvironment,
+    *,
+    analysis_as_of_date: date | None,
+) -> str:
+    """Return the Spark SQL used to build the Gold resolved_match_teams table."""
     matches_fqn = get_silver_source_table_fqn(environment, "matches")
     match_teams_fqn = get_silver_source_table_fqn(environment, "match_teams")
     match_team_players_fqn = get_silver_source_table_fqn(environment, "match_team_players")
     team_memberships_fqn = get_silver_source_table_fqn(environment, "team_memberships")
     teams_fqn = get_silver_source_table_fqn(environment, "teams")
+    analysis_filter = ""
+    if analysis_as_of_date is not None:
+        analysis_filter = f"\n    WHERE mtb.match_date IS NOT NULL\n      AND mtb.match_date <= DATE('{analysis_as_of_date.isoformat()}')"
 
     return f"""
 WITH match_team_base AS (
@@ -169,6 +186,7 @@ base AS (
     FROM match_team_base AS mtb
     LEFT JOIN match_team_pairs AS mtp
       ON mtb.match_team_id = mtp.match_team_id
+    {analysis_filter}
 ),
 teams_normalized AS (
     SELECT
@@ -316,6 +334,8 @@ LEFT JOIN teams_normalized AS rt
 def publish_resolved_match_teams(
     spark: Any,
     environment: ReleaseEnvironment,
+    *,
+    analysis_as_of_date: date | None = None,
 ) -> ResolvedMatchTeamsPublicationSummary:
     """Build and publish resolved_match_teams using Spark-native SQL."""
     target_table_fqn = get_gold_target_table_fqn(environment, "resolved_match_teams")
@@ -324,10 +344,28 @@ def publish_resolved_match_teams(
         spark,
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
-        stage_sql=build_resolved_match_teams_sql(environment),
+        stage_sql=_build_resolved_match_teams_sql(
+            environment,
+            analysis_as_of_date=analysis_as_of_date,
+        ),
         validation_fn=_validate_resolved_match_teams_table,
     )
-    input_row_count = int(spark.table(get_silver_source_table_fqn(environment, "match_teams")).count())
+    if analysis_as_of_date is None:
+        input_row_count = int(spark.table(get_silver_source_table_fqn(environment, "match_teams")).count())
+    else:
+        summary_row = spark.sql(
+            f"""
+SELECT
+    COUNT(*) AS input_row_count
+FROM {get_silver_source_table_fqn(environment, "match_teams")} AS mt
+LEFT JOIN {get_silver_source_table_fqn(environment, "matches")} AS m
+  ON CAST(mt.match_id AS STRING) = CAST(m.match_id AS STRING)
+WHERE COALESCE(CAST(mt.match_date AS DATE), CAST(m.match_date AS DATE)) IS NOT NULL
+  AND COALESCE(CAST(mt.match_date AS DATE), CAST(m.match_date AS DATE)) <= DATE('{analysis_as_of_date.isoformat()}')
+""".strip()
+        ).collect()[0]
+        mapping = summary_row.asDict(recursive=True) if hasattr(summary_row, "asDict") else dict(summary_row)
+        input_row_count = int(mapping["input_row_count"] or 0)
     summary_row = spark.sql(
         f"""
 SELECT

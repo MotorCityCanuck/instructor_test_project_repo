@@ -103,7 +103,11 @@ def main() -> None:
                 )
             ],
         )
-        resolution_summary = publish_resolved_match_teams(spark, environment)
+        resolution_summary = publish_resolved_match_teams(
+            spark,
+            environment,
+            analysis_as_of_date=pipeline_context.analysis_as_of_date,
+        )
         if resolution_summary.output_row_count != resolution_summary.input_row_count:
             raise ValueError(
                 "Resolved match-side row count does not reconcile with match_teams: "

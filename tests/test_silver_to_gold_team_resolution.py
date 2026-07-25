@@ -466,6 +466,32 @@ def test_build_resolved_match_teams_normalizes_reversed_player_order_and_duplica
     assert row["resolved_team_id"] == "team-active-pair"
 
 
+def test_build_resolved_match_teams_excludes_future_matches_after_analysis_date() -> None:
+    result = build_resolved_match_teams(
+        match_teams_rows=[
+            {
+                "match_team_id": "mt-10",
+                "match_id": "match-10",
+                "team_id": "team-direct",
+                "team_number": 1,
+                "match_date": "2026-07-02",
+                "winning_team_id": "team-direct",
+            }
+        ],
+        match_team_players_rows=[
+            {"match_team_id": "mt-10", "player_id": "player-21"},
+            {"match_team_id": "mt-10", "player_id": "player-22"},
+        ],
+        team_memberships_rows=[],
+        teams_rows=_teams_rows(),
+        analysis_as_of_date=date(2026, 6, 30),
+    )
+
+    assert result.rows == ()
+    assert result.direct_resolution_count == 0
+    assert result.persistent_team_resolution_pct == 0.0
+
+
 def test_build_resolved_match_teams_sql_references_required_sources() -> None:
     config = load_silver_to_gold_config("napa_5k")
     environment = resolve_release_environment(config)
@@ -481,6 +507,54 @@ def test_build_resolved_match_teams_sql_references_required_sources() -> None:
     assert "winning_team_id" in sql
     assert "team_identity_type" in sql
     assert "team_identity_type = 'AD_HOC'" in sql
+
+
+def test_build_resolved_match_teams_sql_applies_analysis_date_filter_when_requested() -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+    spark = _FakeSpark(
+        input_row_count=100,
+        summary_row={
+            "output_row_count": 100,
+            "direct_resolution_count": 90,
+            "active_pair_resolution_count": 5,
+            "historical_pair_resolution_count": 3,
+            "ambiguous_count": 1,
+            "unresolved_count": 1,
+            "persistent_team_resolution_pct": 98.0,
+        },
+    )
+    published = {}
+
+    def _fake_publish_stage_to_gold_table(
+        _spark,
+        *,
+        stage_table_fqn: str,
+        target_table_fqn: str,
+        stage_sql: str,
+        validation_fn=None,
+        count_fn=None,
+    ):
+        published["stage_sql"] = stage_sql
+        return 100, 100
+
+    monkeypatch = __import__("pytest").MonkeyPatch()
+    try:
+        monkeypatch.setattr(
+            "napa_pipeline.silver_to_gold.team_resolution.publish_stage_to_gold_table",
+            _fake_publish_stage_to_gold_table,
+        )
+        summary = publish_resolved_match_teams(
+            spark,
+            environment,
+            analysis_as_of_date=date(2026, 6, 30),
+        )
+    finally:
+        monkeypatch.undo()
+
+    assert summary.input_row_count == 100
+    assert "DATE('2026-06-30')" in published["stage_sql"]
+    assert "WHERE mtb.match_date IS NOT NULL" in published["stage_sql"]
 
 
 class _FakeRow:
@@ -520,6 +594,8 @@ class _FakeSpark:
 
     def sql(self, query: str):
         self.executed_sql.append(query)
+        if "COUNT(*) AS input_row_count" in query:
+            return _FakeCollectResult([{"input_row_count": self._input_row_count}])
         return _FakeCollectResult([self._summary_row])
 
 
@@ -572,3 +648,48 @@ def test_publish_resolved_match_teams_returns_summary(monkeypatch) -> None:
     assert published["target_table_fqn"] == f"{environment.catalog}.{environment.gold_schema}.resolved_match_teams"
     assert published["stage_table_fqn"] == f"{environment.catalog}.{environment.gold_stage_schema}.resolved_match_teams"
     assert "DIRECT_VALID_TEAM_ID" in published["stage_sql"]
+
+
+def test_publish_resolved_match_teams_passes_analysis_date_to_stage_sql(monkeypatch) -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+    spark = _FakeSpark(
+        input_row_count=123,
+        summary_row={
+            "output_row_count": 123,
+            "direct_resolution_count": 100,
+            "active_pair_resolution_count": 10,
+            "historical_pair_resolution_count": 5,
+            "ambiguous_count": 4,
+            "unresolved_count": 4,
+            "persistent_team_resolution_pct": 93.0,
+        },
+    )
+    published = {}
+
+    def _fake_publish_stage_to_gold_table(
+        _spark,
+        *,
+        stage_table_fqn: str,
+        target_table_fqn: str,
+        stage_sql: str,
+        validation_fn=None,
+        count_fn=None,
+    ):
+        published["stage_sql"] = stage_sql
+        return 123, 123
+
+    monkeypatch.setattr(
+        "napa_pipeline.silver_to_gold.team_resolution.publish_stage_to_gold_table",
+        _fake_publish_stage_to_gold_table,
+    )
+
+    summary = publish_resolved_match_teams(
+        spark,
+        environment,
+        analysis_as_of_date=date(2026, 6, 30),
+    )
+
+    assert summary.input_row_count == 123
+    assert "DATE('2026-06-30')" in published["stage_sql"]
+    assert "WHERE mtb.match_date IS NOT NULL" in published["stage_sql"]
