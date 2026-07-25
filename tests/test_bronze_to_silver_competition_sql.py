@@ -80,11 +80,13 @@ def test_build_competition_sql_plan_for_match_teams_contains_expected_rules() ->
 
     assert "MATCH_TEAM_001" in plan.rejected_sql
     assert "MATCH_TEAM_006" in plan.rejected_sql
-    assert "MATCH_TEAM_005" in plan.rejected_sql
     assert "MATCH_TEAM_DUPLICATE" in plan.rejected_sql
     assert "winner_flag" in plan.accepted_sql
     assert "side_cardinality_warning_flag" in plan.accepted_sql
     assert "COALESCE(pre_match_team_rating, team_rating_before, average_team_rating)" in plan.accepted_sql
+    assert "team_rating_after" not in plan.accepted_sql
+    assert "CAST(NULL AS DOUBLE) AS post_match_team_rating" in plan.accepted_sql
+    assert "CAST(NULL AS DOUBLE) AS rating_change" in plan.accepted_sql
     assert "team_id IS NULL OR team_sk IS NULL" in plan.rejected_sql
     assert plan.warning_count_sql is not None
 

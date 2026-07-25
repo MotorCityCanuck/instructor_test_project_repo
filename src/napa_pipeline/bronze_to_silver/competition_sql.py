@@ -522,8 +522,7 @@ WITH normalized_source AS (
         NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
         NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
         TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS team_number_raw,
-        NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before, average_team_rating) AS STRING)), '') AS pre_match_team_rating_raw,
-        NULLIF(TRIM(CAST(COALESCE(post_match_team_rating, team_rating_after) AS STRING)), '') AS post_match_team_rating_raw
+        NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before, average_team_rating) AS STRING)), '') AS pre_match_team_rating_raw
     FROM {source_table_fqn}
 ),
 deduped_source AS (
@@ -535,7 +534,7 @@ typed_source AS (
         source.*,
         CAST(source.team_number_raw AS INT) AS team_number,
         CAST(source.pre_match_team_rating_raw AS DOUBLE) AS pre_match_team_rating,
-        CAST(source.post_match_team_rating_raw AS DOUBLE) AS post_match_team_rating
+        CAST(NULL AS DOUBLE) AS post_match_team_rating
     FROM deduped_source source
 ),
 validated_source AS (
@@ -563,7 +562,6 @@ invalid_rows AS (
             WHEN team_number_raw IS NULL OR team_number_raw = '' THEN 'MISSING_REQUIRED_COLUMN'
             WHEN team_number IS NULL OR team_number NOT IN (1, 2) THEN 'VALUE_OUT_OF_RANGE'
             WHEN pre_match_team_rating_raw IS NOT NULL AND pre_match_team_rating IS NULL THEN 'INVALID_DATA_TYPE'
-            WHEN post_match_team_rating_raw IS NOT NULL AND post_match_team_rating IS NULL THEN 'INVALID_DATA_TYPE'
         END AS reject_reason,
         CASE
             WHEN match_team_id IS NULL THEN 'MATCH_TEAM_001'
@@ -572,7 +570,6 @@ invalid_rows AS (
             WHEN team_number_raw IS NULL OR team_number_raw = '' THEN 'MATCH_TEAM_003'
             WHEN team_number IS NULL OR team_number NOT IN (1, 2) THEN 'MATCH_TEAM_003'
             WHEN pre_match_team_rating_raw IS NOT NULL AND pre_match_team_rating IS NULL THEN 'MATCH_TEAM_004'
-            WHEN post_match_team_rating_raw IS NOT NULL AND post_match_team_rating IS NULL THEN 'MATCH_TEAM_005'
         END AS rule_id,
         CASE
             WHEN match_team_id IS NULL THEN 'CRITICAL'
@@ -585,7 +582,6 @@ invalid_rows AS (
             WHEN team_number_raw IS NULL OR team_number_raw = '' THEN 'team_number is required.'
             WHEN team_number IS NULL OR team_number NOT IN (1, 2) THEN 'team_number must be 1 or 2.'
             WHEN pre_match_team_rating_raw IS NOT NULL AND pre_match_team_rating IS NULL THEN concat('Invalid pre_match_team_rating value ''', pre_match_team_rating_raw, '''.')
-            WHEN post_match_team_rating_raw IS NOT NULL AND post_match_team_rating IS NULL THEN concat('Invalid post_match_team_rating value ''', post_match_team_rating_raw, '''.')
         END AS reject_reason_detail,
         {sql_literal(context.pipeline_run_id)} AS pipeline_run_id,
         {sql_literal(context.pipeline_run_id)} AS _pipeline_run_id,
@@ -598,8 +594,7 @@ invalid_rows AS (
                 'match_id', match_id,
                 'team_id', team_id,
                 'team_number_raw', team_number_raw,
-                'pre_match_team_rating_raw', pre_match_team_rating_raw,
-                'post_match_team_rating_raw', post_match_team_rating_raw
+                'pre_match_team_rating_raw', pre_match_team_rating_raw
             )
         ) AS source_record_json
     FROM validated_source
@@ -613,7 +608,6 @@ invalid_rows AS (
        OR team_number IS NULL
        OR team_number NOT IN (1, 2)
        OR (pre_match_team_rating_raw IS NOT NULL AND pre_match_team_rating IS NULL)
-       OR (post_match_team_rating_raw IS NOT NULL AND post_match_team_rating IS NULL)
 ),
 valid_rows AS (
     SELECT
@@ -635,10 +629,7 @@ valid_rows AS (
       AND team_sk IS NOT NULL
       AND team_number IS NOT NULL
       AND team_number IN (1, 2)
-      AND NOT (
-          (pre_match_team_rating_raw IS NOT NULL AND pre_match_team_rating IS NULL)
-          OR (post_match_team_rating_raw IS NOT NULL AND post_match_team_rating IS NULL)
-      )
+      AND NOT (pre_match_team_rating_raw IS NOT NULL AND pre_match_team_rating IS NULL)
 ),
 ranked_rows AS (
     SELECT
@@ -651,7 +642,6 @@ ranked_rows AS (
                   + CASE WHEN team_id IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN team_number IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN pre_match_team_rating IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN post_match_team_rating IS NOT NULL THEN 1 ELSE 0 END
                 ) DESC,
                 sha2(
                     concat_ws('|',
@@ -659,8 +649,7 @@ ranked_rows AS (
                         coalesce(match_id, '<NULL>'),
                         coalesce(team_id, '<NULL>'),
                         coalesce(cast(team_number as string), '<NULL>'),
-                        coalesce(cast(pre_match_team_rating as string), '<NULL>'),
-                        coalesce(cast(post_match_team_rating as string), '<NULL>')
+                        coalesce(cast(pre_match_team_rating as string), '<NULL>')
                     ),
                     256
                 ) ASC
@@ -683,11 +672,7 @@ accepted_rows AS (
         END AS winner_flag,
         pre_match_team_rating,
         post_match_team_rating,
-        CASE
-            WHEN pre_match_team_rating IS NOT NULL AND post_match_team_rating IS NOT NULL
-                THEN post_match_team_rating - pre_match_team_rating
-            ELSE NULL
-        END AS rating_change,
+        CAST(NULL AS DOUBLE) AS rating_change,
         CASE
             WHEN COUNT(*) OVER (PARTITION BY match_id) <> {expected_match_team_count} THEN true
             ELSE false
@@ -790,7 +775,6 @@ WHERE duplicate_rank > 1
                 "NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id",
                 "TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS team_number_raw",
                 "NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before, average_team_rating) AS STRING)), '') AS pre_match_team_rating_raw",
-                "NULLIF(TRIM(CAST(COALESCE(post_match_team_rating, team_rating_after) AS STRING)), '') AS post_match_team_rating_raw",
             ],
         ),
         business_key_duplicate_count_sql=f"""
@@ -805,15 +789,14 @@ WITH valid_rows AS (
         team.team_sk,
         CAST(source.team_number_raw AS INT) AS team_number,
         CAST(source.pre_match_team_rating_raw AS DOUBLE) AS pre_match_team_rating,
-        CAST(source.post_match_team_rating_raw AS DOUBLE) AS post_match_team_rating
+        CAST(NULL AS DOUBLE) AS post_match_team_rating
     FROM (
         SELECT
             NULLIF(TRIM(CAST(COALESCE(match_team_id, id) AS STRING)), '') AS match_team_id,
             NULLIF(TRIM(CAST(match_id AS STRING)), '') AS match_id,
             NULLIF(TRIM(CAST(team_id AS STRING)), '') AS team_id,
             TRIM(CAST(COALESCE(team_number, side_number) AS STRING)) AS team_number_raw,
-            NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before, average_team_rating) AS STRING)), '') AS pre_match_team_rating_raw,
-            NULLIF(TRIM(CAST(COALESCE(post_match_team_rating, team_rating_after) AS STRING)), '') AS post_match_team_rating_raw
+            NULLIF(TRIM(CAST(COALESCE(pre_match_team_rating, team_rating_before, average_team_rating) AS STRING)), '') AS pre_match_team_rating_raw
         FROM {source_table_fqn}
     ) source
     LEFT JOIN {matches_fqn} match
@@ -826,10 +809,7 @@ WITH valid_rows AS (
       AND CAST(source.team_number_raw AS INT) IN (1, 2)
       AND source.team_number_raw IS NOT NULL
       AND source.team_number_raw <> ''
-      AND NOT (
-          (source.pre_match_team_rating_raw IS NOT NULL AND CAST(source.pre_match_team_rating_raw AS DOUBLE) IS NULL)
-          OR (source.post_match_team_rating_raw IS NOT NULL AND CAST(source.post_match_team_rating_raw AS DOUBLE) IS NULL)
-      )
+      AND NOT (source.pre_match_team_rating_raw IS NOT NULL AND CAST(source.pre_match_team_rating_raw AS DOUBLE) IS NULL)
 ),
 ranked_rows AS (
     SELECT
@@ -842,7 +822,6 @@ ranked_rows AS (
                   + CASE WHEN team_id IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN team_number IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN pre_match_team_rating IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN post_match_team_rating IS NOT NULL THEN 1 ELSE 0 END
                 ) DESC,
                 sha2(
                     concat_ws('|',
@@ -850,8 +829,7 @@ ranked_rows AS (
                         coalesce(match_id, '<NULL>'),
                         coalesce(team_id, '<NULL>'),
                         coalesce(cast(team_number as string), '<NULL>'),
-                        coalesce(cast(pre_match_team_rating as string), '<NULL>'),
-                        coalesce(cast(post_match_team_rating as string), '<NULL>')
+                        coalesce(cast(pre_match_team_rating as string), '<NULL>')
                     ),
                     256
                 ) ASC

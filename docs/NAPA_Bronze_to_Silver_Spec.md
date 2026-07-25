@@ -2126,13 +2126,12 @@ team_id  → teams.team_id
 | `team_number` | Side number |
 | `winner_flag` | Derived winner indicator |
 | `pre_match_team_rating` | Silver rename of source `average_team_rating`, representing the side's average player rating at match time |
-| `post_match_team_rating` | Rating after match where supplied |
-| `rating_change` | Objective change where derivable |
+| `post_match_team_rating` | Nullable downstream placeholder; derive from player-level rating history after the match if needed |
+| `rating_change` | Nullable downstream placeholder; derive only when both pre/post team ratings are defined |
 
 ## Derived Columns
 
 - `winner_flag`;
-- `rating_change` where both source values exist;
 - conformed keys.
 
 ## Validation Rules

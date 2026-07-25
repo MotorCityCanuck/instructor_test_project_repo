@@ -125,8 +125,6 @@ COMPETITION_SOURCE_COLUMN_CANDIDATES = {
     "pre_match_team_rating",
     "team_rating_before",
     "average_team_rating",
-    "post_match_team_rating",
-    "team_rating_after",
     "match_team_player_id",
     "player_id",
     "player_position",

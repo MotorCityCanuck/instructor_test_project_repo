@@ -394,6 +394,9 @@ Runtime values and limitations:
 - Bronze/export `match_teams` does not provide `pre_match_team_rating` directly.
 - Silver `pre_match_team_rating` maps from source `average_team_rating`, which represents the average of the two player ratings on that side at match time.
 - `pre_match_team_rating` should be interpreted as a match-time side average, not as a separately maintained persistent team rating.
+- Bronze/export `match_teams` does not provide `post_match_team_rating` directly.
+- Silver `post_match_team_rating` is intentionally left null in this layer until a downstream derivation joins match participants to player-level rating history after the match and averages the resulting post-match player ratings.
+- Silver `rating_change` is intentionally left null in this layer and should only be derived downstream when both pre-match and post-match team ratings are defined.
 
 Phase 0 answer: historical match sides do contain persistent `team_id` in the implemented Silver SQL plan.
 

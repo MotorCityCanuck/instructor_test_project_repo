@@ -318,7 +318,6 @@ def test_build_match_teams_accepts_valid_rows_and_derives_winner_flag() -> None:
                 "team_id": "team-1",
                 "team_number": "1",
                 "pre_match_team_rating": "4.2",
-                "post_match_team_rating": "4.3",
             },
             {
                 "id": "mt-4",
@@ -326,7 +325,6 @@ def test_build_match_teams_accepts_valid_rows_and_derives_winner_flag() -> None:
                 "team_id": "team-2",
                 "team_number": "2",
                 "pre_match_team_rating": "4.1",
-                "post_match_team_rating": "4.0",
             },
         ],
         config,
@@ -340,7 +338,8 @@ def test_build_match_teams_accepts_valid_rows_and_derives_winner_flag() -> None:
     winners = [row for row in result.accepted_rows if row["winner_flag"]]
     assert len(winners) == 1
     assert winners[0]["team_number"] == 1
-    assert winners[0]["rating_change"] == 0.09999999999999964
+    assert winners[0]["post_match_team_rating"] is None
+    assert winners[0]["rating_change"] is None
 
 
 def test_build_match_teams_maps_average_team_rating_to_pre_match_team_rating() -> None:
@@ -354,7 +353,6 @@ def test_build_match_teams_maps_average_team_rating_to_pre_match_team_rating() -
                 "team_id": "team-1",
                 "team_number": "1",
                 "average_team_rating": "4.2",
-                "post_match_team_rating": "4.3",
             }
         ],
         config,
@@ -366,7 +364,34 @@ def test_build_match_teams_maps_average_team_rating_to_pre_match_team_rating() -
     assert result.reconciliation.status == "PASSED"
     row = result.accepted_rows[0]
     assert row["pre_match_team_rating"] == 4.2
-    assert row["rating_change"] == 0.09999999999999964
+    assert row["post_match_team_rating"] is None
+    assert row["rating_change"] is None
+
+
+def test_build_match_teams_leaves_post_match_team_rating_and_rating_change_null() -> None:
+    config, context, _, _, _, teams_rows, _, matches_rows, _ = _parents()
+
+    result = build_match_teams(
+        [
+            {
+                "id": "mt-3",
+                "match_id": "match-1",
+                "team_id": "team-1",
+                "team_number": "1",
+                "pre_match_team_rating": "4.2",
+            }
+        ],
+        config,
+        context,
+        matches_rows=matches_rows,
+        teams_rows=teams_rows,
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    row = result.accepted_rows[0]
+    assert row["pre_match_team_rating"] == 4.2
+    assert row["post_match_team_rating"] is None
+    assert row["rating_change"] is None
 
 
 def test_build_match_teams_flags_side_cardinality_warning() -> None:

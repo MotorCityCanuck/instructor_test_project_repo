@@ -606,19 +606,6 @@ def _build_match_team_candidate(
     )
     if pre_rating_reject is not None:
         return None, pre_rating_reject
-    post_rating, post_rating_reject = _safe_optional_float(
-        normalized.get("post_match_team_rating") or normalized.get("team_rating_after"),
-        context=context,
-        source_table="match_teams",
-        target_table="match_teams",
-        source_business_key=match_team_id,
-        rule_id="MATCH_TEAM_005",
-        source_record=normalized,
-        field_name="post_match_team_rating",
-    )
-    if post_rating_reject is not None:
-        return None, post_rating_reject
-
     match_row = matches_index[match_id]
     winner_flag = (
         match_row.get("winning_team_number") == team_number
@@ -636,8 +623,8 @@ def _build_match_team_candidate(
         "team_number": team_number,
         "winner_flag": winner_flag,
         "pre_match_team_rating": pre_rating,
-        "post_match_team_rating": post_rating,
-        "rating_change": (post_rating - pre_rating) if pre_rating is not None and post_rating is not None else None,
+        "post_match_team_rating": None,
+        "rating_change": None,
         "side_cardinality_warning_flag": False,
     }
     candidate.update(
