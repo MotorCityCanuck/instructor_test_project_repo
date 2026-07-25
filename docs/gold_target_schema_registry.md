@@ -24,38 +24,112 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 
 ### `competition_match_sides`
 
-- Status: `planned`
+- Status: `implemented`
 - Phase: `3`
 - Intended purpose: normalized match-side competition fact table for downstream player and team analytics
 - Expected Silver dependencies:
   - `matches`
   - `match_teams`
+  - `match_team_players`
+  - `match_games`
+  - `regions`
+  - `monthly_batches`
 - Current contract notes:
   - Must use deployed Silver fields, not spec-only Bronze assumptions
   - Must treat `matches.winning_team_number` as Silver-derived
-  - Must not assume `matches.competition_category` is populated
-- Gold columns:
-  - pending phase design finalization
+  - `side_score` and `opponent_score` are currently implemented as match-side game wins because Silver does not expose a separate side-level match score
+  - Future matches after `analysis_as_of_date`, invalid winners, duplicate sides, and overlapping cross-side players are excluded from Phase 3 output
+- Current implemented columns:
+  - `match_id`
+  - `match_team_id`
+  - `match_date`
+  - `batch_id`
+  - `batch_sequence`
+  - `batch_date`
+  - `region_id`
+  - `match_country_code`
+  - `match_type`
+  - `competition_category`
+  - `team_number`
+  - `opponent_team_number`
+  - `team_id`
+  - `opponent_team_id`
+  - `winning_team_id`
+  - `winning_team_number`
+  - `completed_flag`
+  - `side_score`
+  - `opponent_score`
+  - `won_flag`
+  - `lost_flag`
+  - `games_won`
+  - `games_lost`
+  - `game_differential`
+  - `points_for`
+  - `points_against`
+  - `point_differential`
+  - `point_share`
+  - `close_game_count`
+  - `deciding_game_flag`
+  - `pre_match_team_rating`
+  - `opponent_pre_match_team_rating`
+  - `player_one_id`
+  - `player_two_id`
+  - `canonical_player_pair_key`
+  - `side_cardinality_warning_flag`
+  - `membership_history_warning_flag`
 - Unresolved items:
-  - whether a match-level category derivation is needed in this table
+  - whether a separate side-level match score should supersede the current game-win proxy if a better source is approved later
 
 ### `competition_player_matches`
 
-- Status: `planned`
+- Status: `implemented`
 - Phase: `3`
 - Intended purpose: player-level competition participation fact table
 - Expected Silver dependencies:
-  - `matches`
-  - `match_teams`
+  - `competition_match_sides`
   - `match_team_players`
-  - `players`
 - Current contract notes:
   - `player_position` is normalized in Silver
   - `membership_history_warning_flag` is available in Silver
-- Gold columns:
-  - pending phase design finalization
+- Current implemented columns:
+  - `match_id`
+  - `match_team_id`
+  - `match_date`
+  - `batch_id`
+  - `batch_sequence`
+  - `batch_date`
+  - `region_id`
+  - `match_country_code`
+  - `match_type`
+  - `competition_category`
+  - `team_number`
+  - `opponent_team_number`
+  - `team_id`
+  - `opponent_team_id`
+  - `player_id`
+  - `player_position`
+  - `partner_player_id`
+  - `canonical_player_pair_key`
+  - `won_flag`
+  - `lost_flag`
+  - `side_score`
+  - `opponent_score`
+  - `games_won`
+  - `games_lost`
+  - `game_differential`
+  - `points_for`
+  - `points_against`
+  - `point_differential`
+  - `point_share`
+  - `close_game_count`
+  - `deciding_game_flag`
+  - `pre_match_player_rating`
+  - `pre_match_partner_rating`
+  - `pre_match_team_rating`
+  - `pre_match_opponent_team_rating`
+  - `membership_history_warning_flag`
 - Unresolved items:
-  - whether the table should carry nullable category/status placeholders from `matches`
+  - later phases may add expectation-based and longitudinal player-match features, but Phase 3 intentionally stops at sourced participation context
 
 ### `resolved_match_teams`
 

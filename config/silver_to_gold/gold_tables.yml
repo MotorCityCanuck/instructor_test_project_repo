@@ -13,7 +13,7 @@ gold_tables:
     stage: foundation
     target: competition_player_matches
     transform: build_competition_player_matches
-    primary_key: [match_id, team_id, player_id]
+    primary_key: [match_id, team_number, player_id]
 
   resolved_match_teams:
     enabled: true
@@ -174,4 +174,3 @@ gold_tables:
     target: gold_run_summary
     transform: build_gold_run_summary
     primary_key: [pipeline_run_id]
-
