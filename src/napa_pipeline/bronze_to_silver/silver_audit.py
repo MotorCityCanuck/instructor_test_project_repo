@@ -328,7 +328,9 @@ def _audit_single_table(
         table_name=table_name,
         row_count=row_count,
         null_counts=null_counts,
-        required_columns=tuple(primary_key) + STANDARD_METADATA_COLUMNS,
+        required_columns=tuple(primary_key)
+        + STANDARD_METADATA_COLUMNS
+        + tuple(str(column) for column in table_config.get("required_contract_columns", ())),
         null_detail_limit=sample_limit,
     )
     findings.extend(null_findings)

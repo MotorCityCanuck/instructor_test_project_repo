@@ -655,8 +655,14 @@ def _build_club_memberships_sql_plan(
     club_membership_id_expr = _source_nullif_string_expr(source_columns, ["club_membership_id", "id"])
     player_id_expr = _source_nullif_string_expr(source_columns, ["player_id"])
     club_id_expr = _source_nullif_string_expr(source_columns, ["club_id"])
-    membership_start_date_expr = _source_string_expr(source_columns, ["membership_start_date", "start_date"])
-    membership_end_date_expr = _source_string_expr(source_columns, ["membership_end_date", "end_date"])
+    membership_start_date_expr = _source_string_expr(
+        source_columns,
+        ["membership_start_date", "joined_date", "start_date"],
+    )
+    membership_end_date_expr = _source_string_expr(
+        source_columns,
+        ["membership_end_date", "left_date", "end_date"],
+    )
     metadata_sql = _metadata_sql(
         context,
         source_table="club_memberships",
@@ -977,8 +983,14 @@ def _build_team_memberships_sql_plan(
     team_membership_id_expr = _source_nullif_string_expr(source_columns, ["team_membership_id", "id"])
     player_id_expr = _source_nullif_string_expr(source_columns, ["player_id"])
     team_id_expr = _source_nullif_string_expr(source_columns, ["team_id"])
-    membership_start_date_expr = _source_string_expr(source_columns, ["membership_start_date", "start_date"])
-    membership_end_date_expr = _source_string_expr(source_columns, ["membership_end_date", "end_date"])
+    membership_start_date_expr = _source_string_expr(
+        source_columns,
+        ["membership_start_date", "joined_date", "start_date"],
+    )
+    membership_end_date_expr = _source_string_expr(
+        source_columns,
+        ["membership_end_date", "left_date", "end_date"],
+    )
     player_role_expr = _source_upper_string_expr(source_columns, ["player_role", "role"])
     position_input_expr = _source_upper_string_expr(source_columns, ["player_position", "preferred_side", "position"])
     position_expr = _domain_case_expression("position_input", config.data["domains"]["player_position"])

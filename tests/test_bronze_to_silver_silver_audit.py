@@ -200,6 +200,115 @@ def test_run_silver_layer_audit_detects_release_and_quality_status_anomalies() -
     assert any(finding.rule_id == "AUDIT_NULL_002" for finding in findings)
 
 
+def test_run_silver_layer_audit_treats_required_contract_columns_as_non_nullable() -> None:
+    config = BronzeToSilverConfig(
+        data={
+            "project": {
+                "pipeline_name": "bronze_to_silver",
+                "pipeline_version": "1.0.0",
+                "processing_mode": "full_refresh",
+            },
+            "release": {"release_name": "napa_5k"},
+            "runtime": {"catalog": "workspace"},
+            "schemas": {
+                "bronze": "instructor_5k_bronze",
+                "silver": "instructor_5k_silver",
+                "silver_reject": "instructor_5k_silver_reject",
+                "operations": "instructor_ops",
+            },
+            "thresholds": {
+                "expected_match_team_count": 2,
+                "expected_match_team_player_count": 2,
+            },
+            "sources": {
+                "team_memberships": {
+                    "enabled": True,
+                    "bronze_table": "team_memberships",
+                    "source_file": "team_memberships.parquet",
+                    "natural_key": ["id"],
+                }
+            },
+            "silver_tables": {
+                "team_memberships": {
+                    "enabled": True,
+                    "source": "team_memberships",
+                    "target": "team_memberships",
+                    "build_order": 90,
+                    "primary_key": ["team_membership_id"],
+                    "required_contract_columns": ["membership_start_date"],
+                }
+            },
+        },
+        config_hash="config-hash",
+        config_root=Path("."),
+    )
+    environment = ReleaseEnvironment(
+        catalog="workspace",
+        bronze_schema="instructor_5k_bronze",
+        silver_schema="instructor_5k_silver",
+        silver_reject_schema="instructor_5k_silver_reject",
+        operations_schema="instructor_ops",
+    )
+    table_fqn = "workspace.instructor_5k_silver.team_memberships"
+    spark = FakeSparkSession(
+        existing_tables={table_fqn},
+        table_fields={
+            table_fqn: [
+                "team_membership_id",
+                "membership_start_date",
+                "_pipeline_run_id",
+                "_pipeline_version",
+                "_source_dataset",
+                "_source_table",
+                "_load_ts",
+                "_record_hash",
+                "_data_quality_status",
+            ]
+        },
+        query_results={
+            f"SELECT COUNT(*) AS value FROM {table_fqn}": [{"value": 2}],
+            "SUM(CASE WHEN `team_membership_id` IS NULL THEN 1 ELSE 0 END)": [
+                {
+                    "team_membership_id": 0,
+                    "membership_start_date": 1,
+                    "_pipeline_run_id": 0,
+                    "_pipeline_version": 0,
+                    "_source_dataset": 0,
+                    "_source_table": 0,
+                    "_load_ts": 0,
+                    "_record_hash": 0,
+                    "_data_quality_status": 0,
+                }
+            ],
+            f"GROUP BY `team_membership_id` HAVING COUNT(*) > 1": [{"duplicate_key_count": 0, "duplicate_row_count": 0}],
+            f"FROM {table_fqn} WHERE `_source_dataset` IS NULL OR CAST(`_source_dataset` AS STRING) <> 'napa_5k'": [
+                {"value": 0}
+            ],
+            f"FROM {table_fqn} WHERE `_source_table` IS NULL OR CAST(`_source_table` AS STRING) <> 'team_memberships'": [
+                {"value": 0}
+            ],
+            f"FROM {table_fqn} WHERE `_data_quality_status` IS NULL OR UPPER(CAST(`_data_quality_status` AS STRING)) NOT IN ('ACCEPTED', 'WARNING', 'INFO')": [
+                {"value": 0}
+            ],
+        },
+    )
+
+    report = run_silver_layer_audit(
+        spark,
+        config,
+        environment,
+        include_cross_table=False,
+    )
+
+    finding = next(
+        finding
+        for finding in report.tables[0].findings
+        if finding.rule_id == "AUDIT_NULL_001"
+    )
+    assert finding.sample_values == ("membership_start_date",)
+    assert finding.failed_row_count == 1
+
+
 def test_audit_report_render_includes_cross_table_findings() -> None:
     report = SilverAuditReport(
         release_name="napa_5k",

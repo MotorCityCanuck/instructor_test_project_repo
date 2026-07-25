@@ -336,6 +336,33 @@ def test_build_team_memberships_accepts_valid_row() -> None:
     assert row["current_membership_flag"] is True
 
 
+def test_build_team_memberships_maps_joined_and_left_dates_to_silver_membership_dates() -> None:
+    config, context, monthly_batches_rows, _, players_rows, _, teams_rows = _parents()
+
+    result = build_team_memberships(
+        [
+            {
+                "id": "team-mem-joined-date",
+                "player_id": "player-1",
+                "team_id": "team-1",
+                "joined_date": "2026-01-01",
+                "left_date": "2026-03-15",
+                "player_position": "left",
+            }
+        ],
+        config,
+        context,
+        players_rows=players_rows,
+        teams_rows=teams_rows,
+        monthly_batches_rows=monthly_batches_rows,
+    )
+
+    assert result.reconciliation.status == "PASSED"
+    row = result.accepted_rows[0]
+    assert str(row["membership_start_date"]) == "2026-01-01"
+    assert str(row["membership_end_date"]) == "2026-03-15"
+
+
 def test_build_team_memberships_rejects_invalid_position() -> None:
     config, context, monthly_batches_rows, _, players_rows, _, teams_rows = _parents()
 

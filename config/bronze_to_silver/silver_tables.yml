@@ -102,6 +102,7 @@ silver_tables:
     build_order: 90
     transform: build_team_memberships
     primary_key: [team_membership_id]
+    required_contract_columns: [membership_start_date]
     source_key_mapping:
       id: team_membership_id
     reject_table: team_memberships_exceptions

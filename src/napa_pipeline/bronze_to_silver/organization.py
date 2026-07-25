@@ -813,7 +813,9 @@ def _build_team_membership_candidate(
         )
 
     start_date, start_reject = _safe_optional_date(
-        normalized.get("membership_start_date") or normalized.get("start_date"),
+        normalized.get("membership_start_date")
+        or normalized.get("joined_date")
+        or normalized.get("start_date"),
         context=context,
         source_table="team_memberships",
         target_table="team_memberships",
@@ -826,7 +828,9 @@ def _build_team_membership_candidate(
         return None, start_reject
 
     end_date, end_reject = _safe_optional_date(
-        normalized.get("membership_end_date") or normalized.get("end_date"),
+        normalized.get("membership_end_date")
+        or normalized.get("left_date")
+        or normalized.get("end_date"),
         context=context,
         source_table="team_memberships",
         target_table="team_memberships",

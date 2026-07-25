@@ -155,6 +155,39 @@ def test_build_organization_sql_plan_for_team_memberships_contains_expected_rule
     assert plan.warning_count_sql is not None
 
 
+def test_build_organization_sql_plan_for_team_memberships_uses_joined_date_when_source_native_columns_are_present() -> None:
+    config, environment, context = _config_environment_context()
+
+    plan = build_organization_sql_plan(
+        config,
+        context,
+        target_table="team_memberships",
+        source_table_fqn=f"{environment.catalog}.{environment.bronze_schema}.team_memberships",
+        silver_schema_fqn=f"{environment.catalog}.{environment.silver_schema}",
+        source_columns={
+            "id",
+            "player_id",
+            "team_id",
+            "joined_date",
+            "left_date",
+            "player_position",
+        },
+    )
+    combined_sql = "\n".join(
+        [
+            plan.accepted_sql,
+            plan.rejected_sql,
+            plan.exact_duplicate_count_sql,
+            plan.business_key_duplicate_count_sql,
+        ]
+    )
+
+    assert "CAST(joined_date AS STRING)" in combined_sql
+    assert "CAST(left_date AS STRING)" in combined_sql
+    assert "membership_start_date, start_date" not in combined_sql
+    assert "membership_end_date, end_date" not in combined_sql
+
+
 def test_execute_single_table_sql_publishes_club_outputs(monkeypatch) -> None:
     config, environment, context = _config_environment_context()
     spark = DummySpark()
