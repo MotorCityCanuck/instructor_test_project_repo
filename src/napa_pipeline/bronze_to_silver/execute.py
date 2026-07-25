@@ -113,7 +113,6 @@ COMPETITION_SOURCE_COLUMN_CANDIDATES = {
     "match_type",
     "competition_category",
     "category",
-    "match_status",
     "status",
     "winning_team_number",
     "winner_team_number",

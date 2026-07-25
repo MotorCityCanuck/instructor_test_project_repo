@@ -479,7 +479,6 @@ def _build_match_candidate(
         "match_date": match_date,
         "match_type": standardize_string(normalized.get("match_type"), uppercase=True),
         "competition_category": standardize_string(normalized.get("match_type"), uppercase=True),
-        "match_status": None,
         "winning_team_id": winner_team_id,
         "winning_team_number": winner,
         "completed_flag": completed_flag,

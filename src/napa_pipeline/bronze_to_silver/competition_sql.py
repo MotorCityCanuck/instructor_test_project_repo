@@ -75,7 +75,6 @@ WITH normalized_source AS (
         TRIM(CAST(COALESCE(match_date, date) AS STRING)) AS match_date_raw,
         NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS match_type,
         NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS competition_category,
-        CAST(NULL AS STRING) AS match_status,
         TRIM(CAST(COALESCE(winning_team_number, winner_team_number) AS STRING)) AS winning_team_number_raw,
         NULLIF(TRIM(CAST(COALESCE(winning_team_id, winner_team_id) AS STRING)), '') AS winning_team_id
     FROM {source_table_fqn}
@@ -195,7 +194,6 @@ invalid_rows AS (
                 'match_date_raw', match_date_raw,
                 'match_type', match_type,
                 'competition_category', competition_category,
-                'match_status', match_status,
                 'winning_team_number_raw', winning_team_number_raw,
                 'winning_team_id', winning_team_id
             )
@@ -226,7 +224,6 @@ valid_rows AS (
         match_date,
         match_type,
         competition_category,
-        match_status,
         winning_team_id,
         winning_team_number,
         completed_flag
@@ -260,7 +257,6 @@ ranked_rows AS (
                   + CASE WHEN match_date IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN match_type IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN competition_category IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN match_status IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN winning_team_number IS NOT NULL THEN 1 ELSE 0 END
                 ) DESC,
                 sha2(
@@ -271,7 +267,6 @@ ranked_rows AS (
                         coalesce(cast(match_date as string), '<NULL>'),
                         coalesce(match_type, '<NULL>'),
                         coalesce(competition_category, '<NULL>'),
-                        coalesce(match_status, '<NULL>'),
                         coalesce(cast(winning_team_number as string), '<NULL>')
                     ),
                     256
@@ -293,7 +288,6 @@ SELECT
     match_date,
     match_type,
     competition_category,
-    match_status,
     winning_team_id,
     winning_team_number,
     completed_flag,
@@ -346,7 +340,6 @@ SELECT
             'match_date', match_date,
             'match_type', match_type,
             'competition_category', competition_category,
-            'match_status', match_status,
             'winning_team_id', winning_team_id,
             'winning_team_number', winning_team_number
         )
@@ -360,7 +353,6 @@ SELECT
                 'match_date', match_date,
                 'match_type', match_type,
                 'competition_category', competition_category,
-                'match_status', match_status,
                 'winning_team_id', winning_team_id,
                 'winning_team_number', winning_team_number
             )
@@ -416,7 +408,6 @@ valid_rows AS (
         TO_DATE(source.match_date_raw) AS match_date,
         source.match_type,
         source.competition_category,
-        source.match_status,
         source.winning_team_id,
         CASE
             WHEN CAST(source.winning_team_number_raw AS INT) IS NOT NULL THEN CAST(source.winning_team_number_raw AS INT)
@@ -441,7 +432,6 @@ valid_rows AS (
             TRIM(CAST(COALESCE(match_date, date) AS STRING)) AS match_date_raw,
             NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS match_type,
             NULLIF(UPPER(TRIM(CAST(match_type AS STRING))), '') AS competition_category,
-            CAST(NULL AS STRING) AS match_status,
             TRIM(CAST(COALESCE(winning_team_number, winner_team_number) AS STRING)) AS winning_team_number_raw,
             NULLIF(TRIM(CAST(COALESCE(winning_team_id, winner_team_id) AS STRING)), '') AS winning_team_id
         FROM {source_table_fqn}
@@ -482,7 +472,6 @@ ranked_rows AS (
                   + CASE WHEN match_date IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN match_type IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN competition_category IS NOT NULL THEN 1 ELSE 0 END
-                  + CASE WHEN match_status IS NOT NULL THEN 1 ELSE 0 END
                   + CASE WHEN winning_team_number IS NOT NULL THEN 1 ELSE 0 END
                 ) DESC,
                 sha2(
@@ -493,7 +482,6 @@ ranked_rows AS (
                         coalesce(cast(match_date as string), '<NULL>'),
                         coalesce(match_type, '<NULL>'),
                         coalesce(competition_category, '<NULL>'),
-                        coalesce(match_status, '<NULL>'),
                         coalesce(winning_team_id, '<NULL>'),
                         coalesce(cast(winning_team_number as string), '<NULL>')
                     ),

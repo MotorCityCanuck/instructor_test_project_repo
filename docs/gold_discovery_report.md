@@ -188,9 +188,9 @@ Runtime-only values still need Databricks inspection:
 - `matches` includes persisted `winning_team_id` plus Silver-derived `winning_team_number` and `completed_flag`.
 - `match_games` includes game-level scores and winning side, supporting winner validation and point metrics.
 - Provided `matches` profiling shows `match_type` values: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
-- The Databricks schema export confirms Bronze `matches` does not contain `competition_category`, `match_status`, or `winning_team_number`.
+- The Databricks schema export confirms Bronze `matches` does not contain `competition_category` or `winning_team_number`.
 - The Databricks schema export confirms Bronze `match_teams` contains `team_number` and does not contain `side_number`.
-- `competition_category` and `match_status` exist physically in Silver `matches`, but they should currently be treated as nullable fields without trusted Bronze source population.
+- `competition_category` exists physically in Silver `matches` and is derived from source `match_type`.
 - Provided `players` profiling confirms gender values `F` and `M`. Player `country_code` is expected to be populated from home region when direct player country is absent.
 - Provided `players` profiling shows `active_flag` values null, false, and true.
 - Databricks validation on July 22, 2026 confirmed a successful latest 5K Bronze-to-Silver run in `workspace.instructor_ops.b2s_pipeline_runs` with:
@@ -223,7 +223,7 @@ Runtime-only values still need Databricks inspection:
 - `databricks.yml` does not include `config/silver_to_gold/**`; future Gold workflow/config files would not deploy until the bundle is updated.
 - The Gold spec's required Silver metadata does not match the implemented Silver metadata exactly.
 - Player `country_code` should not be null when `home_region_id` resolves to a valid region with `country_code`. Any remaining null player country values should be investigated as missing home-region data or invalid region linkage.
-- Any Gold assumption that Bronze `matches` directly provides `competition_category` or `match_status` is incorrect against the exported Databricks contract.
+- Any Gold assumption that Bronze `matches` directly provides `competition_category` is incorrect against the exported Databricks contract.
 - Any Gold assumption that Bronze `match_teams` provides `side_number` is incorrect against the exported Databricks contract.
 - Category-specific Gold products should use normalized `teams.team_category` unless an approved match-level derivation is introduced later; they should not depend on Bronze `matches.competition_category`.
 - No local Delta/Spark Silver tables are available in this repository. Physical schemas and profiling output were provided externally, but row counts and source correction must occur in Databricks.
@@ -269,7 +269,6 @@ UNION ALL SELECT 'match_games', COUNT(*) FROM workspace.instructor_5k_silver.mat
 - Confirm corrected `players.country_code` profiling output shows no null values after rerunning Bronze-to-Silver.
 - Confirm accepted `match_type` values: `CHALLENGE`, `CLINIC`, `LADDER`, `LEAGUE`, `RECREATIONAL`, `TOURNAMENT`.
 - Confirm whether any future match-level `competition_category` derivation is still needed beyond `teams.team_category`.
-- Confirm whether Gold should introduce a derived `match_status` vocabulary at all, or continue to treat the field as nullable.
 - Confirm whether current team membership as-of logic should use `matches.match_date` or release `analysis_as_of_date` when reconstructing historical rosters.
 
 ## Phase 0 Status

@@ -98,8 +98,7 @@ def _pipeline_rows():
                 "batch_id": "batch-2026-06",
                 "region_id": "region-1",
                 "match_date": "2026-06-15",
-                "competition_category": "mixed",
-                "status": "completed",
+                "match_type": "league",
                 "winning_team_id": "team-1",
                 "winning_team_number": "1",
             }
@@ -345,6 +344,7 @@ def test_build_vw_match_results_aggregates_match_scores() -> None:
     row = view_rows[0]
     assert "team_one_name" not in row
     assert "team_two_name" not in row
+    assert "match_status" not in row
     assert row["team_one_total_score"] == 11
     assert row["team_two_total_score"] == 9
     assert row["game_count"] == 1

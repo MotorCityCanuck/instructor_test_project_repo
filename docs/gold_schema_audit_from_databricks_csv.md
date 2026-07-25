@@ -44,7 +44,6 @@ Present columns:
 Not present:
 
 - `competition_category`
-- `match_status`
 - `winning_team_number`
 
 ### `workspace.instructor_5k_bronze.match_teams`
@@ -108,7 +107,6 @@ Present columns:
 - `match_type`
 - `winning_team_id`
 - `competition_category`
-- `match_status`
 - `winning_team_number`
 - `completed_flag`
 - `match_year`
@@ -116,8 +114,7 @@ Present columns:
 
 Important interpretation:
 
-- `competition_category` and `match_status` exist physically in Silver, but the Bronze contract does not provide source fields for them.
-- Until approved derivation logic is added, these columns should be treated as currently nullable analytical placeholders, not trusted source facts.
+- `competition_category` exists physically in Silver and is derived from source `match_type`.
 - `winning_team_id` is the persisted winner-team lineage field.
 - `winning_team_number` is a derived Silver field.
 - `completed_flag` is a derived Silver field.
@@ -198,11 +195,9 @@ Present columns:
 ### Unsafe assumptions that should be avoided
 
 - Do not assume Bronze `matches` has `competition_category`.
-- Do not assume Bronze `matches` has `match_status`.
 - Do not assume Bronze `matches` has `winning_team_number`.
 - Do not assume Bronze `match_teams` has `side_number`.
 - Do not assume Silver `matches.competition_category` is populated from source.
-- Do not assume Silver `matches.match_status` is populated from source.
 - Do not assume Gold feature logic can rely on `average_team_rating_at_match`; the deployed Silver names are `pre_match_team_rating` and `post_match_team_rating`.
 
 ## Phase Impact
@@ -213,7 +208,6 @@ Implications:
 
 - Competition chronology is supported by `matches.match_date`.
 - Winner-side logic should use `matches.winning_team_number`, but lineage and validation should anchor on `matches.winning_team_id`.
-- Any filtering based on `match_status` should be treated as untrusted until explicit derivation logic exists.
 - Any category-specific branching should not depend on `matches.competition_category` without an approved derivation.
 
 ### Phase 4 persistent team resolution
@@ -234,7 +228,6 @@ Before implementing category-specific features, scorecards, or recommendations, 
 
 1. whether `competition_category` should be derived from `teams.team_category`;
 2. whether a match-level category should be inferred only when both sides agree;
-3. whether `match_status` should remain null, or whether a derived status vocabulary should be introduced.
 
 ## Recommended Guardrails
 

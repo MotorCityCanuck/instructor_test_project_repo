@@ -74,7 +74,6 @@ The field exists physically in Silver but does not currently have trustworthy so
 Examples as of July 23, 2026:
 
 - `matches.competition_category`
-- `matches.match_status`
 
 ### `approved_derivation_required`
 
@@ -145,7 +144,6 @@ Before declaring a Gold phase ready:
 As of Thursday, July 23, 2026, these areas require explicit caution:
 
 - `matches.competition_category`
-- `matches.match_status`
 - winner-side semantics sourced from Bronze `matches.winning_team_id`
 - any Gold logic that assumes both `match_teams` sides have persistent `team_id`
 - any Gold logic that assumes specification-only rating field names rather than deployed Silver field names
