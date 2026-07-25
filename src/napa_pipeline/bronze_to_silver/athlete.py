@@ -51,7 +51,6 @@ def build_players(
     country_domain = config.data["domains"]["country_code"]
     gender_domain = config.data["domains"]["gender"]
     dominant_hand_domain = config.data["domains"]["dominant_hand"]
-    side_domain = config.data["domains"]["player_position"]
     player_age_groups = config.data["thresholds"].get("player_age_groups")
     region_index = _index_rows(regions_rows, "region_id")
     as_of_date = _resolve_release_as_of_date(monthly_batches_rows)
@@ -89,7 +88,6 @@ def build_players(
             country_domain=country_domain,
             gender_domain=gender_domain,
             dominant_hand_domain=dominant_hand_domain,
-            side_domain=side_domain,
             player_age_groups=player_age_groups,
             as_of_date=as_of_date,
             context=context,
@@ -303,7 +301,6 @@ def _build_player_candidate(
     country_domain: dict[str, Any],
     gender_domain: dict[str, Any],
     dominant_hand_domain: dict[str, Any],
-    side_domain: dict[str, Any],
     player_age_groups: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None,
     as_of_date: date | None,
     context: PipelineContext,
@@ -388,19 +385,6 @@ def _build_player_candidate(
             source_record=normalized,
         )
 
-    preferred_side_raw = normalized.get("preferred_side") or normalized.get("preferred_position")
-    preferred_side = _normalize_optional_domain_value(preferred_side_raw, side_domain)
-    if preferred_side_raw not in (None, "") and preferred_side is None:
-        return None, _invalid_domain_reject(
-            context=context,
-            source_table="player_master",
-            target_table="players",
-            source_business_key=player_id,
-            rule_id="PLAYER_006",
-            detail=f"Invalid preferred_side value '{preferred_side_raw}'.",
-            source_record=normalized,
-        )
-
     region_row = region_index.get(home_region_id) if home_region_id else None
     country_raw = (
         normalized.get("country_code")
@@ -456,7 +440,6 @@ def _build_player_candidate(
         "birth_date": birth_date,
         "gender": gender,
         "dominant_hand": dominant_hand,
-        "preferred_side": preferred_side,
         "home_region_id": home_region_id,
         "home_region_sk": region_row.get("region_sk") if region_row else None,
         "country_code": country_code,

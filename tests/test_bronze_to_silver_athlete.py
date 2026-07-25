@@ -59,7 +59,6 @@ def test_build_players_accepts_valid_row_and_derives_age_and_region_key() -> Non
                 "birth_date": "2000-07-01",
                 "gender": "female",
                 "dominant_hand": "R",
-                "preferred_side": "left",
                 "home_region_id": "region-1",
                 "country": "Canada",
                 "status": "active",
@@ -78,7 +77,7 @@ def test_build_players_accepts_valid_row_and_derives_age_and_region_key() -> Non
     assert row["display_name"] == "Taylor Ng"
     assert row["gender"] == "F"
     assert row["dominant_hand"] == "RIGHT"
-    assert row["preferred_side"] == "LEFT"
+    assert "preferred_side" not in row
     assert row["country_code"] == "CAN"
     assert row["home_region_id"] == "region-1"
     assert row["home_region_sk"] == regions_rows[0]["region_sk"]

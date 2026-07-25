@@ -45,8 +45,10 @@ def test_build_athlete_sql_plan_for_players_contains_expected_rules() -> None:
     assert "PLAYER_001" in plan.rejected_sql
     assert "PLAYER_005" in plan.rejected_sql
     assert "PLAYER_DUPLICATE" in plan.rejected_sql
+    assert "PLAYER_006" not in plan.rejected_sql
     assert "home_region_sk" in plan.accepted_sql
     assert "rating_confidence" in plan.accepted_sql
+    assert "preferred_side" not in plan.accepted_sql
     assert "'CANADA'" in plan.accepted_sql
     assert "CAST(NULL AS STRING) AS age_group" not in plan.accepted_sql
     assert "'AGE_18_34'" in plan.accepted_sql
@@ -100,6 +102,7 @@ def test_build_athlete_sql_plan_for_players_uses_actual_bronze_columns() -> None
     assert "CAST(rating_value AS STRING)" in combined_sql
     assert "CAST(confidence_score AS STRING)" in combined_sql
     assert "CAST(player_status AS STRING)" in combined_sql
+    assert "preferred_side" not in combined_sql
     assert "COALESCE(source.source_country_code, region.country_code) AS country_code" in combined_sql
     assert "COALESCE(CASE" in combined_sql
     assert "region.country_code) AS country_code" in combined_sql

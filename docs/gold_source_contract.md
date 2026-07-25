@@ -111,7 +111,6 @@ Columns:
 - `birth_date`
 - `gender`
 - `dominant_hand`
-- `preferred_side`
 - `home_region_id`
 - `home_region_sk`
 - `country_code`
@@ -127,14 +126,13 @@ Gold uses:
 - Player identity and display fields.
 - Direct country code where present.
 - Region-derived country through `home_region_id` when direct player country is absent.
-- Gender, hand, preferred side, age group, rating, rating confidence.
+- Gender, hand, age group, rating, rating confidence.
 - Active status via `active_flag`.
 
 Known domains from config:
 
 - Gender: `M`, `F`.
 - Dominant hand: `LEFT`, `RIGHT`, `AMBIDEXTROUS`.
-- Preferred side: `LEFT`, `RIGHT`.
 
 ### `player_registrations`
 

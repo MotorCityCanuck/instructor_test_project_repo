@@ -1511,7 +1511,6 @@ home_region_id → regions.region_id
 | `birth_date` | Birth date where supplied |
 | `gender` | Standardized gender code |
 | `dominant_hand` | Standardized handedness where supplied |
-| `preferred_side` | Preferred court side where supplied |
 | `home_region_id` | Home region |
 | `home_region_sk` | Conformed region key |
 | `country_code` | Standardized country |

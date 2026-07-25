@@ -60,7 +60,6 @@ def _build_players_sql_plan(
     birth_date_expr = _source_string_expr(source_columns, ["birth_date", "date_of_birth", "dob"])
     gender_expr_input = _source_upper_string_expr(source_columns, ["gender"])
     dominant_hand_expr_input = _source_upper_string_expr(source_columns, ["dominant_hand", "handedness"])
-    preferred_side_expr_input = _source_upper_string_expr(source_columns, ["preferred_side", "preferred_position"])
     home_region_id_expr = _source_nullif_string_expr(source_columns, ["home_region_id", "region_id"])
     country_expr_input = _source_upper_string_expr(source_columns, ["country_code", "country"])
     rating_expr = _source_nullif_string_expr(source_columns, ["rating_value", "rating", "player_rating"])
@@ -71,7 +70,6 @@ def _build_players_sql_plan(
     status_expr = _source_upper_string_expr(source_columns, ["player_status", "active_flag", "status"])
     gender_expr = _domain_case_expression("gender_input", config.data["domains"]["gender"])
     dominant_hand_expr = _domain_case_expression("dominant_hand_input", config.data["domains"]["dominant_hand"])
-    preferred_side_expr = _domain_case_expression("preferred_side_input", config.data["domains"]["player_position"])
     country_expr = _domain_case_expression("country_input", config.data["domains"]["country_code"])
     age_expr = """
 CASE
@@ -113,7 +111,6 @@ normalized_source AS (
         {birth_date_expr} AS birth_date_raw,
         {gender_expr_input} AS gender_input,
         {dominant_hand_expr_input} AS dominant_hand_input,
-        {preferred_side_expr_input} AS preferred_side_input,
         {home_region_id_expr} AS home_region_id,
         {country_expr_input} AS country_input,
         {rating_expr} AS rating_raw,
@@ -130,7 +127,6 @@ deduped_source AS (
         birth_date_raw,
         gender_input,
         dominant_hand_input,
-        preferred_side_input,
         home_region_id,
         country_input,
         rating_raw,
@@ -146,7 +142,6 @@ typed_source AS (
         CAST(source.rating_confidence_raw AS DOUBLE) AS rating_confidence_value,
         {gender_expr} AS gender,
         {dominant_hand_expr} AS dominant_hand,
-        {preferred_side_expr} AS preferred_side,
         {country_expr} AS source_country_code
     FROM deduped_source source
 ),
@@ -173,7 +168,6 @@ invalid_rows AS (
             WHEN home_region_id IS NOT NULL AND home_region_sk IS NULL THEN 'ORPHAN_FOREIGN_KEY'
             WHEN gender_input IS NOT NULL AND gender IS NULL THEN 'INVALID_DOMAIN_VALUE'
             WHEN dominant_hand_input IS NOT NULL AND dominant_hand IS NULL THEN 'INVALID_DOMAIN_VALUE'
-            WHEN preferred_side_input IS NOT NULL AND preferred_side IS NULL THEN 'INVALID_DOMAIN_VALUE'
             WHEN country_input IS NOT NULL AND country_code IS NULL THEN 'INVALID_DOMAIN_VALUE'
             WHEN rating_raw IS NOT NULL AND rating_value IS NULL THEN 'INVALID_DATA_TYPE'
             WHEN rating_confidence_raw IS NOT NULL AND rating_confidence_value IS NULL THEN 'INVALID_DATA_TYPE'
@@ -185,7 +179,6 @@ invalid_rows AS (
             WHEN home_region_id IS NOT NULL AND home_region_sk IS NULL THEN 'PLAYER_002'
             WHEN gender_input IS NOT NULL AND gender IS NULL THEN 'PLAYER_003'
             WHEN dominant_hand_input IS NOT NULL AND dominant_hand IS NULL THEN 'PLAYER_004'
-            WHEN preferred_side_input IS NOT NULL AND preferred_side IS NULL THEN 'PLAYER_006'
             WHEN country_input IS NOT NULL AND country_code IS NULL THEN 'PLAYER_007'
             WHEN rating_raw IS NOT NULL AND rating_value IS NULL THEN 'PLAYER_008'
             WHEN rating_confidence_raw IS NOT NULL AND rating_confidence_value IS NULL THEN 'PLAYER_009'
@@ -206,8 +199,6 @@ invalid_rows AS (
                 THEN concat('Invalid gender value ''', gender_input, '''.')
             WHEN dominant_hand_input IS NOT NULL AND dominant_hand IS NULL
                 THEN concat('Invalid dominant_hand value ''', dominant_hand_input, '''.')
-            WHEN preferred_side_input IS NOT NULL AND preferred_side IS NULL
-                THEN concat('Invalid preferred_side value ''', preferred_side_input, '''.')
             WHEN country_input IS NOT NULL AND country_code IS NULL
                 THEN concat('Invalid country value ''', country_input, '''.')
             WHEN rating_raw IS NOT NULL AND rating_value IS NULL
@@ -229,7 +220,6 @@ invalid_rows AS (
                 'birth_date_raw', birth_date_raw,
                 'gender_input', gender_input,
                 'dominant_hand_input', dominant_hand_input,
-                'preferred_side_input', preferred_side_input,
                 'home_region_id', home_region_id,
                 'country_input', country_input,
                 'rating_raw', rating_raw,
@@ -244,7 +234,6 @@ invalid_rows AS (
        OR (home_region_id IS NOT NULL AND home_region_sk IS NULL)
        OR (gender_input IS NOT NULL AND gender IS NULL)
        OR (dominant_hand_input IS NOT NULL AND dominant_hand IS NULL)
-       OR (preferred_side_input IS NOT NULL AND preferred_side IS NULL)
        OR (country_input IS NOT NULL AND country_code IS NULL)
        OR (rating_raw IS NOT NULL AND rating_value IS NULL)
        OR (rating_confidence_raw IS NOT NULL AND rating_confidence_value IS NULL)
@@ -264,7 +253,6 @@ valid_rows AS (
         birth_date,
         gender,
         dominant_hand,
-        preferred_side,
         home_region_id,
         home_region_sk,
         country_code,
@@ -285,7 +273,6 @@ valid_rows AS (
           OR (home_region_id IS NOT NULL AND home_region_sk IS NULL)
           OR (gender_input IS NOT NULL AND gender IS NULL)
           OR (dominant_hand_input IS NOT NULL AND dominant_hand IS NULL)
-          OR (preferred_side_input IS NOT NULL AND preferred_side IS NULL)
           OR (country_input IS NOT NULL AND country_code IS NULL)
           OR (rating_raw IS NOT NULL AND rating_value IS NULL)
           OR (rating_confidence_raw IS NOT NULL AND rating_confidence_value IS NULL)
@@ -335,7 +322,6 @@ SELECT
     birth_date,
     gender,
     dominant_hand,
-    preferred_side,
     home_region_id,
     home_region_sk,
     country_code,
@@ -392,7 +378,6 @@ SELECT
             'birth_date', birth_date,
             'gender', gender,
             'dominant_hand', dominant_hand,
-            'preferred_side', preferred_side,
             'home_region_id', home_region_id,
             'country_code', country_code,
             'rating', rating,
@@ -409,7 +394,6 @@ SELECT
                 'birth_date', birth_date,
                 'gender', gender,
                 'dominant_hand', dominant_hand,
-                'preferred_side', preferred_side,
                 'home_region_id', home_region_id,
                 'country_code', country_code,
                 'rating', rating,
@@ -436,7 +420,6 @@ WITH normalized_source AS (
         {birth_date_expr} AS birth_date_raw,
         {gender_expr_input} AS gender_input,
         {dominant_hand_expr_input} AS dominant_hand_input,
-        {preferred_side_expr_input} AS preferred_side_input,
         {home_region_id_expr} AS home_region_id,
         {country_expr_input} AS country_input,
         {rating_expr} AS rating_raw,
@@ -471,7 +454,6 @@ valid_rows AS (
         TO_DATE(source.birth_date_raw) AS birth_date,
         {gender_expr} AS gender,
         {dominant_hand_expr} AS dominant_hand,
-        {preferred_side_expr} AS preferred_side,
         source.home_region_id,
         region.region_sk AS home_region_sk,
         COALESCE({country_expr}, region.country_code) AS country_code,
@@ -486,7 +468,6 @@ valid_rows AS (
             {birth_date_expr} AS birth_date_raw,
             {gender_expr_input} AS gender_input,
             {dominant_hand_expr_input} AS dominant_hand_input,
-            {preferred_side_expr_input} AS preferred_side_input,
             {home_region_id_expr} AS home_region_id,
             {country_expr_input} AS country_input,
             {rating_expr} AS rating_raw,
@@ -503,7 +484,6 @@ valid_rows AS (
           OR (source.home_region_id IS NOT NULL AND region.region_sk IS NULL)
           OR (source.gender_input IS NOT NULL AND {gender_expr} IS NULL)
           OR (source.dominant_hand_input IS NOT NULL AND {dominant_hand_expr} IS NULL)
-          OR (source.preferred_side_input IS NOT NULL AND {preferred_side_expr} IS NULL)
           OR (source.country_input IS NOT NULL AND {country_expr} IS NULL)
           OR (source.rating_raw IS NOT NULL AND CAST(source.rating_raw AS DOUBLE) IS NULL)
           OR (source.rating_confidence_raw IS NOT NULL AND CAST(source.rating_confidence_raw AS DOUBLE) IS NULL)
