@@ -66,11 +66,17 @@ PHASE7_TARGET_CONFIG = {
 SELECT COUNT(*) AS partnership_count
 FROM (
     SELECT DISTINCT
-        COALESCE(CAST(resolved_team_id AS STRING), CAST(canonical_player_pair_key AS STRING)) AS partnership_key
-    FROM {get_gold_target_table_fqn(environment, "resolved_match_teams")}
-    WHERE canonical_player_pair_key IS NOT NULL
-      AND match_date IS NOT NULL
-      AND CAST(match_date AS DATE) <= DATE('{analysis_as_of_date.isoformat()}')
+        COALESCE(
+            CAST(rmt.resolved_team_id AS STRING),
+            CAST(rmt.canonical_player_pair_key AS STRING)
+        ) AS partnership_key
+    FROM {get_gold_target_table_fqn(environment, "resolved_match_teams")} AS rmt
+    INNER JOIN {get_gold_target_table_fqn(environment, "competition_match_sides")} AS cms
+      ON CAST(rmt.match_id AS STRING) = CAST(cms.match_id AS STRING)
+     AND CAST(rmt.match_team_id AS STRING) = CAST(cms.match_team_id AS STRING)
+    WHERE rmt.canonical_player_pair_key IS NOT NULL
+      AND CAST(cms.match_date AS DATE) IS NOT NULL
+      AND CAST(cms.match_date AS DATE) <= DATE('{analysis_as_of_date.isoformat()}')
 )
 """.strip()
             ).collect()[0].asDict(recursive=True)["partnership_count"]
