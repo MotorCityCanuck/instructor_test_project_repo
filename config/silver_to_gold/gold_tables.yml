@@ -93,7 +93,7 @@ gold_tables:
     stage: modeling
     target: match_outcome_training_set
     transform: build_match_outcome_training_set
-    primary_key: [match_id, team_id]
+    primary_key: [match_id]
 
   match_outcome_predictions:
     enabled: true
@@ -101,7 +101,7 @@ gold_tables:
     stage: modeling
     target: match_outcome_predictions
     transform: build_match_outcome_predictions
-    primary_key: [match_id, team_id]
+    primary_key: [match_id]
 
   match_model_metrics:
     enabled: true
@@ -109,7 +109,7 @@ gold_tables:
     stage: modeling
     target: match_model_metrics
     transform: build_match_model_metrics
-    primary_key: [model_name, evaluation_window]
+    primary_key: [model_run_id, split_name, metric_name]
 
   player_evaluation_scorecards:
     enabled: true

@@ -61,6 +61,12 @@ PHASE8_TARGET_TABLES = (
     "entity_data_quality_confidence",
 )
 
+PHASE9_TARGET_TABLES = (
+    "match_outcome_training_set",
+    "match_outcome_predictions",
+    "match_model_metrics",
+)
+
 
 class UpstreamSilverRunNotFoundError(RuntimeError):
     """Raised when no successful upstream Bronze-to-Silver run can be resolved."""

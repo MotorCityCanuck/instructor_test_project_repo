@@ -500,6 +500,131 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
   - the component formula is currently a transparent reference implementation and may still need instructor review before it is used as an eligibility gate
   - player team-resolution coverage currently relies on resolved historical match sides joined through `competition_player_matches`
 
+### `match_outcome_training_set`
+
+- Status: `implemented`
+- Phase: `9`
+- Intended purpose: canonical one-row-per-match modeling set for time-valid historical outcome estimation
+- Expected Gold dependencies:
+  - `competition_match_sides`
+  - `team_performance_features`
+- Current contract notes:
+  - current implementation uses deterministic Team A assignment with `team_number = 1` and Team B with `team_number = 2`
+  - only completed historical matches on or before `analysis_as_of_date` are included
+  - current repository configuration supports chronological `train` and `validation` splits only; the broader `test` split remains a planned extension
+- Current implemented columns:
+  - `match_id`
+  - `match_date`
+  - `batch_id`
+  - `batch_sequence`
+  - `batch_date`
+  - `region_id`
+  - `match_country_code`
+  - `match_type`
+  - `competition_category`
+  - `team_a_match_team_id`
+  - `team_b_match_team_id`
+  - `team_a_team_number`
+  - `team_b_team_number`
+  - `team_a_team_id`
+  - `team_b_team_id`
+  - `team_a_pre_match_team_rating`
+  - `team_b_pre_match_team_rating`
+  - `rating_expected_probability`
+  - `team_rating_difference`
+  - `recent_form_difference`
+  - `adjusted_win_rate_difference`
+  - `strength_of_schedule_difference`
+  - `partnership_continuity_difference`
+  - `consistency_score_difference`
+  - `rating_reliability_difference`
+  - `actual_winner_team_number`
+  - `team_a_win_flag`
+  - `team_b_win_flag`
+  - `team_a_feature_evidence_status`
+  - `team_b_feature_evidence_status`
+  - `split_name`
+- Unresolved items:
+  - the current build does not symmetry-expand each match into alternate Team A / Team B rows
+  - richer quality-confidence features can be added later without changing the one-row-per-match grain
+
+### `match_outcome_predictions`
+
+- Status: `implemented`
+- Phase: `9`
+- Intended purpose: published pre-match win probability prediction table for historical matches
+- Expected Gold dependencies:
+  - `match_outcome_training_set`
+- Current contract notes:
+  - the current implementation is baseline-first and publishes only the analytical-rating probability model
+  - `model_predicted_probability` currently equals `rating_expected_probability`
+- Current implemented columns:
+  - `match_id`
+  - `match_date`
+  - `batch_id`
+  - `batch_sequence`
+  - `batch_date`
+  - `region_id`
+  - `match_country_code`
+  - `match_type`
+  - `competition_category`
+  - `split_name`
+  - `model_run_id`
+  - `model_name`
+  - `model_version`
+  - `algorithm`
+  - `team_a_match_team_id`
+  - `team_b_match_team_id`
+  - `team_a_team_id`
+  - `team_b_team_id`
+  - `team_a_team_number`
+  - `team_b_team_number`
+  - `team_a_pre_match_team_rating`
+  - `team_b_pre_match_team_rating`
+  - `rating_expected_probability`
+  - `model_predicted_probability`
+  - `team_rating_difference`
+  - `recent_form_difference`
+  - `adjusted_win_rate_difference`
+  - `strength_of_schedule_difference`
+  - `partnership_continuity_difference`
+  - `consistency_score_difference`
+  - `rating_reliability_difference`
+  - `actual_winner_team_number`
+  - `team_a_win_flag`
+  - `predicted_winner_team_number`
+  - `predicted_winner_team_id`
+  - `actual_winner_team_id`
+  - `prediction_correct_flag`
+  - `prediction_explanation`
+- Unresolved items:
+  - challenger-model prediction columns remain unimplemented in the current reference build
+
+### `match_model_metrics`
+
+- Status: `implemented`
+- Phase: `9`
+- Intended purpose: time-split match-model performance metrics for the published baseline run
+- Expected Gold dependencies:
+  - `match_outcome_predictions`
+- Current contract notes:
+  - current implementation publishes baseline metrics only
+  - calibration is represented as probability-band gap metrics rather than a separate report artifact
+- Current implemented columns:
+  - `model_run_id`
+  - `model_name`
+  - `model_version`
+  - `algorithm`
+  - `feature_definition_version`
+  - `split_name`
+  - `metric_name`
+  - `metric_value`
+  - `evaluated_row_count`
+  - `evaluation_window`
+- Unresolved items:
+  - the current config and harness publish `train` and `validation` metrics only
+  - a fitted challenger model remains a later extension
+
 ### `recommendation_scorecards`
 
 - Status: `planned`
