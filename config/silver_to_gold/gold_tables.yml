@@ -157,7 +157,7 @@ gold_tables:
     stage: sensitivity
     target: selection_sensitivity_results
     transform: build_selection_sensitivity_results
-    primary_key: [scenario_name, country_code, category_code, team_id]
+    primary_key: [country_code, category_code, team_id, scenario_name]
 
   recommendation_explanations:
     enabled: true
@@ -165,7 +165,7 @@ gold_tables:
     stage: sensitivity
     target: recommendation_explanations
     transform: build_recommendation_explanations
-    primary_key: [country_code, category_code, team_id]
+    primary_key: [country_code, category_code, team_id, scoring_scenario]
 
   gold_run_summary:
     enabled: true

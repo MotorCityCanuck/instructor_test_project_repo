@@ -887,6 +887,92 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
   - optional cross-category overlap constraints remain a later instructor-approved extension
   - explanation-template publication and sensitivity outputs remain Phase 13 work
 
+### `selection_sensitivity_results`
+
+- Status: `implemented`
+- Phase: `13`
+- Intended purpose: scenario-by-scenario recommendation stability view for every retained recommendation candidate
+- Expected Silver / Gold dependencies:
+  - `team_selection_scorecards`
+  - `olympic_team_recommendations`
+- Current contract notes:
+  - current implementation recomputes scenario scores from persisted Phase 11 component scores rather than rerunning upstream phases under separate scenario-specific scorecard builds
+  - the six approved scenarios are implemented as transparent weight overlays on the persisted team component scores
+  - `selection_frequency` currently represents primary-selection frequency across the approved scenarios
+- Current implemented columns:
+  - `country_code`
+  - `category_code`
+  - `team_id`
+  - `scoring_scenario`
+  - `scenario_name`
+  - `analysis_as_of_date`
+  - `release_name`
+  - `release_role`
+  - `authoritative_recommendation_flag`
+  - `baseline_recommendation_status`
+  - `scenario_recommendation_status`
+  - `scenario_rank`
+  - `scenario_score`
+  - `primary_selection_flag`
+  - `best_scenario_rank`
+  - `worst_scenario_rank`
+  - `rank_range_across_scenarios`
+  - `selection_frequency`
+  - `recommendation_stability_score`
+  - `player_one_id`
+  - `player_two_id`
+  - `top_strengths`
+  - `top_risks`
+  - `material_limitation_text`
+  - `current_member_count`
+  - `evidence_sufficiency_status`
+  - `combined_team_confidence`
+  - `methodology_version`
+- Unresolved items:
+  - scenario overlays are instructor-reference assumptions because the current config enumerates scenario names but does not yet define scenario-specific weights explicitly
+
+### `recommendation_explanations`
+
+- Status: `implemented`
+- Phase: `13`
+- Intended purpose: template-based analytical explanation rows for published recommendation candidates
+- Expected Silver / Gold dependencies:
+  - `team_selection_scorecards`
+  - `olympic_team_recommendations`
+  - `selection_sensitivity_results`
+- Current contract notes:
+  - current rows are generated only from persisted analytical evidence and avoid unsupported scouting or psychological claims
+  - human-review fields are present with baseline defaults, but no override workflow is implemented yet
+- Current implemented columns:
+  - `country_code`
+  - `category_code`
+  - `team_id`
+  - `scoring_scenario`
+  - `analysis_as_of_date`
+  - `release_name`
+  - `release_role`
+  - `authoritative_recommendation_flag`
+  - `analytical_recommendation_status`
+  - `human_review_status`
+  - `human_override_flag`
+  - `human_override_reason`
+  - `headline_rationale`
+  - `strongest_components`
+  - `material_weaknesses`
+  - `evidence_volume_summary`
+  - `confidence_band`
+  - `key_data_limitations`
+  - `closest_alternative_team_id`
+  - `closest_alternative_score_gap`
+  - `selection_frequency`
+  - `recommendation_stability_score`
+  - `rank_range_across_scenarios`
+  - `sensitivity_summary`
+  - `explanation_text`
+  - `methodology_version`
+- Unresolved items:
+  - explanation wording is still a deterministic reference template rather than a finalized executive communication layer
+
 ## Change Log Expectations
 
 Whenever this registry changes materially:
