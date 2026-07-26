@@ -295,6 +295,42 @@ def test_build_team_selection_scorecards_classifies_eligible_and_ineligible_team
     assert "TEAM_NOT_ACTIVE" in str(inactive_row["eligibility_reason_codes"])
 
 
+def test_build_team_selection_scorecards_uses_membership_dates_not_only_current_flag() -> None:
+    (
+        teams,
+        memberships,
+        team_features,
+        partnerships,
+        player_scorecards,
+        quality,
+        resolved,
+        predictions,
+    ) = _sample_team_selection_inputs()
+    for membership in memberships:
+        membership["membership_start_date"] = "2025-01-01"
+        membership["membership_end_date"] = None
+        membership["current_membership_flag"] = False
+
+    rows = build_team_selection_scorecards(
+        teams_rows=teams,
+        team_memberships_rows=memberships,
+        team_performance_features_rows=team_features,
+        partnership_effectiveness_rows=partnerships,
+        player_scorecard_rows=player_scorecards,
+        entity_data_quality_confidence_rows=quality,
+        resolved_match_teams_rows=resolved,
+        match_outcome_predictions_rows=predictions,
+        analysis_as_of_date=date(2025, 12, 31),
+        scoring_scenario="BALANCED",
+        scorecards_config=_scorecards_config(),
+        eligibility_config=_eligibility_config(),
+    )
+
+    eligible_row = next(row for row in rows if row["team_id"] == "team-1")
+    assert eligible_row["current_member_count"] == 2
+    assert eligible_row["eligibility_status"] == "ELIGIBLE"
+
+
 def test_build_olympic_team_candidates_ranks_only_eligible_rows() -> None:
     (
         teams,
@@ -399,6 +435,41 @@ def test_publish_olympic_team_candidates_returns_summary(monkeypatch) -> None:
     assert summary.stage_table_fqn == stage_fqn
     assert summary.target_table_fqn == target_fqn
     assert summary.output_row_count == 1
+
+
+def test_publish_olympic_team_candidates_supports_empty_publish(monkeypatch) -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+    target_fqn = f"{environment.catalog}.{environment.gold_schema}.olympic_team_candidates"
+    stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.olympic_team_candidates"
+    spark = _FakeSpark(
+        {
+            target_fqn: _FakeTable(row_count=0),
+            stage_fqn: _FakeTable(row_count=0),
+        }
+    )
+    published = []
+
+    monkeypatch.setattr(
+        "napa_pipeline.silver_to_gold.team_selection.publish_sql_table",
+        lambda _spark, table_fqn, select_sql: published.append((table_fqn, select_sql)) or 0,
+    )
+    monkeypatch.setattr(
+        "napa_pipeline.silver_to_gold.team_selection._validate_key_constraints",
+        lambda *args, **kwargs: None,
+    )
+
+    summary = publish_olympic_team_candidates(
+        spark,
+        environment,
+        rows=(),
+    )
+
+    assert published[0][0] == stage_fqn
+    assert "WHERE 1 = 0" in published[0][1]
+    assert published[1][0] == target_fqn
+    assert summary.input_row_count == 0
+    assert summary.output_row_count == 0
 
 
 def test_publish_phase11_selection_tables_returns_two_summaries(monkeypatch) -> None:

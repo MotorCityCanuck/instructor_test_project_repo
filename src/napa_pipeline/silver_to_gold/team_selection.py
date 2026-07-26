@@ -12,7 +12,10 @@ from napa_pipeline.silver_to_gold.io import (
     get_gold_target_table_fqn,
     get_silver_source_table_fqn,
 )
-from napa_pipeline.silver_to_gold.publish import publish_stage_records_to_gold_table
+from napa_pipeline.silver_to_gold.publish import (
+    publish_sql_table,
+    publish_stage_records_to_gold_table,
+)
 
 
 ELIGIBLE_STATUS = "ELIGIBLE"
@@ -142,8 +145,14 @@ def build_team_selection_scorecards(
         for component, weight in scorecards_config["team_weights"].items()
     }
 
-    current_members_by_team = _current_members_by_team(team_memberships_rows)
-    overlap_by_team = _membership_overlap_by_team(team_memberships_rows)
+    current_members_by_team = _current_members_by_team(
+        team_memberships_rows,
+        analysis_as_of_date=analysis_as_of_date,
+    )
+    overlap_by_team = _membership_overlap_by_team(
+        team_memberships_rows,
+        analysis_as_of_date=analysis_as_of_date,
+    )
     player_scorecards_by_id = {
         _normalize_required_string(row.get("player_id")): row
         for row in player_scorecard_rows
@@ -186,7 +195,10 @@ def build_team_selection_scorecards(
         if country_code not in countries or category_code not in categories:
             continue
 
-        active_flag = _coerce_bool(team_row.get("active_flag"))
+        active_flag = _team_is_active_as_of_date(
+            team_row,
+            analysis_as_of_date=analysis_as_of_date,
+        )
         team_status = _normalize_optional_string(team_row.get("team_status"))
         current_member_ids = current_members_by_team.get(team_id, ())
         current_member_count = len(current_member_ids)
@@ -260,6 +272,7 @@ def build_team_selection_scorecards(
             require_active_team=require_active_team,
             analysis_as_of_date=analysis_as_of_date,
             overlap_warning_flag=overlap_by_team.get(team_id, False),
+            active_as_of_date=active_flag,
         )
         eligibility_status = _derive_eligibility_status(
             reason_codes=eligibility_reason_codes,
@@ -515,6 +528,31 @@ def publish_olympic_team_candidates(
     """Publish olympic_team_candidates from Python-built records."""
     target_table_fqn = get_gold_target_table_fqn(environment, "olympic_team_candidates")
     stage_table_fqn = get_gold_stage_table_fqn(environment, "olympic_team_candidates")
+    if not rows:
+        publish_sql_table(
+            spark,
+            stage_table_fqn,
+            _build_empty_olympic_team_candidates_sql(),
+        )
+        _validate_key_constraints(
+            spark,
+            stage_table_fqn,
+            key_columns=("country_code", "category_code", "team_id", "scoring_scenario"),
+            label="olympic_team_candidates",
+        )
+        publish_sql_table(
+            spark,
+            target_table_fqn,
+            f"SELECT * FROM {stage_table_fqn}",
+        )
+        output_row_count = int(spark.table(target_table_fqn).count())
+        return OlympicTeamCandidatesPublicationSummary(
+            target_table_fqn=target_table_fqn,
+            stage_table_fqn=stage_table_fqn,
+            input_row_count=0,
+            output_row_count=output_row_count,
+        )
+
     publish_stage_records_to_gold_table(
         spark,
         stage_table_fqn=stage_table_fqn,
@@ -536,8 +574,37 @@ def publish_olympic_team_candidates(
     )
 
 
+def _build_empty_olympic_team_candidates_sql() -> str:
+    return """
+SELECT
+    CAST(NULL AS STRING) AS country_code,
+    CAST(NULL AS STRING) AS category_code,
+    CAST(NULL AS STRING) AS team_id,
+    CAST(NULL AS STRING) AS scoring_scenario,
+    CAST(NULL AS DATE) AS analysis_as_of_date,
+    CAST(NULL AS INT) AS candidate_rank,
+    CAST(NULL AS STRING) AS recommendation_tier,
+    CAST(NULL AS DOUBLE) AS final_team_selection_score,
+    CAST(NULL AS DOUBLE) AS confidence_adjusted_team_score,
+    CAST(NULL AS DOUBLE) AS raw_team_selection_score,
+    CAST(NULL AS DOUBLE) AS combined_team_confidence,
+    CAST(NULL AS STRING) AS evidence_sufficiency_status,
+    CAST(NULL AS BOOLEAN) AS candidate_attribution_allowed_flag,
+    CAST(NULL AS STRING) AS player_one_id,
+    CAST(NULL AS STRING) AS player_two_id,
+    CAST(NULL AS STRING) AS player_one_display_name,
+    CAST(NULL AS STRING) AS player_two_display_name,
+    CAST(NULL AS STRING) AS top_strengths,
+    CAST(NULL AS STRING) AS top_risks,
+    CAST(NULL AS STRING) AS candidate_rationale
+WHERE 1 = 0
+""".strip()
+
+
 def _current_members_by_team(
     team_memberships_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    *,
+    analysis_as_of_date: date,
 ) -> dict[str, tuple[str, ...]]:
     current_members: dict[str, set[str]] = {}
     for row in team_memberships_rows:
@@ -545,7 +612,10 @@ def _current_members_by_team(
         player_id = _normalize_optional_string(row.get("player_id"))
         if team_id is None or player_id is None:
             continue
-        if not _coerce_bool(row.get("current_membership_flag")):
+        if not _membership_is_active_as_of_date(
+            row,
+            analysis_as_of_date=analysis_as_of_date,
+        ):
             continue
         current_members.setdefault(team_id, set()).add(player_id)
     return {
@@ -556,11 +626,18 @@ def _current_members_by_team(
 
 def _membership_overlap_by_team(
     team_memberships_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    *,
+    analysis_as_of_date: date,
 ) -> dict[str, bool]:
     overlap: dict[str, bool] = {}
     for row in team_memberships_rows:
         team_id = _normalize_optional_string(row.get("team_id"))
         if team_id is None:
+            continue
+        if not _membership_is_active_as_of_date(
+            row,
+            analysis_as_of_date=analysis_as_of_date,
+        ):
             continue
         overlap[team_id] = overlap.get(team_id, False) or _coerce_bool(
             row.get("membership_overlap_flag")
@@ -649,11 +726,11 @@ def _derive_eligibility_reason_codes(
     require_active_team: bool,
     analysis_as_of_date: date,
     overlap_warning_flag: bool,
+    active_as_of_date: bool,
 ) -> list[str]:
     reason_codes: list[str] = []
-    active_flag = _coerce_bool(team_row.get("active_flag"))
     dissolution_date = _coerce_date(team_row.get("dissolution_date"))
-    if require_active_team and not active_flag:
+    if require_active_team and not active_as_of_date:
         reason_codes.append("TEAM_NOT_ACTIVE")
     if dissolution_date is not None and dissolution_date <= analysis_as_of_date:
         reason_codes.append("TEAM_DISSOLVED")
@@ -926,3 +1003,35 @@ def _coerce_date(value: Any) -> date | None:
         return date.fromisoformat(text[:10])
     except ValueError:
         return None
+
+
+def _membership_is_active_as_of_date(
+    membership_row: dict[str, Any],
+    *,
+    analysis_as_of_date: date,
+) -> bool:
+    start_date = _coerce_date(membership_row.get("membership_start_date"))
+    end_date = _coerce_date(membership_row.get("membership_end_date"))
+    if start_date is not None and start_date > analysis_as_of_date:
+        return False
+    if end_date is not None and end_date < analysis_as_of_date:
+        return False
+    if start_date is None and end_date is None:
+        return _coerce_bool(membership_row.get("current_membership_flag"))
+    return True
+
+
+def _team_is_active_as_of_date(
+    team_row: dict[str, Any],
+    *,
+    analysis_as_of_date: date,
+) -> bool:
+    formation_date = _coerce_date(team_row.get("formation_date"))
+    dissolution_date = _coerce_date(team_row.get("dissolution_date"))
+    if formation_date is not None and formation_date > analysis_as_of_date:
+        return False
+    if dissolution_date is not None and dissolution_date <= analysis_as_of_date:
+        return False
+    if formation_date is None and dissolution_date is None:
+        return _coerce_bool(team_row.get("active_flag"))
+    return True
