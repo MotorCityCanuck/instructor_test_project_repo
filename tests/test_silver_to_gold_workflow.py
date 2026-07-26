@@ -13,6 +13,7 @@ from napa_pipeline.silver_to_gold.workflow import (
     PHASE5_TARGET_TABLES,
     PHASE6_TARGET_TABLES,
     PHASE7_TARGET_TABLES,
+    PHASE8_TARGET_TABLES,
     REQUIRED_SILVER_SOURCE_TABLES,
     SilverSourceValidationError,
     UpstreamSilverRunNotFoundError,
@@ -150,6 +151,12 @@ def test_phase7_target_table_inventory_is_expected() -> None:
     assert PHASE7_TARGET_TABLES == (
         "team_performance_features",
         "partnership_effectiveness",
+    )
+
+
+def test_phase8_target_table_inventory_is_expected() -> None:
+    assert PHASE8_TARGET_TABLES == (
+        "entity_data_quality_confidence",
     )
 
 

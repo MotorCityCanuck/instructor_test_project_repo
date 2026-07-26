@@ -3,4 +3,19 @@ quality_rules:
   maximum_team_country_null_pct: 0.0
   maximum_unresolved_team_pct: 0.1
   maximum_leakage_failures: 0
-
+  minimum_match_count_for_confidence: 5
+  minimum_recent_match_count: 1
+  confidence_component_weights:
+    identity_integrity: 0.18
+    relationship_integrity: 0.15
+    match_structure_integrity: 0.12
+    game_score_integrity: 0.10
+    rating_coverage: 0.15
+    match_volume_coverage: 0.10
+    recency_coverage: 0.08
+    team_resolution_coverage: 0.07
+    source_data_quality_score: 0.05
+  confidence_band_thresholds:
+    high: 85
+    moderate: 70
+    low: 50

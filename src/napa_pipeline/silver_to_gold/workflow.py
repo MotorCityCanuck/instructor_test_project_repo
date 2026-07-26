@@ -57,6 +57,10 @@ PHASE7_TARGET_TABLES = (
     "partnership_effectiveness",
 )
 
+PHASE8_TARGET_TABLES = (
+    "entity_data_quality_confidence",
+)
+
 
 class UpstreamSilverRunNotFoundError(RuntimeError):
     """Raised when no successful upstream Bronze-to-Silver run can be resolved."""

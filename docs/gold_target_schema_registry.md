@@ -454,6 +454,52 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
   - development momentum is currently a transparent bounded weighted composite rather than an instructor-approved final scorecard component
   - volatility-related development measures remain unimplemented because no separate Silver volatility field is currently available
 
+### `entity_data_quality_confidence`
+
+- Status: `implemented`
+- Phase: `8`
+- Intended purpose: transparent evidence-quality confidence table for both players and teams
+- Expected Silver / Gold dependencies:
+  - `players`
+  - `player_current_ratings`
+  - `player_performance_features`
+  - `player_development_features`
+  - `competition_player_matches`
+  - `resolved_match_teams`
+  - `teams`
+  - `team_memberships`
+  - `team_performance_features`
+  - `competition_match_sides`
+- Current contract notes:
+  - current implementation publishes one row per `entity_type, entity_id` for the active analysis date
+  - confidence is intentionally separated from performance and uses configured component weights from `quality_rules.yml`
+  - missing evidence reduces confidence by assigning low component coverage rather than silently dropping the row
+- Current implemented columns:
+  - `entity_type`
+  - `entity_id`
+  - `analysis_as_of_date`
+  - `display_label`
+  - `country_code`
+  - `active_flag`
+  - `candidate_attribution_allowed_flag`
+  - `identity_integrity`
+  - `relationship_integrity`
+  - `match_structure_integrity`
+  - `game_score_integrity`
+  - `rating_coverage`
+  - `match_volume_coverage`
+  - `recency_coverage`
+  - `team_resolution_coverage`
+  - `source_data_quality_score`
+  - `data_quality_confidence_score`
+  - `quality_confidence_band`
+  - `critical_quality_issue_count`
+  - `warning_quality_issue_count`
+  - `material_limitation_text`
+- Unresolved items:
+  - the component formula is currently a transparent reference implementation and may still need instructor review before it is used as an eligibility gate
+  - player team-resolution coverage currently relies on resolved historical match sides joined through `competition_player_matches`
+
 ### `recommendation_scorecards`
 
 - Status: `planned`
