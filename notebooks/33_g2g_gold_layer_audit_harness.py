@@ -100,7 +100,10 @@ def main() -> None:
             match_rows=match_rows,
             analysis_as_of_date=args.analysis_as_of_date,
         )
-        pipeline_context = create_pipeline_context(runtime_context)
+        pipeline_context = create_pipeline_context(
+            runtime_context,
+            processing_mode="gold_audit",
+        )
         initialize_pipeline_run(spark, pipeline_context)
         table_runs_fqn = get_operations_table_fqn(pipeline_context, TABLE_RUNS_TABLE)
 

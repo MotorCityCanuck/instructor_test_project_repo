@@ -65,6 +65,8 @@ class _GoldTableProfile:
     null_primary_key_row_count: int
     duplicate_primary_key_group_count: int
     duplicate_primary_key_row_count: int
+    null_primary_key_sample_keys: tuple[str, ...]
+    duplicate_primary_key_sample_keys: tuple[str, ...]
     empty_table_flag: bool
     distinct_analysis_as_of_date_count: int | None
     distinct_scoring_scenario_count: int | None
@@ -189,9 +191,14 @@ def publish_gold_layer_audit(
     append_records(spark, reconciliation_results_fqn, reconciliation_records)
 
     if critical_failure_count > 0:
+        failure_summary = build_gold_audit_failure_summary(
+            quality_records,
+            reconciliation_records,
+        )
         raise GoldAuditValidationError(
             "Gold audit detected critical anomalies. "
-            f"critical_failures={critical_failure_count}, warnings={warning_count}."
+            f"critical_failures={critical_failure_count}, warnings={warning_count}.\n"
+            f"{failure_summary}"
         )
 
     return GoldAuditSummary(
@@ -207,6 +214,61 @@ def publish_gold_layer_audit(
         warning_count=warning_count,
         critical_failure_count=critical_failure_count,
     )
+
+
+def build_gold_audit_failure_summary(
+    quality_records: list[dict[str, Any]],
+    reconciliation_records: list[dict[str, Any]],
+    *,
+    limit: int = 20,
+) -> str:
+    """Return a compact human-readable summary of failed audit records."""
+    failed_quality_records = [
+        record
+        for record in quality_records
+        if record.get("status") == "FAILED" and record.get("severity") == "ERROR"
+    ]
+    failed_reconciliation_records = [
+        record for record in reconciliation_records if record.get("status") == "FAILED"
+    ]
+    lines = ["Failed audit details:"]
+
+    if failed_quality_records:
+        lines.append("Quality failures:")
+        for record in failed_quality_records[:limit]:
+            lines.append(
+                "  - "
+                f"{record.get('target_table')}.{record.get('rule_id')}: "
+                f"failed_rows={record.get('failed_row_count')}, "
+                f"failure_pct={record.get('failure_pct')}, "
+                f"sample_keys={record.get('sample_keys')}"
+            )
+        if len(failed_quality_records) > limit:
+            lines.append(
+                f"  - ... {len(failed_quality_records) - limit} additional quality failures"
+            )
+    else:
+        lines.append("Quality failures: none")
+
+    if failed_reconciliation_records:
+        lines.append("Reconciliation failures:")
+        for record in failed_reconciliation_records[:limit]:
+            lines.append(
+                "  - "
+                f"{record.get('reconciliation_name')}: "
+                f"source_count={record.get('source_count')}, "
+                f"accepted_count={record.get('accepted_count')}, "
+                f"difference={record.get('difference')}"
+            )
+        if len(failed_reconciliation_records) > limit:
+            lines.append(
+                "  - ... "
+                f"{len(failed_reconciliation_records) - limit} additional reconciliation failures"
+            )
+    else:
+        lines.append("Reconciliation failures: none")
+
+    return "\n".join(lines)
 
 
 def build_expected_reconciliations(
@@ -302,6 +364,7 @@ def evaluate_table_profile_anomalies(
                 evaluated_row_count=profile.row_count,
                 failed_row_count=profile.null_primary_key_row_count,
                 failure_pct=_calculate_failure_pct(profile.null_primary_key_row_count, profile.row_count),
+                sample_keys=list(profile.null_primary_key_sample_keys),
                 evaluated_ts=profiled_ts,
             )
         )
@@ -321,6 +384,7 @@ def evaluate_table_profile_anomalies(
                     profile.duplicate_primary_key_row_count,
                     profile.row_count,
                 ),
+                sample_keys=list(profile.duplicate_primary_key_sample_keys),
                 evaluated_ts=profiled_ts,
             )
         )
@@ -463,6 +527,8 @@ def _profile_gold_table(
     null_primary_key_row_count = 0
     duplicate_primary_key_group_count = 0
     duplicate_primary_key_row_count = 0
+    null_primary_key_sample_keys: tuple[str, ...] = ()
+    duplicate_primary_key_sample_keys: tuple[str, ...] = ()
 
     if spec.primary_key and set(spec.primary_key).issubset(column_names):
         null_predicate = " OR ".join(
@@ -476,6 +542,13 @@ WHERE {null_predicate}
         null_row = spark.sql(null_query).collect()[0]
         null_mapping = null_row.asDict(recursive=True) if hasattr(null_row, "asDict") else dict(null_row)
         null_primary_key_row_count = int(null_mapping["null_primary_key_row_count"] or 0)
+        if null_primary_key_row_count > 0:
+            null_primary_key_sample_keys = _collect_null_primary_key_samples(
+                spark,
+                table_fqn=table_fqn,
+                primary_key=spec.primary_key,
+                null_predicate=null_predicate,
+            )
 
         group_by_clause = ", ".join(_quote_identifier(column_name) for column_name in spec.primary_key)
         duplicate_query = f"""
@@ -501,6 +574,13 @@ FROM (
         duplicate_primary_key_row_count = int(
             duplicate_mapping["duplicate_primary_key_row_count"] or 0
         )
+        if duplicate_primary_key_group_count > 0:
+            duplicate_primary_key_sample_keys = _collect_duplicate_primary_key_samples(
+                spark,
+                table_fqn=table_fqn,
+                primary_key=spec.primary_key,
+                group_by_clause=group_by_clause,
+            )
 
     distinct_analysis_as_of_date_count = None
     if "analysis_as_of_date" in column_names:
@@ -549,6 +629,8 @@ WHERE scoring_scenario IS NOT NULL
         null_primary_key_row_count=null_primary_key_row_count,
         duplicate_primary_key_group_count=duplicate_primary_key_group_count,
         duplicate_primary_key_row_count=duplicate_primary_key_row_count,
+        null_primary_key_sample_keys=null_primary_key_sample_keys,
+        duplicate_primary_key_sample_keys=duplicate_primary_key_sample_keys,
         empty_table_flag=row_count == 0,
         distinct_analysis_as_of_date_count=distinct_analysis_as_of_date_count,
         distinct_scoring_scenario_count=distinct_scoring_scenario_count,
@@ -556,6 +638,67 @@ WHERE scoring_scenario IS NOT NULL
         warning_count=warning_count,
         status=status,
     )
+
+
+def _collect_null_primary_key_samples(
+    spark: Any,
+    *,
+    table_fqn: str,
+    primary_key: tuple[str, ...],
+    null_predicate: str,
+    limit: int = 10,
+) -> tuple[str, ...]:
+    """Return bounded sample primary-key values for rows with null key fields."""
+    sample_query = f"""
+SELECT {_build_primary_key_sample_expression(primary_key)} AS sample_key
+FROM {table_fqn}
+WHERE {null_predicate}
+LIMIT {limit}
+""".strip()
+    return _collect_sample_key_values(spark, sample_query)
+
+
+def _collect_duplicate_primary_key_samples(
+    spark: Any,
+    *,
+    table_fqn: str,
+    primary_key: tuple[str, ...],
+    group_by_clause: str,
+    limit: int = 10,
+) -> tuple[str, ...]:
+    """Return bounded sample primary-key values for duplicate key groups."""
+    sample_query = f"""
+SELECT {_build_primary_key_sample_expression(primary_key)} AS sample_key
+FROM (
+    SELECT {group_by_clause}, COUNT(*) AS group_count
+    FROM {table_fqn}
+    GROUP BY {group_by_clause}
+    HAVING COUNT(*) > 1
+    ORDER BY group_count DESC
+    LIMIT {limit}
+)
+""".strip()
+    return _collect_sample_key_values(spark, sample_query)
+
+
+def _collect_sample_key_values(spark: Any, sample_query: str) -> tuple[str, ...]:
+    rows = spark.sql(sample_query).collect()
+    sample_keys: list[str] = []
+    for row in rows:
+        mapping = row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
+        sample_keys.append(str(mapping["sample_key"]))
+    return tuple(sample_keys)
+
+
+def _build_primary_key_sample_expression(primary_key: tuple[str, ...]) -> str:
+    parts = [
+        "CONCAT("
+        f"'{column_name}=', "
+        f"COALESCE(CAST({_quote_identifier(column_name)} AS STRING), '<NULL>')"
+        ")"
+        for column_name in primary_key
+    ]
+    return f"CONCAT_WS('|', {', '.join(parts)})"
 
 
 def _build_table_profile_record(

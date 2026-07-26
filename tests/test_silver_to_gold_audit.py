@@ -1,6 +1,10 @@
 """Tests for standalone Gold-layer audit helpers."""
 
+from datetime import date, datetime
+from types import SimpleNamespace
+
 from napa_pipeline.silver_to_gold.gold_audit import (
+    build_gold_audit_failure_summary,
     build_expected_reconciliations,
     evaluate_table_profile_anomalies,
 )
@@ -17,7 +21,7 @@ def _pipeline_context():
         gold_schema="instructor_5k_gold",
         stage_schema="instructor_5k_gold_stage",
         operations_schema="instructor_ops",
-        analysis_as_of_date=__import__("datetime").date(2025, 12, 31),
+        analysis_as_of_date=date(2025, 12, 31),
         scoring_scenario="BALANCED",
         model_enabled=True,
         authoritative_recommendation_flag=False,
@@ -54,12 +58,14 @@ def test_build_expected_reconciliations_uses_known_cross_table_balances() -> Non
 
 def test_evaluate_table_profile_anomalies_flags_key_and_alignment_failures() -> None:
     context = _pipeline_context()
-    profile = __import__("types").SimpleNamespace(
+    profile = SimpleNamespace(
         table_name="player_evaluation_scorecards",
         row_count=10,
         null_primary_key_row_count=1,
         duplicate_primary_key_group_count=2,
         duplicate_primary_key_row_count=3,
+        null_primary_key_sample_keys=("player_id=<NULL>",),
+        duplicate_primary_key_sample_keys=("player_id=p1",),
         distinct_analysis_as_of_date_count=2,
         distinct_scoring_scenario_count=2,
     )
@@ -73,7 +79,7 @@ def test_evaluate_table_profile_anomalies_flags_key_and_alignment_failures() -> 
         column_profiles=column_profiles,
         expected_analysis_as_of_date="2025-12-31",
         expected_scoring_scenario="BALANCED",
-        profiled_ts=__import__("datetime").datetime(2026, 7, 26, 0, 0),
+        profiled_ts=datetime(2026, 7, 26, 0, 0),
         context=context,
     )
 
@@ -88,12 +94,14 @@ def test_evaluate_table_profile_anomalies_flags_key_and_alignment_failures() -> 
 
 def test_evaluate_table_profile_anomalies_warns_on_empty_tables() -> None:
     context = _pipeline_context()
-    profile = __import__("types").SimpleNamespace(
+    profile = SimpleNamespace(
         table_name="olympic_team_candidates",
         row_count=0,
         null_primary_key_row_count=0,
         duplicate_primary_key_group_count=0,
         duplicate_primary_key_row_count=0,
+        null_primary_key_sample_keys=(),
+        duplicate_primary_key_sample_keys=(),
         distinct_analysis_as_of_date_count=1,
         distinct_scoring_scenario_count=1,
     )
@@ -103,10 +111,49 @@ def test_evaluate_table_profile_anomalies_warns_on_empty_tables() -> None:
         column_profiles={},
         expected_analysis_as_of_date="2025-12-31",
         expected_scoring_scenario="BALANCED",
-        profiled_ts=__import__("datetime").datetime(2026, 7, 26, 0, 0),
+        profiled_ts=datetime(2026, 7, 26, 0, 0),
         context=context,
     )
 
     assert len(records) == 1
     assert records[0]["rule_id"] == "non_empty_table"
     assert records[0]["severity"] == "WARNING"
+
+
+def test_build_gold_audit_failure_summary_includes_failed_rule_details() -> None:
+    summary = build_gold_audit_failure_summary(
+        [
+            {
+                "target_table": "team_selection_scorecards",
+                "rule_id": "primary_key_unique",
+                "severity": "ERROR",
+                "status": "FAILED",
+                "failed_row_count": 2,
+                "failure_pct": 0.5,
+                "sample_keys": ["team_id=abc"],
+            },
+            {
+                "target_table": "olympic_team_candidates",
+                "rule_id": "non_empty_table",
+                "severity": "WARNING",
+                "status": "FAILED",
+                "failed_row_count": 0,
+                "failure_pct": 100.0,
+                "sample_keys": None,
+            },
+        ],
+        [
+            {
+                "reconciliation_name": "recommendation_explanation_coverage",
+                "status": "FAILED",
+                "source_count": 12,
+                "accepted_count": 10,
+                "difference": 2,
+            }
+        ],
+    )
+
+    assert "team_selection_scorecards.primary_key_unique" in summary
+    assert "olympic_team_candidates.non_empty_table" not in summary
+    assert "recommendation_explanation_coverage" in summary
+    assert "source_count=12" in summary

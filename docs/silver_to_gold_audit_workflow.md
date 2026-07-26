@@ -98,6 +98,37 @@ Interpretation:
 
 The audit job fails when it detects critical structural anomalies. Warnings, such as an empty table, are recorded but do not fail the run by themselves.
 
+Failed audit runs are recorded in `pipeline_runs` with `processing_mode = 'gold_audit'`. The raised error includes a compact list of failed quality and reconciliation checks, and the full details remain available in `gold_quality_results` and `gold_reconciliation_results`.
+
+Useful triage queries:
+
+```sql
+SELECT
+    target_table,
+    rule_id,
+    severity,
+    failed_row_count,
+    failure_pct,
+    sample_keys
+FROM workspace.instructor_ops.gold_quality_results
+WHERE pipeline_run_id = '<gold_audit_pipeline_run_id>'
+  AND status = 'FAILED'
+ORDER BY severity DESC, target_table, rule_id;
+```
+
+```sql
+SELECT
+    reconciliation_name,
+    source_count,
+    accepted_count,
+    difference,
+    status
+FROM workspace.instructor_ops.gold_reconciliation_results
+WHERE pipeline_run_id = '<gold_audit_pipeline_run_id>'
+  AND status = 'FAILED'
+ORDER BY reconciliation_name;
+```
+
 ## Deployment
 
 The root bundle already includes `config/silver_to_gold/workflows/*.yml`, so this workflow is picked up automatically by:
