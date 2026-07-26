@@ -117,7 +117,7 @@ gold_tables:
     stage: scorecards
     target: player_evaluation_scorecards
     transform: build_player_evaluation_scorecards
-    primary_key: [player_id]
+    primary_key: [player_id, scoring_scenario]
 
   national_player_rankings:
     enabled: true
@@ -125,7 +125,7 @@ gold_tables:
     stage: scorecards
     target: national_player_rankings
     transform: build_national_player_rankings
-    primary_key: [country_code, ranking_group, rank]
+    primary_key: [country_code, ranking_group, player_id, scoring_scenario]
 
   team_selection_scorecards:
     enabled: true

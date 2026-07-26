@@ -67,6 +67,11 @@ PHASE9_TARGET_TABLES = (
     "match_model_metrics",
 )
 
+PHASE10_TARGET_TABLES = (
+    "player_evaluation_scorecards",
+    "national_player_rankings",
+)
+
 
 class UpstreamSilverRunNotFoundError(RuntimeError):
     """Raised when no successful upstream Bronze-to-Silver run can be resolved."""

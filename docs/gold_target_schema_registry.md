@@ -625,6 +625,115 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
   - the current config and harness publish `train` and `validation` metrics only
   - a fitted challenger model remains a later extension
 
+### `player_evaluation_scorecards`
+
+- Status: `implemented`
+- Phase: `10`
+- Intended purpose: transparent confidence-adjusted current-strength scorecard per eligible player and scoring scenario
+- Expected Silver / Gold dependencies:
+  - `players`
+  - `player_current_ratings`
+  - `player_performance_features`
+  - `player_development_features`
+  - `entity_data_quality_confidence`
+- Current contract notes:
+  - current implementation filters to configured eligibility countries and respects `require_active_player`
+  - current score uses the configured Phase 10 player weights from `scorecards.yml`
+  - missing components are reweighted rather than silently zero-filled
+  - percentile normalization is currently applied within country-level peer groups
+- Current implemented columns:
+  - `player_id`
+  - `scoring_scenario`
+  - `analysis_as_of_date`
+  - `display_name`
+  - `country_code`
+  - `gender_code`
+  - `active_flag`
+  - `eligible_player_flag`
+  - `source_rating_value`
+  - `source_confidence_score`
+  - `analytical_rating_value`
+  - `rated_match_count_current`
+  - `rating_reliability_score`
+  - `rating_evidence_band`
+  - `rating_uncertainty_proxy`
+  - `career_match_count`
+  - `recent_match_count`
+  - `performance_above_expectation_raw`
+  - `game_performance_raw`
+  - `recent_form_raw`
+  - `consistency_raw`
+  - `strength_of_schedule_raw`
+  - `development_momentum_raw`
+  - `latest_assessment_confidence`
+  - `development_feature_evidence_status`
+  - `combined_confidence_score`
+  - `quality_confidence_band`
+  - `material_limitation_text`
+  - `rating_strength_score`
+  - `adjusted_performance_score`
+  - `game_performance_score`
+  - `recent_form_score`
+  - `consistency_score`
+  - `strength_of_schedule_score`
+  - `development_trend_component_score`
+  - `development_headroom_component_score`
+  - `performance_component_score`
+  - `rating_component_score`
+  - `consistency_component_score`
+  - `development_component_score`
+  - `confidence_component_score`
+  - `raw_player_evaluation_score`
+  - `confidence_factor`
+  - `confidence_adjusted_player_score`
+  - `development_confidence_component_score`
+  - `development_potential_score`
+  - `development_candidate_flag`
+  - `top_strengths`
+  - `top_risks`
+  - `evidence_band`
+  - `ranking_rationale`
+- Unresolved items:
+  - current normalization peer groups are country-level rather than separate country-gender cohorts
+  - the development headroom component currently uses `rating_uncertainty_proxy` as the transparent proxy
+
+### `national_player_rankings`
+
+- Status: `implemented`
+- Phase: `10`
+- Intended purpose: national current-strength and development-potential rankings for eligible players
+- Expected Silver / Gold dependencies:
+  - `player_evaluation_scorecards`
+- Current contract notes:
+  - current implementation publishes overall and gender-specific ranking groups where gender exists
+  - rank ordering uses published score, analytical rating, rated match count, then player id as the deterministic tiebreak chain
+  - `top_25_flag` is currently a published attribute rather than a separate table
+- Current implemented columns:
+  - `country_code`
+  - `ranking_group`
+  - `scoring_scenario`
+  - `player_id`
+  - `display_name`
+  - `gender_code`
+  - `active_flag`
+  - `rank_metric_name`
+  - `rank_metric_value`
+  - `rank`
+  - `dense_rank`
+  - `score_difference_from_next`
+  - `top_25_flag`
+  - `confidence_adjusted_player_score`
+  - `development_potential_score`
+  - `analytical_rating_value`
+  - `rated_match_count_current`
+  - `combined_confidence_score`
+  - `top_strengths`
+  - `top_risks`
+  - `evidence_band`
+  - `ranking_rationale`
+- Unresolved items:
+  - current rankings do not yet publish a separate category-specific grouping beyond the available gender split
+
 ### `recommendation_scorecards`
 
 - Status: `planned`
