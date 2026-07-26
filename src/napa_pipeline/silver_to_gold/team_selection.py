@@ -164,6 +164,8 @@ def build_team_selection_scorecards(
             team_row,
             analysis_as_of_date=analysis_as_of_date,
         )
+        if require_active_team and not active_flag:
+            continue
         team_status = _normalize_optional_string(team_row.get("team_status"))
         current_member_ids = current_members_by_team.get(team_id, ())
         current_member_count = len(current_member_ids)
@@ -265,7 +267,7 @@ def build_team_selection_scorecards(
                 ),
                 "current_member_count": current_member_count,
                 "membership_overlap_warning_flag": overlap_by_team.get(team_id, False),
-                "eligible_team_flag": eligibility_status == ELIGIBLE_STATUS,
+                "eligible_team_flag": not eligibility_reason_codes,
                 "eligibility_status": eligibility_status,
                 "eligibility_reason_codes": ",".join(eligibility_reason_codes) or None,
                 "evidence_sufficiency_status": evidence_sufficiency_status,
@@ -407,7 +409,7 @@ def build_team_selection_scorecards_sql(
     confidence_weight = float(scorecards_config["team_weights"]["confidence"])
 
     return f"""
-WITH eligible_teams AS (
+WITH source_teams AS (
     SELECT
         CAST(team_id AS STRING) AS team_id,
         UPPER(TRIM(CAST(team_category AS STRING))) AS team_category,
@@ -429,6 +431,12 @@ WITH eligible_teams AS (
     WHERE team_id IS NOT NULL
       AND UPPER(TRIM(CAST(country_code AS STRING))) IN ({countries})
       AND UPPER(TRIM(CAST(team_category AS STRING))) IN ({categories})
+),
+eligible_teams AS (
+    SELECT *
+    FROM source_teams
+    WHERE NOT {require_active_team}
+       OR active_flag
 ),
 memberships_as_of AS (
     SELECT
@@ -687,14 +695,11 @@ eligibility_rows AS (
         END AS combined_team_confidence,
         CONCAT_WS(
             ',',
-            CASE WHEN {require_active_team} AND NOT active_flag THEN 'TEAM_NOT_ACTIVE' END,
-            CASE WHEN dissolution_date IS NOT NULL AND dissolution_date <= DATE('{analysis_date_literal}') THEN 'TEAM_DISSOLVED' END,
             CASE WHEN current_member_count <> 2 THEN 'INVALID_MEMBERSHIP_COUNT' END,
             CASE WHEN membership_overlap_warning_flag THEN 'AMBIGUOUS_TEAM_COMPOSITION' END,
             CASE WHEN player_one_id IS NULL OR player_two_id IS NULL THEN 'UNKNOWN_PLAYER' END,
             CASE WHEN player_one_id IS NOT NULL AND player_one_score IS NULL THEN 'UNKNOWN_PLAYER' END,
             CASE WHEN player_two_id IS NOT NULL AND player_two_score IS NULL THEN 'UNKNOWN_PLAYER' END,
-            CASE WHEN NOT candidate_attribution_allowed_flag THEN 'CRITICAL_QUALITY_FAILURE' END,
             CASE WHEN evidence_sufficiency_status = '{NONE_EVIDENCE}' THEN 'NO_VALID_TEAM_ID' END
         ) AS eligibility_reason_codes
     FROM scored_rows AS scored
@@ -1015,7 +1020,7 @@ WITH ranked_candidates AS (
         ranking_rationale AS candidate_rationale
     FROM {scorecards_fqn}
     WHERE scoring_scenario = '{scoring_scenario}'
-      AND eligibility_status = '{ELIGIBLE_STATUS}'
+      AND eligible_team_flag
       AND final_team_selection_score IS NOT NULL
 )
 SELECT
@@ -1064,7 +1069,7 @@ def build_olympic_team_candidates(
         row
         for row in team_selection_scorecard_rows
         if row.get("scoring_scenario") == scoring_scenario
-        and row.get("eligibility_status") == ELIGIBLE_STATUS
+        and _coerce_bool(row.get("eligible_team_flag"))
         and _coerce_float(row.get("final_team_selection_score")) is not None
     ]
 
@@ -1437,11 +1442,8 @@ def _derive_eligibility_reason_codes(
     active_as_of_date: bool,
 ) -> list[str]:
     reason_codes: list[str] = []
-    dissolution_date = _coerce_date(team_row.get("dissolution_date"))
-    if require_active_team and not active_as_of_date:
-        reason_codes.append("TEAM_NOT_ACTIVE")
-    if dissolution_date is not None and dissolution_date <= analysis_as_of_date:
-        reason_codes.append("TEAM_DISSOLVED")
+    del team_row, team_id, candidate_attribution_allowed_flag, require_active_team
+    del analysis_as_of_date, active_as_of_date
     if current_member_count != 2:
         reason_codes.append("INVALID_MEMBERSHIP_COUNT")
     if overlap_warning_flag:
@@ -1452,8 +1454,6 @@ def _derive_eligibility_reason_codes(
         reason_codes.append("UNKNOWN_PLAYER")
     if player_two_id is not None and not player_two_row:
         reason_codes.append("UNKNOWN_PLAYER")
-    if not candidate_attribution_allowed_flag:
-        reason_codes.append("CRITICAL_QUALITY_FAILURE")
     if evidence_sufficiency_status == NONE_EVIDENCE:
         reason_codes.append("NO_VALID_TEAM_ID")
     return list(dict.fromkeys(reason_codes))

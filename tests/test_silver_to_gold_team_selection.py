@@ -258,7 +258,7 @@ def _sample_team_selection_inputs():
     return teams, memberships, team_features, partnerships, player_scorecards, quality, resolved, predictions
 
 
-def test_build_team_selection_scorecards_classifies_eligible_and_ineligible_teams() -> None:
+def test_build_team_selection_scorecards_excludes_inactive_teams_and_classifies_hard_failures() -> None:
     (
         teams,
         memberships,
@@ -285,18 +285,16 @@ def test_build_team_selection_scorecards_classifies_eligible_and_ineligible_team
         eligibility_config=_eligibility_config(),
     )
 
-    assert len(rows) == 3
+    assert len(rows) == 2
     eligible_row = next(row for row in rows if row["team_id"] == "team-1")
     ineligible_row = next(row for row in rows if row["team_id"] == "team-2")
-    inactive_row = next(row for row in rows if row["team_id"] == "team-3")
 
     assert eligible_row["eligibility_status"] == "ELIGIBLE"
     assert eligible_row["final_team_selection_score"] is not None
     assert eligible_row["candidate_attribution_allowed_flag"] is True
     assert ineligible_row["eligibility_status"] == "INELIGIBLE"
     assert "INVALID_MEMBERSHIP_COUNT" in str(ineligible_row["eligibility_reason_codes"])
-    assert inactive_row["eligibility_status"] == "INELIGIBLE"
-    assert "TEAM_NOT_ACTIVE" in str(inactive_row["eligibility_reason_codes"])
+    assert {row["team_id"] for row in rows} == {"team-1", "team-2"}
 
 
 def test_build_team_selection_scorecards_uses_membership_dates_not_only_current_flag() -> None:
@@ -374,6 +372,40 @@ def test_build_olympic_team_candidates_ranks_only_eligible_rows() -> None:
     assert candidates[0]["recommendation_tier"] == "PRIMARY"
 
 
+def test_build_olympic_team_candidates_includes_review_required_candidate_capable_rows() -> None:
+    candidates = build_olympic_team_candidates(
+        team_selection_scorecard_rows=(
+            {
+                "country_code": "USA",
+                "team_category": "MENS",
+                "team_id": "team-review",
+                "scoring_scenario": "BALANCED",
+                "analysis_as_of_date": date(2025, 12, 31),
+                "eligible_team_flag": True,
+                "eligibility_status": "REVIEW_REQUIRED",
+                "final_team_selection_score": 72.0,
+                "combined_team_confidence": 60.0,
+            },
+            {
+                "country_code": "USA",
+                "team_category": "MENS",
+                "team_id": "team-hard-fail",
+                "scoring_scenario": "BALANCED",
+                "analysis_as_of_date": date(2025, 12, 31),
+                "eligible_team_flag": False,
+                "eligibility_status": "INELIGIBLE",
+                "final_team_selection_score": 90.0,
+                "combined_team_confidence": 90.0,
+            },
+        ),
+        scoring_scenario="BALANCED",
+        eligibility_config=_eligibility_config(),
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["team_id"] == "team-review"
+
+
 def test_validate_phase11_source_contract_checks_gold_and_silver_tables() -> None:
     config = load_silver_to_gold_config("napa_5k")
     environment = resolve_release_environment(config)
@@ -404,9 +436,13 @@ def test_build_team_selection_scorecards_sql_uses_as_of_membership_dates() -> No
     assert "membership_end_date" in sql
     assert "DATE('2025-12-31')" in sql
     assert "current_membership_flag" in sql
+    assert "WITH source_teams AS" in sql
+    assert "WHERE NOT TRUE" in sql
+    assert "TEAM_NOT_ACTIVE" not in sql
+    assert "CRITICAL_QUALITY_FAILURE" not in sql
 
 
-def test_build_olympic_team_candidates_sql_filters_to_eligible_rows() -> None:
+def test_build_olympic_team_candidates_sql_filters_to_candidate_capable_rows() -> None:
     config = load_silver_to_gold_config("napa_5k")
     environment = resolve_release_environment(config)
 
@@ -416,7 +452,8 @@ def test_build_olympic_team_candidates_sql_filters_to_eligible_rows() -> None:
         eligibility_config=_eligibility_config(),
     )
 
-    assert "eligibility_status = 'ELIGIBLE'" in sql
+    assert "eligible_team_flag" in sql
+    assert "eligibility_status = 'ELIGIBLE'" not in sql
     assert "recommendation_tier" in sql
     assert "candidate_rank" in sql
 
