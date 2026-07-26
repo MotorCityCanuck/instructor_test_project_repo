@@ -23,6 +23,7 @@ from napa_pipeline.silver_to_gold.environment import (
 )
 from napa_pipeline.silver_to_gold.gold_audit import (
     GoldAuditValidationError,
+    build_gold_audit_error_message,
     publish_gold_layer_audit,
 )
 from napa_pipeline.silver_to_gold.operations import (
@@ -74,6 +75,7 @@ def main() -> None:
     spark = get_databricks_global("spark")
     dbutils = get_databricks_global("dbutils")
     pipeline_context = None
+    pipeline_run_completed = False
     table_run_started_ts_by_target: dict[str, object] = {}
 
     try:
@@ -129,7 +131,19 @@ def main() -> None:
             pipeline_context,
             config,
             environment,
+            fail_on_critical=False,
         )
+        audit_failed = audit_summary.critical_failure_count > 0
+        audit_error_message = (
+            build_gold_audit_error_message(
+                critical_failure_count=audit_summary.critical_failure_count,
+                warning_count=audit_summary.warning_count,
+                failure_summary=audit_summary.failure_summary,
+            )
+            if audit_failed
+            else None
+        )
+        audit_status = "FAILED" if audit_failed else "SUCCEEDED"
 
         append_records(
             spark,
@@ -141,11 +155,12 @@ def main() -> None:
                     build_stage="gold_audit",
                     build_order=AUDIT_OUTPUT_CONFIG[TABLE_PROFILE_RESULTS_TABLE]["build_order"],
                     started_ts=table_run_started_ts_by_target[TABLE_PROFILE_RESULTS_TABLE],
-                    status="SUCCEEDED",
+                    status=audit_status,
                     input_row_count=audit_summary.table_profile_row_count,
                     output_row_count=audit_summary.table_profile_row_count,
                     excluded_row_count=0,
                     warning_count=audit_summary.warning_count,
+                    error_message=audit_error_message,
                 ),
                 build_table_run_end_record(
                     pipeline_context,
@@ -153,11 +168,12 @@ def main() -> None:
                     build_stage="gold_audit",
                     build_order=AUDIT_OUTPUT_CONFIG[COLUMN_PROFILE_RESULTS_TABLE]["build_order"],
                     started_ts=table_run_started_ts_by_target[COLUMN_PROFILE_RESULTS_TABLE],
-                    status="SUCCEEDED",
+                    status=audit_status,
                     input_row_count=audit_summary.column_profile_row_count,
                     output_row_count=audit_summary.column_profile_row_count,
                     excluded_row_count=0,
                     warning_count=audit_summary.warning_count,
+                    error_message=audit_error_message,
                 ),
             ],
         )
@@ -203,6 +219,8 @@ def main() -> None:
             f"warnings={audit_summary.warning_count}, "
             f"critical_failures={audit_summary.critical_failure_count}"
         )
+        if audit_error_message:
+            print(audit_error_message)
 
         set_task_value(dbutils, "run_id", pipeline_context.pipeline_run_id)
         set_task_value(dbutils, "pipeline_run_id", pipeline_context.pipeline_run_id)
@@ -218,9 +236,20 @@ def main() -> None:
             "gold_audit_reconciliation_record_count",
             audit_summary.reconciliation_record_count,
         )
+        if audit_failed:
+            complete_pipeline_run(
+                spark,
+                pipeline_context,
+                status="FAILED",
+                error_class=GoldAuditValidationError.__name__,
+                error_message=audit_error_message,
+            )
+            pipeline_run_completed = True
+            raise GoldAuditValidationError(audit_error_message)
         complete_pipeline_run(spark, pipeline_context, status="SUCCEEDED")
+        pipeline_run_completed = True
     except Exception as exc:
-        if pipeline_context is not None:
+        if pipeline_context is not None and not pipeline_run_completed:
             failed_records = []
             for table_name in AUDIT_OUTPUT_CONFIG:
                 started_ts = table_run_started_ts_by_target.get(table_name)
@@ -243,7 +272,7 @@ def main() -> None:
                     get_operations_table_fqn(pipeline_context, TABLE_RUNS_TABLE),
                     failed_records,
                 )
-        if pipeline_context is not None:
+        if pipeline_context is not None and not pipeline_run_completed:
             complete_pipeline_run(
                 spark,
                 pipeline_context,

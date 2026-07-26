@@ -4,6 +4,7 @@ from datetime import date, datetime
 from types import SimpleNamespace
 
 from napa_pipeline.silver_to_gold.gold_audit import (
+    build_gold_audit_error_message,
     build_gold_audit_failure_summary,
     build_expected_reconciliations,
     evaluate_table_profile_anomalies,
@@ -157,3 +158,14 @@ def test_build_gold_audit_failure_summary_includes_failed_rule_details() -> None
     assert "olympic_team_candidates.non_empty_table" not in summary
     assert "recommendation_explanation_coverage" in summary
     assert "source_count=12" in summary
+
+
+def test_build_gold_audit_error_message_includes_failure_summary() -> None:
+    message = build_gold_audit_error_message(
+        critical_failure_count=2,
+        warning_count=1,
+        failure_summary="Failed audit details:\nQuality failures: none",
+    )
+
+    assert "critical_failures=2, warnings=1" in message
+    assert "Failed audit details" in message

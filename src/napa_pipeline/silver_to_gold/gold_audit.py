@@ -43,6 +43,7 @@ class GoldAuditSummary:
     reconciliation_record_count: int
     warning_count: int
     critical_failure_count: int
+    failure_summary: str | None = None
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,8 @@ def publish_gold_layer_audit(
     context: PipelineContext,
     config: SilverToGoldConfig,
     environment: ReleaseEnvironment,
+    *,
+    fail_on_critical: bool = True,
 ) -> GoldAuditSummary:
     """Profile materialized Gold outputs, persist diagnostics, and fail on critical anomalies."""
     table_specs = _get_materialized_gold_table_specs(config)
@@ -190,16 +193,22 @@ def publish_gold_layer_audit(
     append_records(spark, quality_results_fqn, quality_records)
     append_records(spark, reconciliation_results_fqn, reconciliation_records)
 
-    if critical_failure_count > 0:
-        failure_summary = build_gold_audit_failure_summary(
+    failure_summary = (
+        build_gold_audit_failure_summary(
             quality_records,
             reconciliation_records,
         )
-        raise GoldAuditValidationError(
-            "Gold audit detected critical anomalies. "
-            f"critical_failures={critical_failure_count}, warnings={warning_count}.\n"
-            f"{failure_summary}"
+        if critical_failure_count > 0
+        else None
+    )
+    if critical_failure_count > 0:
+        error_message = build_gold_audit_error_message(
+            critical_failure_count=critical_failure_count,
+            warning_count=warning_count,
+            failure_summary=failure_summary,
         )
+        if fail_on_critical:
+            raise GoldAuditValidationError(error_message)
 
     return GoldAuditSummary(
         table_profile_results_fqn=table_profile_results_fqn,
@@ -213,7 +222,24 @@ def publish_gold_layer_audit(
         reconciliation_record_count=len(reconciliation_records),
         warning_count=warning_count,
         critical_failure_count=critical_failure_count,
+        failure_summary=failure_summary,
     )
+
+
+def build_gold_audit_error_message(
+    *,
+    critical_failure_count: int,
+    warning_count: int,
+    failure_summary: str | None,
+) -> str:
+    """Return the validation error message used by the audit harness."""
+    message = (
+        "Gold audit detected critical anomalies. "
+        f"critical_failures={critical_failure_count}, warnings={warning_count}."
+    )
+    if failure_summary:
+        return f"{message}\n{failure_summary}"
+    return message
 
 
 def build_gold_audit_failure_summary(
