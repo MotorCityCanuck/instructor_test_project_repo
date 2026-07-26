@@ -540,8 +540,8 @@ base_rows AS (
         et.active_flag,
         et.formation_date,
         et.dissolution_date,
-        element_at(mr.player_ids, 1) AS player_one_id,
-        element_at(mr.player_ids, 2) AS player_two_id,
+        get(mr.player_ids, 0) AS player_one_id,
+        get(mr.player_ids, 1) AS player_two_id,
         ps1.display_name AS player_one_display_name,
         ps2.display_name AS player_two_display_name,
         COALESCE(mr.current_member_count, 0) AS current_member_count,
@@ -610,9 +610,9 @@ base_rows AS (
     LEFT JOIN partnership_by_team AS pbt
       ON pbt.team_id = et.team_id
     LEFT JOIN player_scorecards AS ps1
-      ON ps1.player_id = element_at(mr.player_ids, 1)
+      ON ps1.player_id = get(mr.player_ids, 0)
     LEFT JOIN player_scorecards AS ps2
-      ON ps2.player_id = element_at(mr.player_ids, 2)
+      ON ps2.player_id = get(mr.player_ids, 1)
     LEFT JOIN team_quality AS tq
       ON tq.team_id = et.team_id
     LEFT JOIN team_resolution AS tr
