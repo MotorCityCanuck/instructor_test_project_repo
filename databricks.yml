@@ -4,11 +4,13 @@ bundle:
 include:
   - config/raw_to_bronze/workflows/*.yml
   - config/bronze_to_silver/workflows/*.yml
+  - config/silver_to_gold/workflows/*.yml
 
 sync:
   include:
     - config/raw_to_bronze/**
     - config/bronze_to_silver/**
+    - config/silver_to_gold/**
     - notebooks/**
     - src/**
     - requirements.txt

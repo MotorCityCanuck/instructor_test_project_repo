@@ -1,0 +1,164 @@
+resources:
+  jobs:
+    napa_silver_to_gold:
+      name: NAPA Silver to Gold
+      description: >
+        Databricks job template for the instructor Silver-to-Gold pipeline.
+        Start the job with release_name set to one of: napa_5k, napa_50k, napa_250k.
+      max_concurrent_runs: 1
+      performance_target: STANDARD
+      environments:
+        - environment_key: napa_serverless_python
+          spec:
+            environment_version: "4"
+            dependencies:
+              - pyyaml
+      parameters:
+        - name: release_name
+          default: napa_5k
+        - name: analysis_as_of_date
+          default: ""
+      tags:
+        pipeline_name: silver_to_gold
+        owner: instructor
+      tasks:
+        - task_key: build_competition_foundation
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          spark_python_task:
+            python_file: ${var.script_root}/21_g2g_phase3_competition_foundation_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_persistent_team_resolution
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          depends_on:
+            - task_key: build_competition_foundation
+          spark_python_task:
+            python_file: ${var.script_root}/22_g2g_phase4_persistent_team_resolution_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_analytical_ratings
+          environment_key: napa_serverless_python
+          timeout_seconds: 7200
+          depends_on:
+            - task_key: build_persistent_team_resolution
+          spark_python_task:
+            python_file: ${var.script_root}/24_g2g_phase5_analytical_rating_engine_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_player_features
+          environment_key: napa_serverless_python
+          timeout_seconds: 7200
+          depends_on:
+            - task_key: build_analytical_ratings
+          spark_python_task:
+            python_file: ${var.script_root}/25_g2g_phase6_player_feature_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_team_features
+          environment_key: napa_serverless_python
+          timeout_seconds: 7200
+          depends_on:
+            - task_key: build_player_features
+          spark_python_task:
+            python_file: ${var.script_root}/26_g2g_phase7_team_feature_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_quality_confidence
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          depends_on:
+            - task_key: build_team_features
+          spark_python_task:
+            python_file: ${var.script_root}/27_g2g_phase8_entity_quality_confidence_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_match_outcome_products
+          environment_key: napa_serverless_python
+          timeout_seconds: 7200
+          depends_on:
+            - task_key: build_quality_confidence
+          spark_python_task:
+            python_file: ${var.script_root}/28_g2g_phase9_match_outcome_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_scorecards_and_rankings
+          environment_key: napa_serverless_python
+          timeout_seconds: 7200
+          depends_on:
+            - task_key: build_match_outcome_products
+          spark_python_task:
+            python_file: ${var.script_root}/29_g2g_phase10_player_scorecard_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_olympic_candidates
+          environment_key: napa_serverless_python
+          timeout_seconds: 7200
+          depends_on:
+            - task_key: build_scorecards_and_rankings
+          spark_python_task:
+            python_file: ${var.script_root}/30_g2g_phase11_team_selection_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_olympic_recommendations
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          depends_on:
+            - task_key: build_olympic_candidates
+          spark_python_task:
+            python_file: ${var.script_root}/31_g2g_phase12_recommendation_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_sensitivity_and_explanations
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          depends_on:
+            - task_key: build_olympic_recommendations
+          spark_python_task:
+            python_file: ${var.script_root}/32_g2g_phase13_sensitivity_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
