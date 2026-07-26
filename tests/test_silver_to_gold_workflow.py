@@ -8,6 +8,7 @@ from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
 from napa_pipeline.silver_to_gold.environment import build_runtime_context, resolve_release_environment
 from napa_pipeline.silver_to_gold.operations import PIPELINE_RUNS_TABLE, create_pipeline_context
 from napa_pipeline.silver_to_gold.workflow import (
+    MATERIALIZED_GOLD_TARGET_TABLES,
     PHASE3_TARGET_TABLES,
     PHASE4_TARGET_TABLES,
     PHASE5_TARGET_TABLES,
@@ -195,6 +196,32 @@ def test_phase12_target_table_inventory_is_expected() -> None:
 
 def test_phase13_target_table_inventory_is_expected() -> None:
     assert PHASE13_TARGET_TABLES == (
+        "selection_sensitivity_results",
+        "recommendation_explanations",
+    )
+
+
+def test_materialized_gold_target_inventory_matches_phase_outputs() -> None:
+    assert MATERIALIZED_GOLD_TARGET_TABLES == (
+        "competition_match_sides",
+        "competition_player_matches",
+        "resolved_match_teams",
+        "player_rating_events",
+        "player_rating_history",
+        "player_current_ratings",
+        "player_performance_features",
+        "player_development_features",
+        "team_performance_features",
+        "partnership_effectiveness",
+        "entity_data_quality_confidence",
+        "match_outcome_training_set",
+        "match_outcome_predictions",
+        "match_model_metrics",
+        "player_evaluation_scorecards",
+        "national_player_rankings",
+        "team_selection_scorecards",
+        "olympic_team_candidates",
+        "olympic_team_recommendations",
         "selection_sensitivity_results",
         "recommendation_explanations",
     )

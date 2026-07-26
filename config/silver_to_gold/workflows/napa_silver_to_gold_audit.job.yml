@@ -1,0 +1,34 @@
+resources:
+  jobs:
+    napa_silver_to_gold_audit:
+      name: NAPA Silver to Gold Audit
+      description: >
+        Databricks job template for profiling and validating published Gold-layer tables.
+        Start the job with release_name set to one of: napa_5k, napa_50k, napa_250k.
+      max_concurrent_runs: 1
+      performance_target: STANDARD
+      environments:
+        - environment_key: napa_serverless_python
+          spec:
+            environment_version: "4"
+            dependencies:
+              - pyyaml
+      parameters:
+        - name: release_name
+          default: napa_5k
+        - name: analysis_as_of_date
+          default: ""
+      tags:
+        pipeline_name: silver_to_gold_audit
+        owner: instructor
+      tasks:
+        - task_key: audit_gold_layer
+          environment_key: napa_serverless_python
+          timeout_seconds: 7200
+          spark_python_task:
+            python_file: ${var.script_root}/33_g2g_gold_layer_audit_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"

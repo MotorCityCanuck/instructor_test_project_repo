@@ -18,6 +18,8 @@ RECONCILIATION_RESULTS_TABLE = "gold_reconciliation_results"
 MODEL_RUNS_TABLE = "gold_model_runs"
 MODEL_METRICS_TABLE = "gold_model_metrics"
 RECOMMENDATION_RUNS_TABLE = "gold_recommendation_runs"
+TABLE_PROFILE_RESULTS_TABLE = "gold_table_profile_results"
+COLUMN_PROFILE_RESULTS_TABLE = "gold_column_profile_results"
 
 
 def utc_now() -> datetime:
@@ -226,6 +228,51 @@ CREATE TABLE IF NOT EXISTS {operations_schema_fqn}.{RECOMMENDATION_RUNS_TABLE} (
     watchlist_count BIGINT,
     status STRING NOT NULL,
     created_ts TIMESTAMP NOT NULL
+)
+USING DELTA
+""".strip(),
+        f"""
+CREATE TABLE IF NOT EXISTS {operations_schema_fqn}.{TABLE_PROFILE_RESULTS_TABLE} (
+    pipeline_run_id STRING NOT NULL,
+    release_name STRING NOT NULL,
+    analysis_as_of_date DATE NOT NULL,
+    table_name STRING NOT NULL,
+    table_fqn STRING NOT NULL,
+    build_stage STRING NOT NULL,
+    build_order INT NOT NULL,
+    primary_key_columns ARRAY<STRING> NOT NULL,
+    row_count BIGINT,
+    column_count INT,
+    null_primary_key_row_count BIGINT,
+    duplicate_primary_key_group_count BIGINT,
+    duplicate_primary_key_row_count BIGINT,
+    empty_table_flag BOOLEAN,
+    distinct_analysis_as_of_date_count BIGINT,
+    distinct_scoring_scenario_count BIGINT,
+    anomaly_count BIGINT,
+    warning_count BIGINT,
+    status STRING NOT NULL,
+    profiled_ts TIMESTAMP NOT NULL
+)
+USING DELTA
+""".strip(),
+        f"""
+CREATE TABLE IF NOT EXISTS {operations_schema_fqn}.{COLUMN_PROFILE_RESULTS_TABLE} (
+    pipeline_run_id STRING NOT NULL,
+    release_name STRING NOT NULL,
+    analysis_as_of_date DATE NOT NULL,
+    table_name STRING NOT NULL,
+    column_name STRING NOT NULL,
+    data_type STRING NOT NULL,
+    nullable BOOLEAN NOT NULL,
+    row_count BIGINT,
+    non_null_count BIGINT,
+    null_count BIGINT,
+    null_pct DOUBLE,
+    approx_distinct_count BIGINT,
+    min_value STRING,
+    max_value STRING,
+    profiled_ts TIMESTAMP NOT NULL
 )
 USING DELTA
 """.strip(),

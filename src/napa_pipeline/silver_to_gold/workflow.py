@@ -86,6 +86,20 @@ PHASE13_TARGET_TABLES = (
     "recommendation_explanations",
 )
 
+MATERIALIZED_GOLD_TARGET_TABLES = (
+    *PHASE3_TARGET_TABLES,
+    *PHASE4_TARGET_TABLES,
+    *PHASE5_TARGET_TABLES,
+    *PHASE6_TARGET_TABLES,
+    *PHASE7_TARGET_TABLES,
+    *PHASE8_TARGET_TABLES,
+    *PHASE9_TARGET_TABLES,
+    *PHASE10_TARGET_TABLES,
+    *PHASE11_TARGET_TABLES,
+    *PHASE12_TARGET_TABLES,
+    *PHASE13_TARGET_TABLES,
+)
+
 
 class UpstreamSilverRunNotFoundError(RuntimeError):
     """Raised when no successful upstream Bronze-to-Silver run can be resolved."""
