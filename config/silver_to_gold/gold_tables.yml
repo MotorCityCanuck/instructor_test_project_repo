@@ -133,7 +133,7 @@ gold_tables:
     stage: scorecards
     target: team_selection_scorecards
     transform: build_team_selection_scorecards
-    primary_key: [team_id]
+    primary_key: [team_id, scoring_scenario]
 
   olympic_team_candidates:
     enabled: true
@@ -141,7 +141,7 @@ gold_tables:
     stage: recommendations
     target: olympic_team_candidates
     transform: build_olympic_team_candidates
-    primary_key: [country_code, category_code, team_id]
+    primary_key: [country_code, category_code, team_id, scoring_scenario]
 
   olympic_team_recommendations:
     enabled: true

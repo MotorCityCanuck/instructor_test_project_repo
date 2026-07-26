@@ -734,6 +734,110 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 - Unresolved items:
   - current rankings do not yet publish a separate category-specific grouping beyond the available gender split
 
+### `team_selection_scorecards`
+
+- Status: `implemented`
+- Phase: `11`
+- Intended purpose: transparent team-selection scorecard per persistent team and scoring scenario
+- Expected Silver / Gold dependencies:
+  - `teams`
+  - `team_memberships`
+  - `team_performance_features`
+  - `partnership_effectiveness`
+  - `player_evaluation_scorecards`
+  - `entity_data_quality_confidence`
+  - `resolved_match_teams`
+  - `match_outcome_predictions`
+- Current contract notes:
+  - current implementation is country-and-category scoped from the configured eligibility universe rather than a global ranking table
+  - all configured teams are classified, including inactive or currently ineligible teams
+  - current score uses the configured Phase 11 team weights from `scorecards.yml`
+  - confidence adjustment follows the documented bounded factor approach; risk penalties remain a transparent reference implementation
+- Current implemented columns:
+  - `team_id`
+  - `scoring_scenario`
+  - `analysis_as_of_date`
+  - `team_category`
+  - `country_code`
+  - `team_status`
+  - `active_flag`
+  - `formation_date`
+  - `dissolution_date`
+  - `player_one_id`
+  - `player_two_id`
+  - `player_one_display_name`
+  - `player_two_display_name`
+  - `current_member_count`
+  - `membership_overlap_warning_flag`
+  - `eligible_team_flag`
+  - `eligibility_status`
+  - `eligibility_reason_codes`
+  - `evidence_sufficiency_status`
+  - `candidate_attribution_allowed_flag`
+  - `partnership_key`
+  - `player_one_score`
+  - `player_two_score`
+  - `average_player_score`
+  - `minimum_player_score`
+  - `player_score_balance`
+  - `partnership_strength_raw`
+  - `prediction_strength_raw`
+  - `team_feature_confidence_raw`
+  - `player_confidence_raw`
+  - `data_quality_confidence_raw`
+  - `team_resolution_confidence_raw`
+  - `material_limitation_text`
+  - `partnership_score`
+  - `player_strength_score`
+  - `prediction_score`
+  - `confidence_component_score`
+  - `combined_team_confidence`
+  - `raw_team_selection_score`
+  - `confidence_factor`
+  - `confidence_adjusted_team_score`
+  - `risk_penalty_score`
+  - `final_team_selection_score`
+  - `top_strengths`
+  - `top_risks`
+  - `ranking_rationale`
+- Unresolved items:
+  - current team-selection normalization is country-and-category percentile based and may still need instructor review before it becomes the final roster methodology
+  - current prediction support uses average implied win probability from published historical match predictions rather than a dedicated forward-looking matchup simulator
+
+### `olympic_team_candidates`
+
+- Status: `implemented`
+- Phase: `11`
+- Intended purpose: ranked eligible team-candidate table per country, category, and scoring scenario
+- Expected Silver / Gold dependencies:
+  - `team_selection_scorecards`
+- Current contract notes:
+  - current implementation includes only `ELIGIBLE` teams from Phase 11 scorecards
+  - ranking tiers are derived from configured `primary`, `alternate`, and `watchlist` counts in `eligibility.yml`
+- Current implemented columns:
+  - `country_code`
+  - `category_code`
+  - `team_id`
+  - `scoring_scenario`
+  - `analysis_as_of_date`
+  - `candidate_rank`
+  - `recommendation_tier`
+  - `final_team_selection_score`
+  - `confidence_adjusted_team_score`
+  - `raw_team_selection_score`
+  - `combined_team_confidence`
+  - `evidence_sufficiency_status`
+  - `candidate_attribution_allowed_flag`
+  - `player_one_id`
+  - `player_two_id`
+  - `player_one_display_name`
+  - `player_two_display_name`
+  - `top_strengths`
+  - `top_risks`
+  - `candidate_rationale`
+- Unresolved items:
+  - this table intentionally stops at ranked candidate visibility and does not yet publish final recommendation statuses, alternates beyond the configured tier boundaries, or instructor-only selection overrides
+
 ### `recommendation_scorecards`
 
 - Status: `planned`
