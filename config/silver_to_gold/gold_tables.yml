@@ -149,7 +149,7 @@ gold_tables:
     stage: recommendations
     target: olympic_team_recommendations
     transform: build_olympic_team_recommendations
-    primary_key: [country_code, category_code, recommendation_status, team_id]
+    primary_key: [country_code, category_code, team_id, scoring_scenario]
 
   selection_sensitivity_results:
     enabled: true

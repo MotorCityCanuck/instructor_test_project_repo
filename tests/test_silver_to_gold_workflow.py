@@ -17,6 +17,7 @@ from napa_pipeline.silver_to_gold.workflow import (
     PHASE9_TARGET_TABLES,
     PHASE10_TARGET_TABLES,
     PHASE11_TARGET_TABLES,
+    PHASE12_TARGET_TABLES,
     REQUIRED_SILVER_SOURCE_TABLES,
     SilverSourceValidationError,
     UpstreamSilverRunNotFoundError,
@@ -182,6 +183,12 @@ def test_phase11_target_table_inventory_is_expected() -> None:
     assert PHASE11_TARGET_TABLES == (
         "team_selection_scorecards",
         "olympic_team_candidates",
+    )
+
+
+def test_phase12_target_table_inventory_is_expected() -> None:
+    assert PHASE12_TARGET_TABLES == (
+        "olympic_team_recommendations",
     )
 
 

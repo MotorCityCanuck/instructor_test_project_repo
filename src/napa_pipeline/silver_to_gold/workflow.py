@@ -77,6 +77,10 @@ PHASE11_TARGET_TABLES = (
     "olympic_team_candidates",
 )
 
+PHASE12_TARGET_TABLES = (
+    "olympic_team_recommendations",
+)
+
 
 class UpstreamSilverRunNotFoundError(RuntimeError):
     """Raised when no successful upstream Bronze-to-Silver run can be resolved."""

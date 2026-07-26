@@ -838,17 +838,54 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 - Unresolved items:
   - this table intentionally stops at ranked candidate visibility and does not yet publish final recommendation statuses, alternates beyond the configured tier boundaries, or instructor-only selection overrides
 
-### `recommendation_scorecards`
+### `olympic_team_recommendations`
 
-- Status: `planned`
-- Phase: `10+`
-- Intended purpose: roster recommendation evidence and explainability outputs
+- Status: `implemented`
+- Phase: `12`
+- Intended purpose: deterministic recommendation layer that promotes eligible teams into primary, alternate, watchlist, and retained ranked-candidate statuses by country, category, and scenario
 - Expected Silver / Gold dependencies:
-  - later Gold analytical products
-- Gold columns:
-  - pending
+  - `team_selection_scorecards`
+- Current contract notes:
+  - current implementation ranks from all eligible team scorecards, not only the retained Phase 11 candidate subset, so `RANKED_CANDIDATE` rows remain visible beyond the configured primary/alternate/watchlist counts
+  - current release metadata includes `release_name`, `release_role`, and `authoritative_recommendation_flag` on every published recommendation row
+  - optional cross-category roster constraints are not yet enabled; current rows therefore publish unconstrained recommendation statuses with explicit `constraint_applied_flag = false`
+  - candidate shortfalls are surfaced as per-row metadata whenever the available eligible pool is smaller than the configured target counts
+- Current implemented columns:
+  - `country_code`
+  - `category_code`
+  - `team_id`
+  - `scoring_scenario`
+  - `analysis_as_of_date`
+  - `release_name`
+  - `release_role`
+  - `authoritative_recommendation_flag`
+  - `recommendation_status`
+  - `candidate_rank`
+  - `player_one_id`
+  - `player_two_id`
+  - `final_team_selection_score`
+  - `combined_team_confidence`
+  - `selection_rationale`
+  - `alternate_rationale`
+  - `key_risks`
+  - `methodology_version`
+  - `score_gap_to_primary`
+  - `score_gap_to_previous`
+  - `closest_alternative_team_id`
+  - `closest_alternative_score_gap`
+  - `configured_primary_count`
+  - `configured_alternate_count`
+  - `configured_watchlist_count`
+  - `available_candidate_count`
+  - `recommendation_shortfall_flag`
+  - `recommendation_shortfall_reason`
+  - `constraint_applied_flag`
+  - `constraint_reason`
+  - `unconstrained_rank`
+  - `constrained_selection_status`
 - Unresolved items:
-  - should not be finalized before upstream category/status derivation decisions are made
+  - optional cross-category overlap constraints remain a later instructor-approved extension
+  - explanation-template publication and sensitivity outputs remain Phase 13 work
 
 ## Change Log Expectations
 
