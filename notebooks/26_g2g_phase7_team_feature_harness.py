@@ -52,7 +52,7 @@ SCRIPT_VERSION = "2026.07.25.1"
 PHASE7_TARGET_CONFIG = {
     "team_performance_features": {
         "build_order": 90,
-        "source_count_resolver": lambda spark, environment: int(
+        "source_count_resolver": lambda spark, environment, analysis_as_of_date: int(
             spark.table(f"{environment.catalog}.{environment.silver_schema}.teams").count()
         )
         * 4,
@@ -60,7 +60,7 @@ PHASE7_TARGET_CONFIG = {
     },
     "partnership_effectiveness": {
         "build_order": 100,
-        "source_count_resolver": lambda spark, environment: int(
+        "source_count_resolver": lambda spark, environment, analysis_as_of_date: int(
             spark.sql(
                 f"""
 SELECT COUNT(*) AS partnership_count
@@ -69,6 +69,8 @@ FROM (
         COALESCE(CAST(resolved_team_id AS STRING), CAST(canonical_player_pair_key AS STRING)) AS partnership_key
     FROM {get_gold_target_table_fqn(environment, "resolved_match_teams")}
     WHERE canonical_player_pair_key IS NOT NULL
+      AND match_date IS NOT NULL
+      AND CAST(match_date AS DATE) <= DATE('{analysis_as_of_date.isoformat()}')
 )
 """.strip()
             ).collect()[0].asDict(recursive=True)["partnership_count"]
@@ -154,6 +156,7 @@ def main() -> None:
             table_name: PHASE7_TARGET_CONFIG[table_name]["source_count_resolver"](
                 spark,
                 environment,
+                pipeline_context.analysis_as_of_date,
             )
             for table_name in PHASE7_TARGET_TABLES
         }
