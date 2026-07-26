@@ -98,7 +98,7 @@ Interpretation:
 
 The audit job fails when it detects critical structural anomalies. Warnings, such as an empty table, are recorded but do not fail the run by themselves.
 
-Failed audit runs are recorded in `pipeline_runs` with `processing_mode = 'gold_audit'`. The harness persists the table profiles, column profiles, quality results, and reconciliation results before it fails the task for critical anomalies. The raised error includes a compact list of failed quality and reconciliation checks, and the full details remain available in `gold_quality_results` and `gold_reconciliation_results`.
+Audit runs are recorded in `pipeline_runs` with `processing_mode = 'gold_audit'`. The harness persists the table profiles, column profiles, quality results, and reconciliation results before it records the final audit status. Critical anomalies are recorded as `SUCCEEDED_WITH_ANOMALIES` in operations metadata so the Databricks task can complete and leave the diagnostic tables queryable. Runtime failures, such as permissions errors or Spark execution errors, still fail the task.
 
 Useful triage queries:
 

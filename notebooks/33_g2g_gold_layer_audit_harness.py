@@ -22,7 +22,6 @@ from napa_pipeline.silver_to_gold.environment import (
     ensure_release_environment,
 )
 from napa_pipeline.silver_to_gold.gold_audit import (
-    GoldAuditValidationError,
     build_gold_audit_error_message,
     publish_gold_layer_audit,
 )
@@ -143,7 +142,7 @@ def main() -> None:
             if audit_failed
             else None
         )
-        audit_status = "FAILED" if audit_failed else "SUCCEEDED"
+        audit_status = "SUCCEEDED_WITH_ANOMALIES" if audit_failed else "SUCCEEDED"
 
         append_records(
             spark,
@@ -231,22 +230,24 @@ def main() -> None:
         set_task_value(dbutils, "gold_audit_table_profile_row_count", audit_summary.table_profile_row_count)
         set_task_value(dbutils, "gold_audit_column_profile_row_count", audit_summary.column_profile_row_count)
         set_task_value(dbutils, "gold_audit_quality_record_count", audit_summary.quality_record_count)
+        set_task_value(dbutils, "gold_audit_warning_count", audit_summary.warning_count)
+        set_task_value(
+            dbutils,
+            "gold_audit_critical_failure_count",
+            audit_summary.critical_failure_count,
+        )
         set_task_value(
             dbutils,
             "gold_audit_reconciliation_record_count",
             audit_summary.reconciliation_record_count,
         )
-        if audit_failed:
-            complete_pipeline_run(
-                spark,
-                pipeline_context,
-                status="FAILED",
-                error_class=GoldAuditValidationError.__name__,
-                error_message=audit_error_message,
-            )
-            pipeline_run_completed = True
-            raise GoldAuditValidationError(audit_error_message)
-        complete_pipeline_run(spark, pipeline_context, status="SUCCEEDED")
+        complete_pipeline_run(
+            spark,
+            pipeline_context,
+            status=audit_status,
+            error_class="GoldAuditValidationError" if audit_failed else None,
+            error_message=audit_error_message,
+        )
         pipeline_run_completed = True
     except Exception as exc:
         if pipeline_context is not None and not pipeline_run_completed:
