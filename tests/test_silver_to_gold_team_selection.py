@@ -5,11 +5,15 @@ from datetime import date
 from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
 from napa_pipeline.silver_to_gold.environment import resolve_release_environment
 from napa_pipeline.silver_to_gold.team_selection import (
+    build_olympic_team_candidates_sql,
     build_olympic_team_candidates,
+    build_team_selection_scorecards_sql,
     build_team_selection_scorecards,
     publish_olympic_team_candidates,
+    publish_olympic_team_candidates_from_sql,
     publish_phase11_team_tables,
     publish_team_selection_scorecards,
+    publish_team_selection_scorecards_from_sql,
 )
 from napa_pipeline.silver_to_gold.team_selection_validation import (
     PHASE11_REQUIRED_SOURCE_COLUMNS,
@@ -384,6 +388,39 @@ def test_validate_phase11_source_contract_checks_gold_and_silver_tables() -> Non
     assert set(validated) == set(PHASE11_REQUIRED_SOURCE_COLUMNS)
 
 
+def test_build_team_selection_scorecards_sql_uses_as_of_membership_dates() -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+
+    sql = build_team_selection_scorecards_sql(
+        environment,
+        analysis_as_of_date=date(2025, 12, 31),
+        scoring_scenario="BALANCED",
+        scorecards_config=_scorecards_config(),
+        eligibility_config=_eligibility_config(),
+    )
+
+    assert "membership_start_date" in sql
+    assert "membership_end_date" in sql
+    assert "DATE('2025-12-31')" in sql
+    assert "current_membership_flag" in sql
+
+
+def test_build_olympic_team_candidates_sql_filters_to_eligible_rows() -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+
+    sql = build_olympic_team_candidates_sql(
+        environment,
+        scoring_scenario="BALANCED",
+        eligibility_config=_eligibility_config(),
+    )
+
+    assert "eligibility_status = 'ELIGIBLE'" in sql
+    assert "recommendation_tier" in sql
+    assert "candidate_rank" in sql
+
+
 def test_publish_team_selection_scorecards_returns_summary(monkeypatch) -> None:
     config = load_silver_to_gold_config("napa_5k")
     environment = resolve_release_environment(config)
@@ -404,6 +441,32 @@ def test_publish_team_selection_scorecards_returns_summary(monkeypatch) -> None:
 
     assert summary.stage_table_fqn == stage_fqn
     assert summary.target_table_fqn == target_fqn
+    assert summary.output_row_count == 3
+
+
+def test_publish_team_selection_scorecards_from_sql_returns_summary(monkeypatch) -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+    target_fqn = f"{environment.catalog}.{environment.gold_schema}.team_selection_scorecards"
+    stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.team_selection_scorecards"
+
+    monkeypatch.setattr(
+        "napa_pipeline.silver_to_gold.team_selection.publish_stage_to_gold_table",
+        lambda *args, **kwargs: (3, 3),
+    )
+
+    summary = publish_team_selection_scorecards_from_sql(
+        spark=None,
+        environment=environment,
+        analysis_as_of_date=date(2025, 12, 31),
+        scoring_scenario="BALANCED",
+        scorecards_config=_scorecards_config(),
+        eligibility_config=_eligibility_config(),
+    )
+
+    assert summary.stage_table_fqn == stage_fqn
+    assert summary.target_table_fqn == target_fqn
+    assert summary.input_row_count == 3
     assert summary.output_row_count == 3
 
 
@@ -434,6 +497,30 @@ def test_publish_olympic_team_candidates_returns_summary(monkeypatch) -> None:
 
     assert summary.stage_table_fqn == stage_fqn
     assert summary.target_table_fqn == target_fqn
+    assert summary.output_row_count == 1
+
+
+def test_publish_olympic_team_candidates_from_sql_returns_summary(monkeypatch) -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+    target_fqn = f"{environment.catalog}.{environment.gold_schema}.olympic_team_candidates"
+    stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.olympic_team_candidates"
+
+    monkeypatch.setattr(
+        "napa_pipeline.silver_to_gold.team_selection.publish_stage_to_gold_table",
+        lambda *args, **kwargs: (1, 1),
+    )
+
+    summary = publish_olympic_team_candidates_from_sql(
+        spark=None,
+        environment=environment,
+        scoring_scenario="BALANCED",
+        eligibility_config=_eligibility_config(),
+    )
+
+    assert summary.stage_table_fqn == stage_fqn
+    assert summary.target_table_fqn == target_fqn
+    assert summary.input_row_count == 1
     assert summary.output_row_count == 1
 
 
@@ -502,80 +589,38 @@ def test_publish_phase11_selection_tables_returns_two_summaries(monkeypatch) -> 
 
 
 def test_publish_phase11_team_tables_builds_scorecards_then_candidates(monkeypatch) -> None:
-    (
-        teams,
-        memberships,
-        team_features,
-        partnerships,
-        player_scorecards,
-        quality,
-        resolved,
-        predictions,
-    ) = _sample_team_selection_inputs()
     config = load_silver_to_gold_config("napa_5k")
     environment = resolve_release_environment(config)
-
-    table_rows = {
-        f"{environment.catalog}.{environment.silver_schema}.teams": teams,
-        f"{environment.catalog}.{environment.silver_schema}.team_memberships": memberships,
-        f"{environment.catalog}.{environment.gold_schema}.team_performance_features": team_features,
-        f"{environment.catalog}.{environment.gold_schema}.partnership_effectiveness": partnerships,
-        f"{environment.catalog}.{environment.gold_schema}.player_evaluation_scorecards": player_scorecards,
-        f"{environment.catalog}.{environment.gold_schema}.entity_data_quality_confidence": quality,
-        f"{environment.catalog}.{environment.gold_schema}.resolved_match_teams": resolved,
-        f"{environment.catalog}.{environment.gold_schema}.match_outcome_predictions": predictions,
-    }
-
-    class _IterTable:
-        def __init__(self, rows):
-            self._rows = rows
-
-        def toLocalIterator(self):
-            return iter(
-                [
-                    type(
-                        "_Row",
-                        (),
-                        {"asDict": lambda self, recursive=True, row=row: dict(row)},
-                    )()
-                    for row in self._rows
-                ]
-            )
-
-    class _IterSpark:
-        def table(self, table_name):
-            return _IterTable(table_rows[table_name])
-
     monkeypatch.setattr(
-        "napa_pipeline.silver_to_gold.team_selection.publish_team_selection_scorecards",
+        "napa_pipeline.silver_to_gold.team_selection.publish_team_selection_scorecards_from_sql",
         lambda *args, **kwargs: type(
             "_Summary",
             (),
             {
                 "target_table_fqn": "scorecards",
                 "stage_table_fqn": "scorecards_stage",
-                "input_row_count": len(kwargs["rows"]),
-                "output_row_count": len(kwargs["rows"]),
+                "input_row_count": 3,
+                "output_row_count": 3,
             },
         )(),
     )
     monkeypatch.setattr(
-        "napa_pipeline.silver_to_gold.team_selection.publish_olympic_team_candidates",
+        "napa_pipeline.silver_to_gold.team_selection.publish_olympic_team_candidates_from_sql",
         lambda *args, **kwargs: type(
             "_Summary",
             (),
             {
                 "target_table_fqn": "candidates",
                 "stage_table_fqn": "candidates_stage",
-                "input_row_count": len(kwargs["rows"]),
-                "output_row_count": len(kwargs["rows"]),
+                "input_row_count": 1,
+                "output_row_count": 1,
             },
         )(),
     )
 
     summary = publish_phase11_team_tables(
-        _IterSpark(),
-        environment,
+        spark=None,
+        environment=environment,
         analysis_as_of_date=date(2025, 12, 31),
         scoring_scenario="BALANCED",
         scorecards_config=_scorecards_config(),
