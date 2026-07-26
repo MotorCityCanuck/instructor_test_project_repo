@@ -17,6 +17,12 @@ Current local implementation status:
 
 Read the older July 22 and July 23 findings below as pre-refactor discovery evidence unless this addendum overrides them.
 
+## Implementation Status Addendum (July 26, 2026)
+
+Silver-to-Gold is now implemented through Phase 13 and deployed through the bundle workflow resource `napa_silver_to_gold`. The repository also includes the standalone Gold audit workflow resource `napa_silver_to_gold_audit`.
+
+Current implemented catalogs and workflow resources are summarized in [implemented_layer_catalog.md](implemented_layer_catalog.md), [silver_to_gold_workflow.md](silver_to_gold_workflow.md), and [silver_to_gold_audit_workflow.md](silver_to_gold_audit_workflow.md). Older findings below that describe `config/silver_to_gold` or `src/napa_pipeline/silver_to_gold` as future work are retained as Phase 0 discovery evidence, not current implementation status.
+
 ## Repository State
 
 - Current branch: `main`.
@@ -220,7 +226,7 @@ Runtime-only values still need Databricks inspection:
 ## Issues and Concerns
 
 - The new Silver-to-Gold specification references versioned file names such as `NAPA_Bronze_to_Silver_Spec_v1.1.md`, but the actual repository file is `docs/NAPA_Bronze_to_Silver_Spec.md`.
-- `databricks.yml` does not include `config/silver_to_gold/**`; future Gold workflow/config files would not deploy until the bundle is updated.
+- Superseded July 26, 2026: `databricks.yml` now includes `config/silver_to_gold/workflows/*.yml` and syncs `config/silver_to_gold/**`.
 - The Gold spec's required Silver metadata does not match the implemented Silver metadata exactly.
 - Player `country_code` should not be null when `home_region_id` resolves to a valid region with `country_code`. Any remaining null player country values should be investigated as missing home-region data or invalid region linkage.
 - Any Gold assumption that Bronze `matches` directly provides `competition_category` is incorrect against the exported Databricks contract.

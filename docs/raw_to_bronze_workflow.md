@@ -104,11 +104,13 @@ databricks bundle validate -t dev
 databricks bundle deploy -t dev
 ```
 
-The root bundle sync includes:
+The root bundle sync includes the shared implementation directories:
 
 - `notebooks/**`
 - `src/**`
 - `config/raw_to_bronze/**`
+- `config/bronze_to_silver/**`
+- `config/silver_to_gold/**`
 - `requirements.txt`
 
 That keeps the Databricks Python script tasks deployable without any local Windows paths.

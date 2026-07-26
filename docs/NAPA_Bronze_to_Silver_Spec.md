@@ -10,6 +10,27 @@
 
 ---
 
+## Implementation Alignment Note
+
+This specification is retained as the original Bronze-to-Silver engineering design. The implemented repository now uses the release-specific instructor namespace documented in [implemented_layer_catalog.md](implemented_layer_catalog.md):
+
+```text
+workspace.instructor_5k_bronze
+workspace.instructor_5k_silver
+workspace.instructor_5k_silver_reject
+workspace.instructor_50k_bronze
+workspace.instructor_50k_silver
+workspace.instructor_50k_silver_reject
+workspace.instructor_250k_bronze
+workspace.instructor_250k_silver
+workspace.instructor_250k_silver_reject
+workspace.instructor_ops
+```
+
+Older examples in this document that reference `workspace.napa_*` or `workspace.napa_ops` should be read as planning examples, not the current implemented catalog names.
+
+---
+
 # Table of Contents
 
 1. Purpose

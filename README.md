@@ -7,7 +7,24 @@ This repository is provided as an instructional template for DSB6000 Data Scienc
 
 See `LICENSE.md` for details.
 
-**Purpose:** This repository is a professional starting scaffold for student consulting teams building the DSB6000 NAPA Olympic Analytics Platform case study. It provides structure, documentation templates, and placeholder files only; teams must design, implement, validate, and explain their own pipeline logic, analytical methods, outputs, and recommendations.
+**Purpose:** This repository began as a professional starting scaffold for student consulting teams building the DSB6000 NAPA Olympic Analytics Platform case study. This instructor test branch now also contains executable instructor reference pipelines for Raw-to-Bronze, Bronze-to-Silver, Silver-to-Gold, and standalone Gold audit validation. Student-facing copies should continue to preserve meaningful student design and implementation work.
+
+## Instructor Implementation Status
+
+The current instructor implementation includes:
+
+- Databricks Asset Bundle workflow resources for Raw-to-Bronze, Bronze-to-Silver, Silver-to-Gold, and Gold audit validation.
+- Configuration-driven release support for `napa_5k`, `napa_50k`, and `napa_250k`.
+- Reusable Python modules under `src/napa_pipeline/`.
+- Operations/audit logging in `workspace.instructor_ops`.
+- Implemented table catalogs documented in [`docs/implemented_layer_catalog.md`](docs/implemented_layer_catalog.md).
+
+Primary workflow docs:
+
+- [`docs/raw_to_bronze_workflow.md`](docs/raw_to_bronze_workflow.md)
+- [`docs/bronze_to_silver_workflow.md`](docs/bronze_to_silver_workflow.md)
+- [`docs/silver_to_gold_workflow.md`](docs/silver_to_gold_workflow.md)
+- [`docs/silver_to_gold_audit_workflow.md`](docs/silver_to_gold_audit_workflow.md)
 
 ## Team Placeholders
 
@@ -20,7 +37,7 @@ Primary Contact: _Replace with team contact name and email_
 
 Student teams act as analytics consulting firms responding to a fictional North American Pickleball Association request for a prototype Olympic Analytics Platform. The platform is expected to support athlete evaluation, doubles partnership analysis, national rankings, Olympic roster recommendations, tournament candidate selection, data quality confidence, governance documentation, and executive reporting.
 
-## What This Template Includes
+## What The Student Template Includes
 
 - A clean repository structure aligned to GitHub, Databricks, and medallion architecture concepts.
 - Markdown documentation templates for architecture, methodology, governance, lineage, data quality, AI usage, and runbook evidence.
@@ -28,26 +45,21 @@ Student teams act as analytics consulting firms responding to a fictional North 
 - Dataset specification reference documentation to orient student teams before implementation.
 - Empty output and deliverable folders for milestone evidence.
 
-## What This Template Does Not Include
+## Student-Facing Boundary
 
-- A completed implementation.
-- Working ingestion, Bronze, Silver, or Gold pipeline logic.
-- Working data quality checks or confidence calculations.
-- Working scoring, ranking, partnership, or roster-selection methods.
-- Completed dashboards, rankings, scorecards, or recommendations.
-- Any raw or generated dataset files.
+Student-facing distributions should not include final analytical conclusions, answer keys, hidden simulation controls, or instructor-only validation shortcuts unless explicitly approved by the instructor. No raw or generated dataset files should be committed.
 
 ## Repository Structure Overview
 
 ```text
-config/         Example project and dataset configuration
+config/         Pipeline configuration and Databricks workflow resources
 data/           Local data placement guidance only; no source data committed
-notebooks/      Databricks-style notebook outlines for milestone workflow
-src/            Reserved for student-developed reusable code
+notebooks/      Databricks Python script task entrypoints and legacy outlines
+src/            Reusable instructor reference pipeline modules
 sql/            Comment-only SQL planning files
-docs/           Project documentation templates and dataset reference
+docs/           Project documentation, implementation catalogs, and runbooks
 outputs/        Generated evidence folders for validation and analytics outputs
-tests/          Reserved for student-developed tests
+tests/          Automated unit and workflow-definition tests
 deliverables/   Milestone evidence folders
 ```
 
@@ -57,13 +69,12 @@ No raw dataset files should be committed to GitHub. Teams should store local sou
 
 ## Quick Start Steps
 
-1. Copy this template into your team repository.
+1. Confirm whether you are using the instructor reference branch or a student-facing template export.
 2. Update the team placeholders in this README and core documentation files.
 3. Review [`docs/assignment_context.md`](docs/assignment_context.md) and [`docs/dataset_specification.md`](docs/dataset_specification.md).
-4. Copy the example configuration files to local variants and adapt them for your environment.
+4. For instructor validation, review [`docs/runbook.md`](docs/runbook.md) and [`docs/implemented_layer_catalog.md`](docs/implemented_layer_catalog.md).
 5. Place source datasets locally or configure Databricks storage without committing raw files.
-6. Design your Bronze, Silver, Gold, data quality, and analytical methodology before implementing code.
-7. Use GitHub commits and milestone folders to preserve evidence for review.
+6. Use GitHub commits and milestone folders to preserve evidence for review.
 
 ## Configuration Overview
 
@@ -96,6 +107,7 @@ AI-assisted tools may help teams draft code, documentation, tests, and design id
 - [`docs/architecture.md`](docs/architecture.md): technical design decisions.
 - [`docs/medallion_design.md`](docs/medallion_design.md): Raw, Bronze, Silver, Gold approach.
 - [`docs/data_dictionary.md`](docs/data_dictionary.md): field and table definitions.
+- [`docs/implemented_layer_catalog.md`](docs/implemented_layer_catalog.md): implemented Raw, Bronze, Silver, Gold, and operations catalogs.
 - [`docs/data_quality_rules.md`](docs/data_quality_rules.md): planned quality controls.
 - [`docs/data_quality_report.md`](docs/data_quality_report.md): milestone quality findings and confidence impact.
 - [`docs/lineage.md`](docs/lineage.md): source-to-output traceability.
@@ -105,3 +117,5 @@ AI-assisted tools may help teams draft code, documentation, tests, and design id
 - [`docs/runbook.md`](docs/runbook.md): setup and execution instructions.
 
 This template is suitable to publish as a GitHub Template Repository after the team placeholders are reviewed and any organization-specific notes are added. Students remain responsible for all pipeline logic, quality checks, analytical methods, outputs, and recommendations.
+
+Before publishing a student-facing copy, review instructor-only implementation files and documentation to decide what should be retained, removed, or converted back to scaffolding.

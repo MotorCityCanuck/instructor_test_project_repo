@@ -9,6 +9,7 @@
 | architecture.md | Document the proposed technical architecture and tool roles. | After major design decisions or workflow changes. |
 | medallion_design.md | Explain Raw, Bronze, Silver, and Gold layer intent and scope. | When medallion design or milestone evidence changes. |
 | data_dictionary.md | Define important tables, fields, and business meanings. | After schema discovery and whenever entities change. |
+| implemented_layer_catalog.md | Summarize the implemented Raw, Bronze, Silver, Gold, and operations catalogs. | When implemented schemas, table inventories, workflow resources, or operations outputs change. |
 | data_quality_rules.md | Define planned data quality checks and severity expectations. | Before rule implementation and when rules change. |
 | data_quality_report.md | Summarize run-specific quality findings and confidence impact. | After each milestone run or major validation cycle. |
 | lineage.md | Trace data flow from source files to final deliverables. | When new transformations or outputs are introduced. |

@@ -53,11 +53,16 @@ build_sensitivity_and_explanations
 
 ## Deployment
 
-The root bundle now includes all three workflow families:
+The root bundle includes all implemented workflow directories:
 
 - `config/raw_to_bronze/workflows/*.yml`
 - `config/bronze_to_silver/workflows/*.yml`
 - `config/silver_to_gold/workflows/*.yml`
+
+The Silver-to-Gold workflow directory currently defines both:
+
+- `napa_silver_to_gold`
+- `napa_silver_to_gold_audit`
 
 The root bundle sync now includes:
 

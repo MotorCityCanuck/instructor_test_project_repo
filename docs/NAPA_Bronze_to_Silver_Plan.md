@@ -9,6 +9,12 @@
 
 ---
 
+## Implementation Status Note
+
+This plan is retained as historical construction guidance. The Bronze-to-Silver implementation now exists under `config/bronze_to_silver`, `src/napa_pipeline/bronze_to_silver`, and `notebooks/11_b2s_*` through `20_b2s_*`. The current implemented catalog, including the final `workspace.instructor_*` namespace convention, is documented in [implemented_layer_catalog.md](implemented_layer_catalog.md).
+
+---
+
 ## 1. Planning Boundary
 
 The Silver pipeline will standardize, validate, reconcile, and publish trusted business entities from Bronze Delta tables. It will not calculate player rankings, chemistry, fatigue, roster recommendations, model features, dashboards, explainability outputs, or other Gold-layer products.
@@ -48,7 +54,7 @@ Build the pipeline in staged increments so each stage leaves the repo runnable, 
 - Confirm whether the implementation is instructor-only, student-facing, or both.
 - Preserve existing scaffold files unless replacing them is explicitly part of the pipeline build.
 - Decide whether to keep the current `src/napa_pipeline` package name or introduce the spec's suggested `src/pipeline` layout.
-- Decide the final namespace convention for release-specific schemas, such as `workspace.napa_5k_bronze` and `workspace.napa_5k_silver`.
+- Final namespace convention has been implemented as release-specific instructor schemas, such as `workspace.instructor_5k_bronze` and `workspace.instructor_5k_silver`.
 - Identify current notebook dependencies, especially `_shared_pipeline_config.py`, and decide whether to keep or replace them with the YAML configuration loader.
 
 **Exit criteria:**
