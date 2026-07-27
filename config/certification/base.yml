@@ -18,8 +18,11 @@ objects:
 execution:
   fail_fast: false
   publish_findings_before_gate: true
+  persist_results: true
+  publish_report: true
   persist_artifacts: true
   create_missing_managed_objects: true
+  fail_on: blocker
 
 manifest:
   enabled: true
