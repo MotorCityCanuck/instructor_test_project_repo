@@ -1,0 +1,167 @@
+schema_contract:
+  regions:
+    required_columns:
+      id: [bigint, int]
+
+  clubs:
+    required_columns:
+      id: [bigint, int]
+      region_id: [bigint, int]
+
+  club_memberships:
+    required_columns:
+      id: [bigint, int]
+      club_id: [bigint, int]
+      player_id: [bigint, int]
+      joined_date: [string, date, timestamp]
+      left_date: [int, bigint, string, date, timestamp]
+
+  player_master:
+    required_columns:
+      player_id: [bigint, int, string]
+
+  player_registrations:
+    required_columns:
+      id: [bigint, int]
+      player_id: [bigint, int, string]
+
+  player_assessment_history:
+    required_columns:
+      id: [bigint, int]
+      player_id: [bigint, int, string]
+
+  teams:
+    required_columns:
+      id: [bigint, int, string]
+      team_type: [string]
+      team_division: [string]
+      team_status: [string]
+      country_code: [string]
+      formation_date: [string, date, timestamp]
+      dissolution_date: [string, date, timestamp]
+
+  team_memberships:
+    required_columns:
+      id: [bigint, int]
+      team_id: [bigint, int, string]
+      player_id: [bigint, int, string]
+      joined_date: [string, date, timestamp]
+      left_date: [int, bigint, string, date, timestamp]
+
+  matches:
+    required_columns:
+      id: [bigint, int]
+      batch_id: [bigint, int]
+      winning_team_id: [bigint, int, string]
+
+  match_teams:
+    required_columns:
+      id: [bigint, int]
+      match_id: [bigint, int]
+      team_id: [bigint, int, string]
+      team_number: [bigint, int]
+
+  match_team_players:
+    required_columns:
+      id: [bigint, int]
+      match_team_id: [bigint, int]
+      player_id: [bigint, int, string]
+
+  match_games:
+    required_columns:
+      id: [bigint, int]
+      match_id: [bigint, int]
+      game_number: [bigint, int]
+      winning_team_number: [bigint, int]
+      team_one_score: [bigint, int]
+      team_two_score: [bigint, int]
+
+  monthly_batches:
+    required_columns:
+      id: [bigint, int]
+
+relationships:
+  - rule_id: RAW_FOREIGN_KEY_CLUB_MEMBERSHIPS_CLUB
+    child_source: club_memberships
+    child_columns: [club_id]
+    parent_source: clubs
+    parent_columns: [id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_CLUB_MEMBERSHIPS_PLAYER
+    child_source: club_memberships
+    child_columns: [player_id]
+    parent_source: player_master
+    parent_columns: [player_id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_PLAYER_REGISTRATIONS_PLAYER
+    child_source: player_registrations
+    child_columns: [player_id]
+    parent_source: player_master
+    parent_columns: [player_id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_PLAYER_ASSESSMENTS_PLAYER
+    child_source: player_assessment_history
+    child_columns: [player_id]
+    parent_source: player_master
+    parent_columns: [player_id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_TEAM_MEMBERSHIPS_TEAM
+    child_source: team_memberships
+    child_columns: [team_id]
+    parent_source: teams
+    parent_columns: [id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_TEAM_MEMBERSHIPS_PLAYER
+    child_source: team_memberships
+    child_columns: [player_id]
+    parent_source: player_master
+    parent_columns: [player_id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_MATCHES_BATCH
+    child_source: matches
+    child_columns: [batch_id]
+    parent_source: monthly_batches
+    parent_columns: [id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_MATCH_TEAMS_MATCH
+    child_source: match_teams
+    child_columns: [match_id]
+    parent_source: matches
+    parent_columns: [id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_MATCH_TEAMS_TEAM
+    child_source: match_teams
+    child_columns: [team_id]
+    parent_source: teams
+    parent_columns: [id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_MATCH_TEAM_PLAYERS_MATCH_TEAM
+    child_source: match_team_players
+    child_columns: [match_team_id]
+    parent_source: match_teams
+    parent_columns: [id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_MATCH_TEAM_PLAYERS_PLAYER
+    child_source: match_team_players
+    child_columns: [player_id]
+    parent_source: player_master
+    parent_columns: [player_id]
+    severity: blocker
+
+  - rule_id: RAW_FOREIGN_KEY_MATCH_GAMES_MATCH
+    child_source: match_games
+    child_columns: [match_id]
+    parent_source: matches
+    parent_columns: [id]
+    severity: blocker
+

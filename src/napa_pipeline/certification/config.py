@@ -78,6 +78,11 @@ def get_default_sources_config_path() -> Path:
     return Path(__file__).resolve().parents[3] / "config" / "raw_to_bronze" / "raw_sources.yml"
 
 
+def get_default_schema_contract_path() -> Path:
+    """Return the certification raw schema and relationship contract path."""
+    return Path(__file__).resolve().parents[3] / "config" / "certification" / "raw_schema.yml"
+
+
 def normalize_release_name(release_name_or_alias: str) -> str:
     """Normalize a certification release alias to the canonical release name."""
     normalized = release_name_or_alias.strip().lower()
@@ -94,6 +99,7 @@ def load_certification_config(
     release_name_or_alias: str,
     config_root: Path | str | None = None,
     sources_config_path: Path | str | None = None,
+    schema_contract_path: Path | str | None = None,
 ) -> CertificationConfig:
     """Load, merge, resolve, and validate certification configuration."""
     release_name = normalize_release_name(release_name_or_alias)
@@ -106,10 +112,17 @@ def load_certification_config(
         if sources_config_path
         else get_default_sources_config_path()
     )
+    schema_path = (
+        Path(schema_contract_path)
+        if schema_contract_path
+        else get_default_schema_contract_path()
+    )
     sources_data = _load_yaml_file(sources_path)
+    schema_data = _load_yaml_file(schema_path)
 
     merged = deep_merge(base_data, env_data)
     merged = deep_merge(merged, sources_data)
+    merged = deep_merge(merged, schema_data)
     merged = resolve_placeholders(merged)
     validate_config(merged, expected_release_name=release_name)
 
@@ -212,6 +225,13 @@ def validate_config(config: dict[str, Any], expected_release_name: str) -> None:
                 f"Source '{source_name}' must define non-empty key_columns."
             )
         build_orders.add(build_order)
+
+    schema_contract = config.get("schema_contract")
+    if not isinstance(schema_contract, dict) or not schema_contract:
+        raise CertificationConfigError("schema_contract must be configured.")
+    relationships = config.get("relationships")
+    if not isinstance(relationships, list):
+        raise CertificationConfigError("relationships must be configured as a list.")
 
     unresolved = list(PLACEHOLDER_PATTERN.finditer(yaml.safe_dump(config)))
     if unresolved:
