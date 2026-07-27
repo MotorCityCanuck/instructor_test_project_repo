@@ -26,3 +26,8 @@ profiles:
     minimum_viable_teams_per_country_division: 300
     minimum_recent_matches_per_candidate_team: 12
     minimum_assessment_periods_for_development_probe: 4
+    minimum_ranking_players_per_country: 500
+    minimum_player_candidates_per_country_division: 50
+    minimum_alternate_players_per_country_division: 10
+    minimum_partnerships_with_repeat_matches: 200
+    minimum_distinct_candidate_teams_per_country_division: 25
