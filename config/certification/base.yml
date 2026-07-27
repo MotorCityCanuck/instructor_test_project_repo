@@ -1,0 +1,23 @@
+project:
+  name: napa_olympic_analytics
+  pipeline_name: raw_certification
+  pipeline_version: "1.0.0"
+  processing_mode: certification
+
+runtime:
+  catalog: workspace
+  team_prefix: instructor
+  default_release: napa_5k
+  timezone: America/New_York
+
+objects:
+  raw_volume_name: napa_files
+  operations_schema: ${runtime.team_prefix}_ops
+  artifacts_volume_name: certification_artifacts
+
+execution:
+  fail_fast: false
+  publish_findings_before_gate: true
+  persist_artifacts: true
+  create_missing_managed_objects: true
+

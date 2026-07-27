@@ -1,0 +1,23 @@
+release:
+  release_name: napa_5k
+  expected_player_scale: 5000
+  role: development
+
+schemas:
+  raw: ${runtime.team_prefix}_5k_raw
+  operations: ${objects.operations_schema}
+
+volumes:
+  raw:
+    name: ${objects.raw_volume_name}
+    path: /Volumes/${runtime.catalog}/${schemas.raw}/${objects.raw_volume_name}
+  artifacts:
+    name: ${objects.artifacts_volume_name}
+    path: /Volumes/${runtime.catalog}/${schemas.operations}/${objects.artifacts_volume_name}
+
+artifacts:
+  root_path: ${volumes.artifacts.path}/raw_certification/${release.release_name}
+
+performance:
+  shuffle_partitions: 16
+
