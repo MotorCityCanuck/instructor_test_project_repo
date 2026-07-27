@@ -27,3 +27,11 @@ manifest:
   file_names:
     - release_manifest.json
     - manifest.json
+
+profiles:
+  common:
+    minimum_active_player_rate_blocker: 0.60
+    maximum_zero_match_active_player_rate: 0.35
+    minimum_player_rating_coverage_rate: 0.70
+    minimum_confidence_coverage_rate: 0.50
+    minimum_development_players_with_history: 1

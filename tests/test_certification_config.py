@@ -62,6 +62,15 @@ def test_load_certification_config_rejects_release_mismatch(tmp_path: Path) -> N
                 },
                 "execution": {"fail_fast": False},
                 "manifest": {"enabled": True, "optional": True, "file_names": ["manifest.json"]},
+                "profiles": {
+                    "common": {
+                        "minimum_active_player_rate_blocker": 0.60,
+                        "maximum_zero_match_active_player_rate": 0.35,
+                        "minimum_player_rating_coverage_rate": 0.70,
+                        "minimum_confidence_coverage_rate": 0.50,
+                        "minimum_development_players_with_history": 1,
+                    }
+                },
             }
         ),
         encoding="utf-8",
@@ -82,6 +91,13 @@ def test_load_certification_config_rejects_release_mismatch(tmp_path: Path) -> N
                     "root_path": "/Volumes/workspace/instructor_ops/certification_artifacts/raw_certification/napa_5k"
                 },
                 "performance": {"shuffle_partitions": 16},
+                "profiles": {
+                    "release_specific": {
+                        "minimum_viable_teams_per_country_division": 10,
+                        "minimum_recent_matches_per_candidate_team": 3,
+                        "minimum_assessment_periods_for_development_probe": 2,
+                    }
+                },
             }
         ),
         encoding="utf-8",

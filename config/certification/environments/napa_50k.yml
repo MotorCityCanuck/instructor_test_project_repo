@@ -21,3 +21,8 @@ artifacts:
 performance:
   shuffle_partitions: 64
 
+profiles:
+  release_specific:
+    minimum_viable_teams_per_country_division: 75
+    minimum_recent_matches_per_candidate_team: 8
+    minimum_assessment_periods_for_development_probe: 3

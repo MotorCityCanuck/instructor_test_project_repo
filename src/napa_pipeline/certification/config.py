@@ -33,6 +33,7 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "volumes",
     "artifacts",
     "performance",
+    "profiles",
     "sources",
 )
 
@@ -66,6 +67,12 @@ class CertificationConfig:
             if source_config.get("enabled", False)
         ]
         return sorted(enabled_sources, key=lambda item: item["build_order"])
+
+    @property
+    def profile_thresholds(self) -> dict[str, Any]:
+        common = self.data["profiles"].get("common", {})
+        release_specific = self.data["profiles"].get("release_specific", {})
+        return {**common, **release_specific}
 
 
 def get_default_config_root() -> Path:
@@ -232,6 +239,14 @@ def validate_config(config: dict[str, Any], expected_release_name: str) -> None:
     relationships = config.get("relationships")
     if not isinstance(relationships, list):
         raise CertificationConfigError("relationships must be configured as a list.")
+
+    profiles = config.get("profiles")
+    if not isinstance(profiles, dict):
+        raise CertificationConfigError("profiles must be configured.")
+    if not isinstance(profiles.get("common"), dict):
+        raise CertificationConfigError("profiles.common must be configured.")
+    if not isinstance(profiles.get("release_specific"), dict):
+        raise CertificationConfigError("profiles.release_specific must be configured.")
 
     unresolved = list(PLACEHOLDER_PATTERN.finditer(yaml.safe_dump(config)))
     if unresolved:
