@@ -15,6 +15,10 @@ from napa_pipeline.certification.environment import (
     ensure_release_environment,
     resolve_release_environment,
 )
+from napa_pipeline.certification.source_loader import (
+    CertificationSourceError,
+    run_inventory_certification,
+)
 
 __all__ = [
     "ALLOWED_RELEASE_ALIASES",
@@ -22,11 +26,12 @@ __all__ = [
     "CertificationConfig",
     "CertificationConfigError",
     "CertificationEnvironmentError",
+    "CertificationSourceError",
     "ReleaseEnvironment",
     "ReleaseEnvironmentStatus",
     "ensure_release_environment",
     "load_certification_config",
     "normalize_release_name",
     "resolve_release_environment",
+    "run_inventory_certification",
 ]
-

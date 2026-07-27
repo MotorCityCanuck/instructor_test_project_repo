@@ -21,3 +21,9 @@ execution:
   persist_artifacts: true
   create_missing_managed_objects: true
 
+manifest:
+  enabled: true
+  optional: true
+  file_names:
+    - release_manifest.json
+    - manifest.json

@@ -27,11 +27,13 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "runtime",
     "objects",
     "execution",
+    "manifest",
     "release",
     "schemas",
     "volumes",
     "artifacts",
     "performance",
+    "sources",
 )
 
 
@@ -55,10 +57,25 @@ class CertificationConfig:
     def release_role(self) -> str:
         return str(self.data["release"]["role"])
 
+    @property
+    def sources_in_build_order(self) -> list[dict[str, Any]]:
+        sources = self.data["sources"]
+        enabled_sources = [
+            {"source_name": source_name, **source_config}
+            for source_name, source_config in sources.items()
+            if source_config.get("enabled", False)
+        ]
+        return sorted(enabled_sources, key=lambda item: item["build_order"])
+
 
 def get_default_config_root() -> Path:
     """Return the repository config directory for Raw certification."""
     return Path(__file__).resolve().parents[3] / "config" / "certification"
+
+
+def get_default_sources_config_path() -> Path:
+    """Return the repository raw source contract path shared with Raw-to-Bronze."""
+    return Path(__file__).resolve().parents[3] / "config" / "raw_to_bronze" / "raw_sources.yml"
 
 
 def normalize_release_name(release_name_or_alias: str) -> str:
@@ -76,6 +93,7 @@ def normalize_release_name(release_name_or_alias: str) -> str:
 def load_certification_config(
     release_name_or_alias: str,
     config_root: Path | str | None = None,
+    sources_config_path: Path | str | None = None,
 ) -> CertificationConfig:
     """Load, merge, resolve, and validate certification configuration."""
     release_name = normalize_release_name(release_name_or_alias)
@@ -83,8 +101,15 @@ def load_certification_config(
     root = Path(config_root) if config_root else get_default_config_root()
     base_data = _load_yaml_file(root / "base.yml")
     env_data = _load_yaml_file(root / "environments" / f"{release_name}.yml")
+    sources_path = (
+        Path(sources_config_path)
+        if sources_config_path
+        else get_default_sources_config_path()
+    )
+    sources_data = _load_yaml_file(sources_path)
 
     merged = deep_merge(base_data, env_data)
+    merged = deep_merge(merged, sources_data)
     merged = resolve_placeholders(merged)
     validate_config(merged, expected_release_name=release_name)
 
@@ -160,6 +185,34 @@ def validate_config(config: dict[str, Any], expected_release_name: str) -> None:
     if not artifacts_root:
         raise CertificationConfigError("artifacts.root_path must be configured.")
 
+    sources = config["sources"]
+    if not isinstance(sources, dict) or not sources:
+        raise CertificationConfigError("No Raw sources are configured.")
+
+    build_orders: set[int] = set()
+    for source_name, source_config in sources.items():
+        build_order = source_config.get("build_order")
+        file_name = source_config.get("file_name")
+        key_columns = source_config.get("key_columns")
+
+        if not isinstance(build_order, int):
+            raise CertificationConfigError(
+                f"Source '{source_name}' has invalid build_order '{build_order}'."
+            )
+        if build_order in build_orders:
+            raise CertificationConfigError(
+                f"Duplicate build_order '{build_order}' detected."
+            )
+        if not file_name or not str(file_name).endswith(".parquet"):
+            raise CertificationConfigError(
+                f"Source '{source_name}' has invalid file_name '{file_name}'."
+            )
+        if not isinstance(key_columns, list) or not key_columns:
+            raise CertificationConfigError(
+                f"Source '{source_name}' must define non-empty key_columns."
+            )
+        build_orders.add(build_order)
+
     unresolved = list(PLACEHOLDER_PATTERN.finditer(yaml.safe_dump(config)))
     if unresolved:
         raise CertificationConfigError("Unresolved placeholders remain in configuration.")
@@ -208,4 +261,3 @@ def _resolve_value(value: Any, flattened: dict[str, Any]) -> Any:
             resolved_value = resolved_value.replace(match.group(0), str(replacement))
         return resolved_value
     return value
-
