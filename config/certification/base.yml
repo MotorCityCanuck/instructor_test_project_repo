@@ -37,3 +37,8 @@ profiles:
     minimum_development_players_with_history: 1
     minimum_quality_issue_rows_for_learning: 1
     maximum_quality_issue_rate_for_learning: 0.25
+    maximum_source_row_count_relative_diff: 0.01
+    maximum_status_distribution_pct_diff: 0.05
+    maximum_rating_average_diff: 0.25
+    maximum_prior_release_active_rate_drift: 0.20
+    minimum_candidate_pool_regression_ratio: 0.50
