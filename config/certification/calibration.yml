@@ -1,0 +1,62 @@
+calibration:
+  threshold_status:
+    minimum_active_player_rate_blocker: provisional
+    maximum_zero_match_active_player_rate: provisional
+    minimum_player_rating_coverage_rate: provisional
+    minimum_confidence_coverage_rate: observational
+    minimum_development_players_with_history: provisional
+    minimum_quality_issue_rows_for_learning: observational
+    maximum_quality_issue_rate_for_learning: provisional
+    maximum_source_row_count_relative_diff: provisional
+    maximum_status_distribution_pct_diff: provisional
+    maximum_rating_average_diff: observational
+    maximum_prior_release_active_rate_drift: observational
+    minimum_candidate_pool_regression_ratio: provisional
+    minimum_viable_teams_per_country_division: provisional
+    minimum_recent_matches_per_candidate_team: provisional
+    minimum_assessment_periods_for_development_probe: provisional
+    minimum_ranking_players_per_country: provisional
+    minimum_player_candidates_per_country_division: provisional
+    minimum_alternate_players_per_country_division: provisional
+    minimum_partnerships_with_repeat_matches: provisional
+    minimum_distinct_candidate_teams_per_country_division: provisional
+
+  required_cases:
+    - known_90pct_inactive_release
+    - correct_active_population_release
+    - broken_team_identity_release
+    - insufficient_canada_mixed_team_depth_release
+    - source_to_raw_row_loss_release
+    - valid_250k_release
+
+  approved_baselines:
+    napa_5k:
+      baseline_id: pending_live_calibration_napa_5k
+      status: provisional
+      notes: Replace with an approved 5k snapshot after live Databricks calibration.
+    napa_50k:
+      baseline_id: pending_live_calibration_napa_50k
+      status: provisional
+      notes: Replace with an approved 50k snapshot after live Databricks calibration.
+    napa_250k:
+      baseline_id: pending_live_calibration_napa_250k
+      status: provisional
+      notes: Replace with an approved 250k snapshot after live Databricks calibration.
+
+  accepted_exceptions: []
+
+  production_release_procedure:
+    - Resolve the certification configuration for the target release and confirm the canonical raw path.
+    - Run the Databricks workflow `napa_raw_certification` for the target release.
+    - Review the Markdown report, JSON snapshot, and CSV finding extract before release approval.
+    - Confirm the certification decision is `CERTIFIED` or `CERTIFIED_WITH_WARNINGS` and that any warnings are accepted in writing.
+    - Record the approved certification run id, report path, snapshot path, and findings path in the instructor release log.
+    - Update the approved baseline reference after any production-grade certification that should be used for future comparisons.
+
+  rollback_and_recertification_procedure:
+    - Stop the student-data release and retain the failing certification artifacts.
+    - Restore the most recent approved upstream release or raw export snapshot.
+    - Document the rollback reason and link it to the failing certification run id.
+    - Remediate the upstream export or release semantics issue.
+    - Rerun `napa_raw_certification` using the corrected raw export and the appropriate source snapshot or baseline reference.
+    - Approve recertification only after the new run artifacts and gate decision are reviewed.

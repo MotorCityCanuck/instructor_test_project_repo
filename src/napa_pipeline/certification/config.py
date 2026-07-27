@@ -27,6 +27,7 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "runtime",
     "objects",
     "execution",
+    "calibration",
     "manifest",
     "release",
     "schemas",
@@ -74,6 +75,10 @@ class CertificationConfig:
         release_specific = self.data["profiles"].get("release_specific", {})
         return {**common, **release_specific}
 
+    @property
+    def threshold_statuses(self) -> dict[str, str]:
+        return dict(self.data["calibration"].get("threshold_status", {}))
+
 
 def get_default_config_root() -> Path:
     """Return the repository config directory for Raw certification."""
@@ -88,6 +93,11 @@ def get_default_sources_config_path() -> Path:
 def get_default_schema_contract_path() -> Path:
     """Return the certification raw schema and relationship contract path."""
     return Path(__file__).resolve().parents[3] / "config" / "certification" / "raw_schema.yml"
+
+
+def get_default_calibration_path() -> Path:
+    """Return the certification calibration and rollout metadata path."""
+    return Path(__file__).resolve().parents[3] / "config" / "certification" / "calibration.yml"
 
 
 def normalize_release_name(release_name_or_alias: str) -> str:
@@ -107,6 +117,7 @@ def load_certification_config(
     config_root: Path | str | None = None,
     sources_config_path: Path | str | None = None,
     schema_contract_path: Path | str | None = None,
+    calibration_path: Path | str | None = None,
 ) -> CertificationConfig:
     """Load, merge, resolve, and validate certification configuration."""
     release_name = normalize_release_name(release_name_or_alias)
@@ -124,12 +135,19 @@ def load_certification_config(
         if schema_contract_path
         else get_default_schema_contract_path()
     )
+    calibration_metadata_path = (
+        Path(calibration_path)
+        if calibration_path
+        else get_default_calibration_path()
+    )
     sources_data = _load_yaml_file(sources_path)
     schema_data = _load_yaml_file(schema_path)
+    calibration_data = _load_yaml_file(calibration_metadata_path)
 
     merged = deep_merge(base_data, env_data)
     merged = deep_merge(merged, sources_data)
     merged = deep_merge(merged, schema_data)
+    merged = deep_merge(merged, calibration_data)
     merged = resolve_placeholders(merged)
     validate_config(merged, expected_release_name=release_name)
 
@@ -247,6 +265,62 @@ def validate_config(config: dict[str, Any], expected_release_name: str) -> None:
         raise CertificationConfigError("profiles.common must be configured.")
     if not isinstance(profiles.get("release_specific"), dict):
         raise CertificationConfigError("profiles.release_specific must be configured.")
+
+    calibration = config.get("calibration")
+    if not isinstance(calibration, dict):
+        raise CertificationConfigError("calibration must be configured.")
+
+    threshold_status = calibration.get("threshold_status")
+    if not isinstance(threshold_status, dict):
+        raise CertificationConfigError("calibration.threshold_status must be configured.")
+    allowed_statuses = {"approved", "provisional", "observational"}
+    missing_threshold_statuses = [
+        threshold_key
+        for threshold_key in config["profiles"].get("common", {}).keys()
+        | config["profiles"].get("release_specific", {}).keys()
+        if threshold_key not in threshold_status
+    ]
+    if missing_threshold_statuses:
+        raise CertificationConfigError(
+            "Missing calibration threshold statuses for: "
+            + ", ".join(sorted(missing_threshold_statuses))
+            + "."
+        )
+    invalid_statuses = {
+        key: value
+        for key, value in threshold_status.items()
+        if value not in allowed_statuses
+    }
+    if invalid_statuses:
+        raise CertificationConfigError(
+            "Invalid calibration threshold statuses: "
+            + ", ".join(f"{key}={value}" for key, value in sorted(invalid_statuses.items()))
+            + "."
+        )
+
+    required_cases = calibration.get("required_cases")
+    if not isinstance(required_cases, list) or not required_cases:
+        raise CertificationConfigError("calibration.required_cases must be a non-empty list.")
+
+    approved_baselines = calibration.get("approved_baselines")
+    if not isinstance(approved_baselines, dict):
+        raise CertificationConfigError("calibration.approved_baselines must be configured.")
+
+    accepted_exceptions = calibration.get("accepted_exceptions")
+    if not isinstance(accepted_exceptions, list):
+        raise CertificationConfigError("calibration.accepted_exceptions must be configured as a list.")
+
+    production_release_procedure = calibration.get("production_release_procedure")
+    if not isinstance(production_release_procedure, list) or not production_release_procedure:
+        raise CertificationConfigError(
+            "calibration.production_release_procedure must be a non-empty list."
+        )
+
+    rollback_and_recertification_procedure = calibration.get("rollback_and_recertification_procedure")
+    if not isinstance(rollback_and_recertification_procedure, list) or not rollback_and_recertification_procedure:
+        raise CertificationConfigError(
+            "calibration.rollback_and_recertification_procedure must be a non-empty list."
+        )
 
     unresolved = list(PLACEHOLDER_PATTERN.finditer(yaml.safe_dump(config)))
     if unresolved:

@@ -31,6 +31,7 @@ def test_load_certification_config_accepts_short_alias() -> None:
     )
     assert len(config.sources_in_build_order) == 13
     assert config.sources_in_build_order[0]["source_name"] == "regions"
+    assert config.threshold_statuses["minimum_active_player_rate_blocker"] == "provisional"
 
 
 def test_load_certification_config_accepts_canonical_release_name() -> None:
@@ -120,3 +121,12 @@ def test_load_certification_config_rejects_release_mismatch(tmp_path: Path) -> N
 
     with pytest.raises(CertificationConfigError, match="does not match"):
         load_certification_config("5k", config_root=config_root, sources_config_path=sources_path)
+
+
+def test_load_certification_config_includes_calibration_metadata() -> None:
+    config = load_certification_config("napa_250k")
+
+    calibration = config.data["calibration"]
+    assert "required_cases" in calibration
+    assert "approved_baselines" in calibration
+    assert calibration["approved_baselines"]["napa_250k"]["status"] == "provisional"
