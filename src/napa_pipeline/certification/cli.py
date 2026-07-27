@@ -40,6 +40,42 @@ def add_config_path_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_analysis_as_of_date_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the optional analysis-as-of-date argument to a script parser."""
+    parser.add_argument(
+        "--analysis-as-of-date",
+        default="",
+        help="Optional analysis date override in YYYY-MM-DD format.",
+    )
+
+
+def add_source_snapshot_path_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the optional source-snapshot path argument to a script parser."""
+    parser.add_argument(
+        "--source-snapshot-path",
+        default="",
+        help="Optional JSON snapshot path for source/export reconciliation.",
+    )
+
+
+def add_baseline_id_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the optional baseline identifier argument to a script parser."""
+    parser.add_argument(
+        "--baseline-id",
+        default="",
+        help="Optional baseline identifier or snapshot reference for regression comparison.",
+    )
+
+
+def add_fail_on_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the release-gate fail-on severity argument to a script parser."""
+    parser.add_argument(
+        "--fail-on",
+        default="blocker",
+        help="Minimum severity that fails the workflow: blocker, error, warning, never.",
+    )
+
+
 def add_run_id_argument(parser: argparse.ArgumentParser, *, required: bool = True) -> None:
     """Add the shared certification run-id argument to a script parser."""
     parser.add_argument(
@@ -55,6 +91,14 @@ def normalize_config_path(config_path: str | None) -> Path | None:
         return None
     stripped = config_path.strip()
     return Path(stripped) if stripped else None
+
+
+def normalize_optional_string(value: str | None) -> str | None:
+    """Return a stripped optional string, or None when blank."""
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 def get_databricks_global(name: str) -> Any:
@@ -82,4 +126,3 @@ def set_task_value(dbutils: Any, key: str, value: Any) -> None:
         dbutils.jobs.taskValues.set(key=key, value=value)
     except Exception:
         pass
-

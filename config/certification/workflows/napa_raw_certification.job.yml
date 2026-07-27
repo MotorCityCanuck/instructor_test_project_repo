@@ -1,0 +1,96 @@
+resources:
+  jobs:
+    napa_raw_certification:
+      name: NAPA Raw Certification
+      description: >
+        Databricks job template for instructor-only Raw student-data certification.
+        Start the job with release_type set to one of: 5k, 50k, 250k.
+      max_concurrent_runs: 1
+      performance_target: STANDARD
+      environments:
+        - environment_key: napa_serverless_python
+          spec:
+            environment_version: "4"
+            dependencies:
+              - pyyaml
+      parameters:
+        - name: release_type
+          default: 5k
+        - name: analysis_as_of_date
+          default: ""
+        - name: config_path
+          default: ""
+        - name: certification_run_id
+          default: ""
+        - name: source_snapshot_path
+          default: ""
+        - name: baseline_id
+          default: ""
+        - name: fail_on
+          default: blocker
+      tags:
+        pipeline_name: raw_certification
+        owner: instructor
+      tasks:
+        - task_key: resolve_configuration
+          environment_key: napa_serverless_python
+          timeout_seconds: 900
+          spark_python_task:
+            python_file: ${var.script_root}/34_rc_resolve_configuration.py
+            parameters:
+              - --release-type
+              - "{{job.parameters.release_type}}"
+              - --config-path
+              - "{{job.parameters.config_path}}"
+              - --run-id
+              - "{{job.parameters.certification_run_id}}"
+
+        - task_key: run_certification
+          environment_key: napa_serverless_python
+          timeout_seconds: 7200
+          depends_on:
+            - task_key: resolve_configuration
+          spark_python_task:
+            python_file: ${var.script_root}/35_rc_run_certification.py
+            parameters:
+              - --release-type
+              - "{{job.parameters.release_type}}"
+              - --config-path
+              - "{{job.parameters.config_path}}"
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+              - --source-snapshot-path
+              - "{{job.parameters.source_snapshot_path}}"
+              - --baseline-id
+              - "{{job.parameters.baseline_id}}"
+
+        - task_key: release_gate
+          environment_key: napa_serverless_python
+          timeout_seconds: 900
+          depends_on:
+            - task_key: run_certification
+          spark_python_task:
+            python_file: ${var.script_root}/36_rc_release_gate.py
+            parameters:
+              - --run-id
+              - "{{tasks.resolve_configuration.values.run_id}}"
+              - --fail-on
+              - "{{job.parameters.fail_on}}"
+              - --decision
+              - "{{tasks.run_certification.values.certification_decision}}"
+              - --status
+              - "{{tasks.run_certification.values.certification_status}}"
+              - --warning-count
+              - "{{tasks.run_certification.values.warning_count}}"
+              - --error-count
+              - "{{tasks.run_certification.values.error_count}}"
+              - --blocker-count
+              - "{{tasks.run_certification.values.blocker_count}}"
+              - --report-path
+              - "{{tasks.run_certification.values.report_path}}"
+              - --snapshot-path
+              - "{{tasks.run_certification.values.snapshot_path}}"
+              - --findings-path
+              - "{{tasks.run_certification.values.findings_path}}"
