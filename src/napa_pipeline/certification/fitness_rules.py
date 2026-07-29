@@ -239,16 +239,21 @@ def _evaluate_rating_and_confidence_coverage(
     player_columns = {field["column_name"] for field in player_source.schema_fields}
     rating_column = _resolve_first_column(player_columns, ("rating", "player_rating"))
     confidence_column = _resolve_first_column(
-        player_columns, ("rating_confidence", "confidence")
+        player_columns, ("rating_confidence", "confidence", "confidence_score")
     )
     if rating_column is None:
         return []
 
+    confidence_projection = (
+        f"SUM(CASE WHEN {confidence_column} IS NOT NULL THEN 1 ELSE 0 END) AS confidence_players"
+        if confidence_column is not None
+        else "CAST(0 AS BIGINT) AS confidence_players"
+    )
     query = f"""
 SELECT
     COUNT(*) AS total_players,
     SUM(CASE WHEN {rating_column} IS NOT NULL THEN 1 ELSE 0 END) AS rated_players,
-    SUM(CASE WHEN {confidence_column} IS NOT NULL THEN 1 ELSE 0 END) AS confidence_players
+    {confidence_projection}
 FROM {player_source.temp_view_name}
 """.strip()
     metrics = _run_metric_query(spark, "RATING_COVERAGE", query)

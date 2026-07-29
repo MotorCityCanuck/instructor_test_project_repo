@@ -112,7 +112,9 @@ def _olympic_player_selection_probe(
     player_columns = {field["column_name"] for field in player_source.schema_fields}
     country_column = _resolve_first_column(player_columns, ("country_code",))
     rating_column = _resolve_first_column(player_columns, ("rating", "player_rating"))
-    confidence_column = _resolve_first_column(player_columns, ("rating_confidence", "confidence"))
+    confidence_column = _resolve_first_column(
+        player_columns, ("rating_confidence", "confidence", "confidence_score")
+    )
     division_column = _resolve_first_column(player_columns, ("preferred_division", "team_division", "division"))
     if country_column is None or rating_column is None:
         return [

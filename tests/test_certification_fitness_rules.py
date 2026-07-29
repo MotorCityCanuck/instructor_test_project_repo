@@ -259,3 +259,127 @@ def test_fitness_rules_fail_on_development_and_recent_team_evidence() -> None:
 
     assert _get_rule(results, "RAW_DEVELOPMENT_HISTORY_COVERAGE").status == "FAIL"
     assert _get_rule(results, "RAW_RECENT_TEAM_EVIDENCE").status == "FAIL"
+
+
+def test_fitness_rules_accept_confidence_score_alias() -> None:
+    config, inventory_result = _inventory_result()
+    player_source = next(
+        source for source in inventory_result.loaded_sources if source.source_name == "player_master"
+    )
+    aliased_player_source = SourceLoadResult(
+        source_name=player_source.source_name,
+        file_name=player_source.file_name,
+        file_path=player_source.file_path,
+        file_size=player_source.file_size,
+        modification_ts=player_source.modification_ts,
+        row_count=player_source.row_count,
+        schema_hash=player_source.schema_hash,
+        schema_fields=tuple(
+            {
+                "column_name": "confidence_score" if field["column_name"] == "rating_confidence" else field["column_name"],
+                "data_type": field["data_type"],
+                "nullable": field["nullable"],
+            }
+            for field in player_source.schema_fields
+        ),
+        temp_view_name=player_source.temp_view_name,
+        read_status=player_source.read_status,
+    )
+    inventory_result = InventoryCertificationResult(
+        release_name=inventory_result.release_name,
+        release_path=inventory_result.release_path,
+        source_mode=inventory_result.source_mode,
+        path_exists=inventory_result.path_exists,
+        expected_sources=inventory_result.expected_sources,
+        discovered_files=inventory_result.discovered_files,
+        loaded_sources=tuple(
+            aliased_player_source if source.source_name == "player_master" else source
+            for source in inventory_result.loaded_sources
+        ),
+        manifest=inventory_result.manifest,
+        rule_results=inventory_result.rule_results,
+    )
+    spark = FakeSparkSession(
+        {
+            "ACTIVE_PLAYER_RATE": {"total_players": 100, "active_players": 80},
+            "VIABLE_TEAM_DEPTH": {"value": 0},
+            "ZERO_MATCH_ACTIVE_PLAYERS": {
+                "active_players": 80,
+                "zero_match_active_players": 20,
+            },
+            "RATING_COVERAGE": {
+                "total_players": 100,
+                "rated_players": 90,
+                "confidence_players": 70,
+            },
+            "DEVELOPMENT_HISTORY": {"value": 25},
+            "RECENT_TEAM_EVIDENCE": {"value": 12},
+        }
+    )
+
+    results = evaluate_fitness_rules(spark, config, inventory_result)
+
+    assert _get_rule(results, "RAW_PLAYER_CONFIDENCE_COVERAGE").status == "PASS"
+    assert "confidence_score" in next(
+        query for query in spark.queries if "RATING_COVERAGE" in query
+    )
+
+
+def test_fitness_rules_skip_confidence_query_when_no_supported_column_exists() -> None:
+    config, inventory_result = _inventory_result()
+    player_source = next(
+        source for source in inventory_result.loaded_sources if source.source_name == "player_master"
+    )
+    stripped_player_source = SourceLoadResult(
+        source_name=player_source.source_name,
+        file_name=player_source.file_name,
+        file_path=player_source.file_path,
+        file_size=player_source.file_size,
+        modification_ts=player_source.modification_ts,
+        row_count=player_source.row_count,
+        schema_hash=player_source.schema_hash,
+        schema_fields=tuple(
+            field for field in player_source.schema_fields if field["column_name"] != "rating_confidence"
+        ),
+        temp_view_name=player_source.temp_view_name,
+        read_status=player_source.read_status,
+    )
+    inventory_result = InventoryCertificationResult(
+        release_name=inventory_result.release_name,
+        release_path=inventory_result.release_path,
+        source_mode=inventory_result.source_mode,
+        path_exists=inventory_result.path_exists,
+        expected_sources=inventory_result.expected_sources,
+        discovered_files=inventory_result.discovered_files,
+        loaded_sources=tuple(
+            stripped_player_source if source.source_name == "player_master" else source
+            for source in inventory_result.loaded_sources
+        ),
+        manifest=inventory_result.manifest,
+        rule_results=inventory_result.rule_results,
+    )
+    spark = FakeSparkSession(
+        {
+            "ACTIVE_PLAYER_RATE": {"total_players": 100, "active_players": 80},
+            "VIABLE_TEAM_DEPTH": {"value": 0},
+            "ZERO_MATCH_ACTIVE_PLAYERS": {
+                "active_players": 80,
+                "zero_match_active_players": 20,
+            },
+            "RATING_COVERAGE": {
+                "total_players": 100,
+                "rated_players": 90,
+                "confidence_players": 0,
+            },
+            "DEVELOPMENT_HISTORY": {"value": 25},
+            "RECENT_TEAM_EVIDENCE": {"value": 12},
+        }
+    )
+
+    results = evaluate_fitness_rules(spark, config, inventory_result)
+
+    assert _get_rule(results, "RAW_PLAYER_RATING_COVERAGE").status == "PASS"
+    assert not any(rule.rule_id == "RAW_PLAYER_CONFIDENCE_COVERAGE" for rule in results)
+    assert "None IS NOT NULL" not in next(
+        query for query in spark.queries if "RATING_COVERAGE" in query
+    )
