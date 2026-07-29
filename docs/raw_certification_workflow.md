@@ -91,10 +91,12 @@ Each completed run publishes:
 Default artifact layout:
 
 ```text
-/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<certification_run_id>/certification.json
-/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<certification_run_id>/certification_report.md
-/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<certification_run_id>/findings.csv
+/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<artifact_created_at_utc>/<certification_run_id>/certification.json
+/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<artifact_created_at_utc>/<certification_run_id>/certification_report.md
+/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<artifact_created_at_utc>/<certification_run_id>/findings.csv
 ```
+
+The timestamp folder uses the certification completion time in UTC with the format `YYYYMMDDTHHMMSSZ`.
 
 Persistence tables:
 

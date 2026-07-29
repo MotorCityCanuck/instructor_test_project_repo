@@ -39,7 +39,9 @@ def publish_artifacts(
     dbutils: Any | None = None,
 ) -> CertificationArtifactBundle:
     """Render and write the certification JSON, Markdown, and CSV artifacts."""
-    run_root = _join_artifact_path(artifacts_root_path, assessment.certification_run_id)
+    timestamp_folder = assessment.completed_at.strftime("%Y%m%dT%H%M%SZ")
+    dated_root = _join_artifact_path(artifacts_root_path, timestamp_folder)
+    run_root = _join_artifact_path(dated_root, assessment.certification_run_id)
     snapshot_path = _join_artifact_path(run_root, "certification.json")
     report_path = _join_artifact_path(run_root, "certification_report.md")
     findings_path = _join_artifact_path(run_root, "findings.csv")

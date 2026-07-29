@@ -151,9 +151,9 @@ workspace.instructor_ops.raw_certification_baselines
 Published artifacts are written under the configured artifacts root:
 
 ```text
-/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<certification_run_id>/certification.json
-/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<certification_run_id>/certification_report.md
-/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<certification_run_id>/findings.csv
+/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<artifact_created_at_utc>/<certification_run_id>/certification.json
+/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<artifact_created_at_utc>/<certification_run_id>/certification_report.md
+/Volumes/<catalog>/<operations_schema>/certification_artifacts/raw_certification/<release_name>/<artifact_created_at_utc>/<certification_run_id>/findings.csv
 ```
 
 ## Tests Added

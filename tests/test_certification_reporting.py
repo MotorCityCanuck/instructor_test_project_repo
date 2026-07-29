@@ -31,6 +31,8 @@ def test_publish_artifacts_writes_snapshot_report_and_csv(tmp_path: Path) -> Non
     assert Path(bundle.snapshot_path).exists()
     assert Path(bundle.report_path).exists()
     assert Path(bundle.findings_path).exists()
+    assert "20260727T120200Z" in bundle.snapshot_path.replace("\\", "/")
+    assert "/run-report/" in bundle.snapshot_path.replace("\\", "/")
     assert len(bundle.artifacts) == 3
     assert '"decision": "REJECTED"' in bundle.snapshot_json
     assert "RAW_TEAM_SELECTION_PROBE_VIABLE" in bundle.report_markdown
