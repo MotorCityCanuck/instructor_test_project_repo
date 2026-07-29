@@ -29,7 +29,7 @@ def evaluate_assignment_probes(
     results.extend(_olympic_player_selection_probe(spark, loaded_by_source, thresholds))
     results.extend(_olympic_team_selection_probe(spark, loaded_by_source, thresholds))
     results.extend(_partnership_analysis_probe(spark, loaded_by_source, thresholds))
-    results.extend(_future_development_probe(spark, loaded_by_source, thresholds))
+    results.extend(_development_analysis_viability_probe(spark, loaded_by_source, thresholds))
     results.extend(_tournament_candidate_probe(spark, loaded_by_source, thresholds))
     results.extend(_data_quality_learning_probe(structural_results, thresholds))
     return tuple(results)
@@ -326,29 +326,17 @@ WHERE tm.member_count = 2
     ]
 
 
-def _future_development_probe(
+def _development_analysis_viability_probe(
     spark: Any,
     loaded_by_source: dict[str, Any],
     thresholds: dict[str, Any],
 ) -> list[CertificationRuleResult]:
     assessments = loaded_by_source.get("player_assessment_history")
-    players = loaded_by_source.get("player_master")
-    if (
-        assessments is None
-        or players is None
-        or assessments.read_status == "UNREADABLE"
-        or players.read_status == "UNREADABLE"
-    ):
-        return []
-
-    player_columns = {field["column_name"] for field in players.schema_fields}
-    country_column = _resolve_first_column(player_columns, ("country_code",))
-    if country_column is None:
+    if assessments is None or assessments.read_status == "UNREADABLE":
         return []
 
     threshold = int(thresholds["minimum_development_players_with_history"])
     assessment_period_threshold = int(thresholds["minimum_assessment_periods_for_development_probe"])
-    country_filter = _in_list(TARGET_COUNTRIES)
     query = f"""
 WITH assessment_players AS (
     SELECT
@@ -357,32 +345,24 @@ WITH assessment_players AS (
     FROM {assessments.temp_view_name} AS a
     GROUP BY CAST(a.player_id AS STRING)
     HAVING COUNT(*) >= {assessment_period_threshold}
-),
-country_players AS (
-    SELECT CAST(player_id AS STRING) AS player_id
-    FROM {players.temp_view_name}
-    WHERE country_code IS NOT NULL
-      AND UPPER(TRIM(CAST({country_column} AS STRING))) IN ({country_filter})
 )
 SELECT COUNT(*) AS value
-FROM assessment_players AS a
-INNER JOIN country_players AS p
-    ON a.player_id = p.player_id
+FROM assessment_players
 """.strip()
     viable_players = int(_run_single_value_query(spark, "PROBE_DEVELOPMENT", query))
     return [
         CertificationRuleResult(
-            rule_id="RAW_PROBE_FUTURE_DEVELOPMENT",
-            name="Future development pathway has players with longitudinal evidence",
+            rule_id="RAW_PROBE_DEVELOPMENT_ANALYSIS_VIABILITY",
+            name="Development analysis pathway has sufficient longitudinal history",
             pillar="Assignment Pathway Readiness",
             category="development",
             status="PASS" if viable_players >= threshold else "FAIL",
             severity="info" if viable_players >= threshold else "error",
             message=(
-                f"{viable_players} players have sufficient longitudinal assessment evidence."
+                f"The release contains {viable_players} players with sufficient longitudinal history for development analysis."
                 if viable_players >= threshold
                 else (
-                    f"Only {viable_players} players have sufficient longitudinal assessment evidence; "
+                    f"The release contains only {viable_players} players with sufficient longitudinal history for development analysis; "
                     f"minimum required is {threshold}."
                 )
             ),

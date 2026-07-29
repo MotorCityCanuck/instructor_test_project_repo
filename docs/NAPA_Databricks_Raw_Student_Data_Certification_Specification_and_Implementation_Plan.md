@@ -553,9 +553,11 @@ Required probes:
 2. **Olympic player-selection probe**
 3. **Olympic team-selection probe**
 4. **Partnership analysis probe**
-5. **Future development probe**
+5. **Development analysis viability probe**
 6. **Tournament candidate probe**
 7. **Data-quality learning probe**
+
+The development-analysis probe must confirm that enough longitudinal history exists to support student-defined criteria, not define the correct development cohort for students.
 
 The probes do not calculate the instructor’s final answer or expose hidden factors. They only verify that the required analytical pathway has a sufficiently large and differentiated population.
 
@@ -846,15 +848,15 @@ The partnership probe shall verify the existence of:
 - meaningful differences in partnership success;
 - enough evidence to distinguish player strength from team effectiveness.
 
-### 13.5 Development pipeline probe
+### 13.5 Development analysis viability probe
 
-The development probe shall verify that the data contains a sufficiently large cohort with:
+The development-analysis probe shall verify that the data contains enough longitudinal signal to support student-defined development analysis, including:
 
 - appropriate age or experience indicators;
 - more than one observation period;
 - rating or assessment improvement;
 - uncertainty information;
-- enough match evidence to avoid identifying development candidates from noise alone.
+- enough evidence to avoid forcing development conclusions from noise alone.
 
 ### 13.6 Tournament candidate probe
 
@@ -1612,7 +1614,7 @@ The Raw framework identifies analytically unusable but structurally valid releas
 
 ### Tasks
 
-Implement all seven probes using configurable candidate definitions.
+Implement all seven probes using configurable readiness definitions.
 
 Requirements:
 
@@ -1620,7 +1622,7 @@ Requirements:
 - no final ranking or roster answer;
 - no hard-coded athlete or team IDs;
 - country/division results must be dimensional;
-- candidate samples must be limited;
+- candidate samples must be limited where a probe actually returns samples;
 - scale-profile thresholds must control pass/fail.
 
 ### Tests
@@ -1629,7 +1631,7 @@ Requirements:
 - viable 50K engineering release;
 - viable 250K production release;
 - missing Canada mixed candidate depth;
-- insufficient development cohort;
+- insufficient development-analysis viability;
 - invalid tournament team availability.
 
 ### Exit criteria

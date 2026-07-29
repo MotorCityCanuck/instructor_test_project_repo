@@ -154,7 +154,7 @@ def test_assignment_probes_pass_for_viable_release() -> None:
     assert _get_rule(results, "RAW_PROBE_OLYMPIC_PLAYER_SELECTION").status == "PASS"
     assert _get_rule(results, "RAW_PROBE_OLYMPIC_TEAM_SELECTION").status == "PASS"
     assert _get_rule(results, "RAW_PROBE_PARTNERSHIP_ANALYSIS").status == "PASS"
-    assert _get_rule(results, "RAW_PROBE_FUTURE_DEVELOPMENT").status == "PASS"
+    assert _get_rule(results, "RAW_PROBE_DEVELOPMENT_ANALYSIS_VIABILITY").status == "PASS"
     assert _get_rule(results, "RAW_PROBE_TOURNAMENT_CANDIDATES").status == "PASS"
     assert _get_rule(results, "RAW_PROBE_DATA_QUALITY_LEARNING").status == "PASS"
 
@@ -181,7 +181,7 @@ def test_assignment_probes_fail_on_pathway_depth_gaps() -> None:
     assert _get_rule(results, "RAW_PROBE_OLYMPIC_PLAYER_SELECTION").status == "FAIL"
     assert _get_rule(results, "RAW_PROBE_OLYMPIC_TEAM_SELECTION").status == "FAIL"
     assert _get_rule(results, "RAW_PROBE_PARTNERSHIP_ANALYSIS").status == "FAIL"
-    assert _get_rule(results, "RAW_PROBE_FUTURE_DEVELOPMENT").status == "FAIL"
+    assert _get_rule(results, "RAW_PROBE_DEVELOPMENT_ANALYSIS_VIABILITY").status == "FAIL"
     assert _get_rule(results, "RAW_PROBE_TOURNAMENT_CANDIDATES").status == "FAIL"
 
 
