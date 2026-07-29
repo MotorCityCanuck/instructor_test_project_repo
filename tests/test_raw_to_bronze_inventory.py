@@ -154,6 +154,44 @@ def test_validate_raw_inventory_fails_on_unexpected_file_when_policy_is_fail() -
         validate_raw_inventory(dbutils, config, environment)
 
 
+def test_validate_raw_inventory_ignores_release_manifest_file() -> None:
+    config = load_raw_to_bronze_config("napa_5k")
+    environment = resolve_release_environment(config)
+    dbutils = FakeDbutils(
+        _expected_entries()
+        + [
+            FakeFileInfo(
+                name="release_manifest.json",
+                path=f"{environment.raw_volume_path}/release_manifest.json",
+            )
+        ]
+    )
+
+    status = validate_raw_inventory(dbutils, config, environment)
+
+    assert status.unexpected_files == ()
+    assert len(status.discovered_files) == 13
+
+
+def test_validate_raw_inventory_ignores_manifest_file() -> None:
+    config = load_raw_to_bronze_config("napa_5k")
+    environment = resolve_release_environment(config)
+    dbutils = FakeDbutils(
+        _expected_entries()
+        + [
+            FakeFileInfo(
+                name="manifest.json",
+                path=f"{environment.raw_volume_path}/manifest.json",
+            )
+        ]
+    )
+
+    status = validate_raw_inventory(dbutils, config, environment)
+
+    assert status.unexpected_files == ()
+    assert len(status.discovered_files) == 13
+
+
 def test_validate_raw_inventory_normalizes_trailing_slash_names() -> None:
     config = load_raw_to_bronze_config("napa_5k")
     environment = resolve_release_environment(config)

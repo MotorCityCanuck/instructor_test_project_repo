@@ -11,6 +11,8 @@ from napa_pipeline.raw_to_bronze.config import RawToBronzeConfig
 from napa_pipeline.raw_to_bronze.environment import ReleaseEnvironment
 from napa_pipeline.raw_to_bronze.operations import calculate_schema_hash
 
+IGNORED_AUXILIARY_FILE_NAMES = frozenset({"manifest.json", "release_manifest.json"})
+
 
 class RawInventoryError(RuntimeError):
     """Raised when Raw inventory validation fails."""
@@ -74,6 +76,7 @@ def validate_raw_inventory(
             modification_ts=_normalize_modification_time(getattr(entry, "modificationTime", None)),
         )
         for entry in entries
+        if not _should_ignore_entry(_normalize_entry_name(entry))
     )
 
     expected_files = tuple(
@@ -194,3 +197,7 @@ def _format_discovered_entries(discovered_files: tuple[RawFileRecord, ...]) -> s
         f"{record.file_name} [{record.file_path}]"
         for record in discovered_files
     )
+
+
+def _should_ignore_entry(file_name: str) -> bool:
+    return file_name in IGNORED_AUXILIARY_FILE_NAMES
