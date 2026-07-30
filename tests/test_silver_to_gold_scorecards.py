@@ -5,6 +5,8 @@ from datetime import date
 from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
 from napa_pipeline.silver_to_gold.environment import resolve_release_environment
 from napa_pipeline.silver_to_gold.scorecards import (
+    NATIONAL_PLAYER_RANKINGS_SCHEMA,
+    PLAYER_EVALUATION_SCORECARDS_SCHEMA,
     build_national_player_rankings,
     build_player_evaluation_scorecards,
     publish_national_player_rankings,
@@ -208,9 +210,15 @@ def test_publish_player_evaluation_scorecards_returns_summary(monkeypatch) -> No
     stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.player_evaluation_scorecards"
     spark = _FakeSpark({target_fqn: _FakeTable(row_count=3)})
 
+    published = {}
+
+    def _fake_publish_stage_records_to_gold_table(*args, **kwargs):
+        published["schema"] = kwargs.get("schema")
+        return 3, 3
+
     monkeypatch.setattr(
         "napa_pipeline.silver_to_gold.scorecards.publish_stage_records_to_gold_table",
-        lambda *args, **kwargs: (3, 3),
+        _fake_publish_stage_records_to_gold_table,
     )
 
     summary = publish_player_evaluation_scorecards(
@@ -222,6 +230,7 @@ def test_publish_player_evaluation_scorecards_returns_summary(monkeypatch) -> No
     assert summary.stage_table_fqn == stage_fqn
     assert summary.target_table_fqn == target_fqn
     assert summary.output_row_count == 3
+    assert published["schema"] is PLAYER_EVALUATION_SCORECARDS_SCHEMA
 
 
 def test_publish_national_player_rankings_returns_summary(monkeypatch) -> None:
@@ -231,9 +240,15 @@ def test_publish_national_player_rankings_returns_summary(monkeypatch) -> None:
     stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.national_player_rankings"
     spark = _FakeSpark({target_fqn: _FakeTable(row_count=8)})
 
+    published = {}
+
+    def _fake_publish_stage_records_to_gold_table(*args, **kwargs):
+        published["schema"] = kwargs.get("schema")
+        return 8, 8
+
     monkeypatch.setattr(
         "napa_pipeline.silver_to_gold.scorecards.publish_stage_records_to_gold_table",
-        lambda *args, **kwargs: (8, 8),
+        _fake_publish_stage_records_to_gold_table,
     )
 
     summary = publish_national_player_rankings(
@@ -252,6 +267,7 @@ def test_publish_national_player_rankings_returns_summary(monkeypatch) -> None:
     assert summary.stage_table_fqn == stage_fqn
     assert summary.target_table_fqn == target_fqn
     assert summary.output_row_count == 8
+    assert published["schema"] is NATIONAL_PLAYER_RANKINGS_SCHEMA
 
 
 def test_publish_phase10_scorecard_tables_returns_two_summaries(monkeypatch) -> None:

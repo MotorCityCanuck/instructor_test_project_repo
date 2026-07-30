@@ -5,10 +5,12 @@ from datetime import date
 from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
 from napa_pipeline.silver_to_gold.environment import resolve_release_environment
 from napa_pipeline.silver_to_gold.features import (
+    PLAYER_DEVELOPMENT_FEATURES_SCHEMA,
     build_player_performance_features_sql,
     build_player_development_features,
     build_player_performance_features,
     get_player_feature_registry,
+    publish_player_development_features,
     publish_player_performance_features,
 )
 from napa_pipeline.silver_to_gold.features_validation import (
@@ -342,6 +344,63 @@ def test_publish_player_performance_features_returns_summary(monkeypatch) -> Non
     assert summary.output_row_count == 12
     assert "competition_player_matches" in published["stage_sql"]
     assert "trailing_365" in published["stage_sql"]
+
+
+def test_publish_player_development_features_passes_explicit_schema(monkeypatch) -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+    rating_history_fqn = f"{environment.catalog}.{environment.gold_schema}.player_rating_history"
+    assessment_fqn = f"{environment.catalog}.{environment.silver_schema}.player_assessment_history"
+    registrations_fqn = f"{environment.catalog}.{environment.silver_schema}.player_registrations"
+    players_fqn = f"{environment.catalog}.{environment.silver_schema}.players"
+    target_fqn = f"{environment.catalog}.{environment.gold_schema}.player_development_features"
+    stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.player_development_features"
+    spark = _FakeSpark(
+        {
+            rating_history_fqn: _FakeTable(rows=_player_rating_history_rows()),
+            assessment_fqn: _FakeTable(rows=_player_assessment_history_rows()),
+            registrations_fqn: _FakeTable(rows=_player_registrations_rows()),
+            players_fqn: _FakeTable(row_count=3, rows=_players_rows()),
+            target_fqn: _FakeTable(row_count=3),
+        }
+    )
+    published = {}
+
+    def _fake_publish_stage_records_to_gold_table(
+        _spark,
+        *,
+        stage_table_fqn: str,
+        target_table_fqn: str,
+        records,
+        schema=None,
+        validation_fn=None,
+        count_fn=None,
+    ):
+        published["stage_table_fqn"] = stage_table_fqn
+        published["target_table_fqn"] = target_table_fqn
+        published["record_count"] = len(records)
+        published["schema"] = schema
+        return 3, 3
+
+    monkeypatch.setattr(
+        "napa_pipeline.silver_to_gold.features.publish_stage_records_to_gold_table",
+        _fake_publish_stage_records_to_gold_table,
+    )
+
+    summary = publish_player_development_features(
+        spark,
+        environment,
+        analysis_as_of_date=date(2026, 6, 30),
+        features_config=_features_config(),
+        evidence_windows_config=_evidence_windows_config(),
+    )
+
+    assert summary.stage_table_fqn == stage_fqn
+    assert summary.target_table_fqn == target_fqn
+    assert summary.input_row_count == 3
+    assert summary.output_row_count == 3
+    assert published["record_count"] == 3
+    assert published["schema"] is PLAYER_DEVELOPMENT_FEATURES_SCHEMA
 
 
 def test_build_player_performance_features_sql_uses_spark_window_aggregations() -> None:

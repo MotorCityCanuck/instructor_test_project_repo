@@ -6,6 +6,46 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
+try:
+    from pyspark.sql.types import (
+        BooleanType,
+        DateType,
+        DoubleType,
+        IntegerType,
+        StringType,
+        StructField,
+        StructType,
+    )
+except ModuleNotFoundError:  # pragma: no cover - local test fallback when pyspark is unavailable
+    class _FallbackType:
+        def __repr__(self) -> str:
+            return self.__class__.__name__
+
+    class BooleanType(_FallbackType):
+        pass
+
+    class DateType(_FallbackType):
+        pass
+
+    class DoubleType(_FallbackType):
+        pass
+
+    class IntegerType(_FallbackType):
+        pass
+
+    class StringType(_FallbackType):
+        pass
+
+    class StructField:
+        def __init__(self, name: str, dataType: Any, nullable: bool):
+            self.name = name
+            self.dataType = dataType
+            self.nullable = nullable
+
+    class StructType(list):
+        def __init__(self, fields: list[StructField]):
+            super().__init__(fields)
+
 from napa_pipeline.silver_to_gold.environment import ReleaseEnvironment
 from napa_pipeline.silver_to_gold.io import (
     get_gold_stage_table_fqn,
@@ -41,6 +81,90 @@ class Phase10PublicationSummary:
 
     player_evaluation_scorecards: PlayerEvaluationScorecardsPublicationSummary
     national_player_rankings: NationalPlayerRankingsPublicationSummary
+
+
+PLAYER_EVALUATION_SCORECARDS_SCHEMA = StructType(
+    [
+        StructField("player_id", StringType(), False),
+        StructField("scoring_scenario", StringType(), False),
+        StructField("analysis_as_of_date", DateType(), False),
+        StructField("display_name", StringType(), True),
+        StructField("country_code", StringType(), False),
+        StructField("gender_code", StringType(), True),
+        StructField("active_flag", BooleanType(), False),
+        StructField("eligible_player_flag", BooleanType(), False),
+        StructField("source_rating_value", DoubleType(), True),
+        StructField("source_confidence_score", DoubleType(), True),
+        StructField("analytical_rating_value", DoubleType(), True),
+        StructField("rated_match_count_current", IntegerType(), False),
+        StructField("rating_reliability_score", DoubleType(), True),
+        StructField("rating_evidence_band", StringType(), True),
+        StructField("rating_uncertainty_proxy", DoubleType(), True),
+        StructField("career_match_count", IntegerType(), False),
+        StructField("recent_match_count", IntegerType(), False),
+        StructField("performance_above_expectation_raw", DoubleType(), True),
+        StructField("game_performance_raw", DoubleType(), True),
+        StructField("recent_form_raw", DoubleType(), True),
+        StructField("consistency_raw", DoubleType(), True),
+        StructField("strength_of_schedule_raw", DoubleType(), True),
+        StructField("development_momentum_raw", DoubleType(), True),
+        StructField("latest_assessment_confidence", DoubleType(), True),
+        StructField("development_feature_evidence_status", StringType(), True),
+        StructField("combined_confidence_score", DoubleType(), True),
+        StructField("quality_confidence_band", StringType(), True),
+        StructField("material_limitation_text", StringType(), True),
+        StructField("rating_strength_score", DoubleType(), True),
+        StructField("adjusted_performance_score", DoubleType(), True),
+        StructField("game_performance_score", DoubleType(), True),
+        StructField("recent_form_score", DoubleType(), True),
+        StructField("consistency_score", DoubleType(), True),
+        StructField("strength_of_schedule_score", DoubleType(), True),
+        StructField("development_trend_component_score", DoubleType(), True),
+        StructField("development_headroom_component_score", DoubleType(), True),
+        StructField("performance_component_score", DoubleType(), True),
+        StructField("rating_component_score", DoubleType(), True),
+        StructField("consistency_component_score", DoubleType(), True),
+        StructField("development_component_score", DoubleType(), True),
+        StructField("confidence_component_score", DoubleType(), True),
+        StructField("raw_player_evaluation_score", DoubleType(), True),
+        StructField("confidence_factor", DoubleType(), False),
+        StructField("confidence_adjusted_player_score", DoubleType(), True),
+        StructField("development_confidence_component_score", DoubleType(), True),
+        StructField("development_potential_score", DoubleType(), True),
+        StructField("development_candidate_flag", BooleanType(), False),
+        StructField("top_strengths", StringType(), True),
+        StructField("top_risks", StringType(), True),
+        StructField("evidence_band", StringType(), True),
+        StructField("ranking_rationale", StringType(), False),
+    ]
+)
+
+NATIONAL_PLAYER_RANKINGS_SCHEMA = StructType(
+    [
+        StructField("country_code", StringType(), False),
+        StructField("ranking_group", StringType(), False),
+        StructField("scoring_scenario", StringType(), False),
+        StructField("player_id", StringType(), False),
+        StructField("display_name", StringType(), True),
+        StructField("gender_code", StringType(), True),
+        StructField("active_flag", BooleanType(), False),
+        StructField("rank_metric_name", StringType(), False),
+        StructField("rank_metric_value", DoubleType(), False),
+        StructField("rank", IntegerType(), False),
+        StructField("dense_rank", IntegerType(), False),
+        StructField("score_difference_from_next", DoubleType(), True),
+        StructField("top_25_flag", BooleanType(), False),
+        StructField("confidence_adjusted_player_score", DoubleType(), True),
+        StructField("development_potential_score", DoubleType(), True),
+        StructField("analytical_rating_value", DoubleType(), True),
+        StructField("rated_match_count_current", IntegerType(), False),
+        StructField("combined_confidence_score", DoubleType(), True),
+        StructField("top_strengths", StringType(), True),
+        StructField("top_risks", StringType(), True),
+        StructField("evidence_band", StringType(), True),
+        StructField("ranking_rationale", StringType(), False),
+    ]
+)
 
 
 def publish_phase10_player_tables(
@@ -432,6 +556,7 @@ def publish_player_evaluation_scorecards(
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
         records=rows,
+        schema=PLAYER_EVALUATION_SCORECARDS_SCHEMA,
         validation_fn=lambda current_spark, table_fqn: _validate_key_constraints(
             current_spark,
             table_fqn,
@@ -462,6 +587,7 @@ def publish_national_player_rankings(
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
         records=rows,
+        schema=NATIONAL_PLAYER_RANKINGS_SCHEMA,
         validation_fn=lambda current_spark, table_fqn: _validate_key_constraints(
             current_spark,
             table_fqn,
@@ -685,4 +811,3 @@ def _coerce_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
-

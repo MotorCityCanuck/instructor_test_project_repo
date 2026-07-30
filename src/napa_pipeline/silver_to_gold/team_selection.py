@@ -6,6 +6,46 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+try:
+    from pyspark.sql.types import (
+        BooleanType,
+        DateType,
+        DoubleType,
+        IntegerType,
+        StringType,
+        StructField,
+        StructType,
+    )
+except ModuleNotFoundError:  # pragma: no cover - local test fallback when pyspark is unavailable
+    class _FallbackType:
+        def __repr__(self) -> str:
+            return self.__class__.__name__
+
+    class BooleanType(_FallbackType):
+        pass
+
+    class DateType(_FallbackType):
+        pass
+
+    class DoubleType(_FallbackType):
+        pass
+
+    class IntegerType(_FallbackType):
+        pass
+
+    class StringType(_FallbackType):
+        pass
+
+    class StructField:
+        def __init__(self, name: str, dataType: Any, nullable: bool):
+            self.name = name
+            self.dataType = dataType
+            self.nullable = nullable
+
+    class StructType(list):
+        def __init__(self, fields: list[StructField]):
+            super().__init__(fields)
+
 from napa_pipeline.silver_to_gold.environment import ReleaseEnvironment
 from napa_pipeline.silver_to_gold.io import (
     get_gold_stage_table_fqn,
@@ -54,6 +94,83 @@ class Phase11PublicationSummary:
 
     team_selection_scorecards: TeamSelectionScorecardsPublicationSummary
     olympic_team_candidates: OlympicTeamCandidatesPublicationSummary
+
+
+TEAM_SELECTION_SCORECARDS_SCHEMA = StructType(
+    [
+        StructField("team_id", StringType(), False),
+        StructField("scoring_scenario", StringType(), False),
+        StructField("analysis_as_of_date", DateType(), False),
+        StructField("team_category", StringType(), False),
+        StructField("country_code", StringType(), False),
+        StructField("team_status", StringType(), True),
+        StructField("active_flag", BooleanType(), False),
+        StructField("formation_date", DateType(), True),
+        StructField("dissolution_date", DateType(), True),
+        StructField("player_one_id", StringType(), True),
+        StructField("player_two_id", StringType(), True),
+        StructField("player_one_display_name", StringType(), True),
+        StructField("player_two_display_name", StringType(), True),
+        StructField("current_member_count", IntegerType(), False),
+        StructField("membership_overlap_warning_flag", BooleanType(), False),
+        StructField("eligible_team_flag", BooleanType(), False),
+        StructField("eligibility_status", StringType(), False),
+        StructField("eligibility_reason_codes", StringType(), True),
+        StructField("evidence_sufficiency_status", StringType(), False),
+        StructField("candidate_attribution_allowed_flag", BooleanType(), False),
+        StructField("partnership_key", StringType(), True),
+        StructField("player_one_score", DoubleType(), True),
+        StructField("player_two_score", DoubleType(), True),
+        StructField("average_player_score", DoubleType(), True),
+        StructField("minimum_player_score", DoubleType(), True),
+        StructField("player_score_balance", DoubleType(), True),
+        StructField("partnership_strength_raw", DoubleType(), True),
+        StructField("prediction_strength_raw", DoubleType(), True),
+        StructField("team_feature_confidence_raw", DoubleType(), True),
+        StructField("player_confidence_raw", DoubleType(), True),
+        StructField("data_quality_confidence_raw", DoubleType(), True),
+        StructField("team_resolution_confidence_raw", DoubleType(), True),
+        StructField("material_limitation_text", StringType(), True),
+        StructField("partnership_score", DoubleType(), True),
+        StructField("player_strength_score", DoubleType(), True),
+        StructField("prediction_score", DoubleType(), True),
+        StructField("confidence_component_score", DoubleType(), True),
+        StructField("combined_team_confidence", DoubleType(), True),
+        StructField("raw_team_selection_score", DoubleType(), True),
+        StructField("confidence_factor", DoubleType(), True),
+        StructField("confidence_adjusted_team_score", DoubleType(), True),
+        StructField("risk_penalty_score", DoubleType(), False),
+        StructField("final_team_selection_score", DoubleType(), True),
+        StructField("top_strengths", StringType(), True),
+        StructField("top_risks", StringType(), True),
+        StructField("ranking_rationale", StringType(), False),
+    ]
+)
+
+OLYMPIC_TEAM_CANDIDATES_SCHEMA = StructType(
+    [
+        StructField("country_code", StringType(), False),
+        StructField("category_code", StringType(), False),
+        StructField("team_id", StringType(), False),
+        StructField("scoring_scenario", StringType(), False),
+        StructField("analysis_as_of_date", DateType(), True),
+        StructField("candidate_rank", IntegerType(), False),
+        StructField("recommendation_tier", StringType(), False),
+        StructField("final_team_selection_score", DoubleType(), True),
+        StructField("confidence_adjusted_team_score", DoubleType(), True),
+        StructField("raw_team_selection_score", DoubleType(), True),
+        StructField("combined_team_confidence", DoubleType(), True),
+        StructField("evidence_sufficiency_status", StringType(), True),
+        StructField("candidate_attribution_allowed_flag", BooleanType(), True),
+        StructField("player_one_id", StringType(), True),
+        StructField("player_two_id", StringType(), True),
+        StructField("player_one_display_name", StringType(), True),
+        StructField("player_two_display_name", StringType(), True),
+        StructField("top_strengths", StringType(), True),
+        StructField("top_risks", StringType(), True),
+        StructField("candidate_rationale", StringType(), True),
+    ]
+)
 
 
 def publish_phase11_team_tables(
@@ -1216,6 +1333,7 @@ def publish_team_selection_scorecards(
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
         records=rows,
+        schema=TEAM_SELECTION_SCORECARDS_SCHEMA,
         validation_fn=lambda current_spark, table_fqn: _validate_key_constraints(
             current_spark,
             table_fqn,
@@ -1271,6 +1389,7 @@ def publish_olympic_team_candidates(
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
         records=rows,
+        schema=OLYMPIC_TEAM_CANDIDATES_SCHEMA,
         validation_fn=lambda current_spark, table_fqn: _validate_key_constraints(
             current_spark,
             table_fqn,

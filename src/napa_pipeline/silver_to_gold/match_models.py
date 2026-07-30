@@ -7,6 +7,38 @@ from datetime import date
 import math
 from typing import Any
 
+try:
+    from pyspark.sql.types import (
+        IntegerType,
+        DoubleType,
+        StringType,
+        StructField,
+        StructType,
+    )
+except ModuleNotFoundError:  # pragma: no cover - local test fallback when pyspark is unavailable
+    class _FallbackType:
+        def __repr__(self) -> str:
+            return self.__class__.__name__
+
+    class IntegerType(_FallbackType):
+        pass
+
+    class DoubleType(_FallbackType):
+        pass
+
+    class StringType(_FallbackType):
+        pass
+
+    class StructField:
+        def __init__(self, name: str, dataType: Any, nullable: bool):
+            self.name = name
+            self.dataType = dataType
+            self.nullable = nullable
+
+    class StructType(list):
+        def __init__(self, fields: list[StructField]):
+            super().__init__(fields)
+
 from napa_pipeline.silver_to_gold.environment import ReleaseEnvironment
 from napa_pipeline.silver_to_gold.io import (
     get_gold_stage_table_fqn,
@@ -22,6 +54,21 @@ BASELINE_ALGORITHM = "ANALYTICAL_RATING_PROBABILITY"
 DEFAULT_RATING_SCALE = 400.0
 PREDICTION_EXPLANATION = (
     "Baseline analytical rating probability from pre-match team ratings."
+)
+
+MATCH_MODEL_METRICS_SCHEMA = StructType(
+    [
+        StructField("model_run_id", StringType(), False),
+        StructField("model_name", StringType(), False),
+        StructField("model_version", StringType(), False),
+        StructField("algorithm", StringType(), False),
+        StructField("feature_definition_version", StringType(), False),
+        StructField("split_name", StringType(), False),
+        StructField("metric_name", StringType(), False),
+        StructField("metric_value", DoubleType(), True),
+        StructField("evaluated_row_count", IntegerType(), False),
+        StructField("evaluation_window", StringType(), False),
+    ]
 )
 
 
@@ -446,6 +493,7 @@ def publish_match_model_metrics(
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
         records=metric_records,
+        schema=MATCH_MODEL_METRICS_SCHEMA,
         validation_fn=lambda current_spark, table_fqn: _validate_key_constraints(
             current_spark,
             table_fqn,

@@ -7,6 +7,46 @@ from datetime import date, datetime, timedelta
 import math
 from typing import Any
 
+try:
+    from pyspark.sql.types import (
+        BooleanType,
+        DateType,
+        DoubleType,
+        IntegerType,
+        StringType,
+        StructField,
+        StructType,
+    )
+except ModuleNotFoundError:  # pragma: no cover - local test fallback when pyspark is unavailable
+    class _FallbackType:
+        def __repr__(self) -> str:
+            return self.__class__.__name__
+
+    class BooleanType(_FallbackType):
+        pass
+
+    class DateType(_FallbackType):
+        pass
+
+    class DoubleType(_FallbackType):
+        pass
+
+    class IntegerType(_FallbackType):
+        pass
+
+    class StringType(_FallbackType):
+        pass
+
+    class StructField:
+        def __init__(self, name: str, dataType: Any, nullable: bool):
+            self.name = name
+            self.dataType = dataType
+            self.nullable = nullable
+
+    class StructType(list):
+        def __init__(self, fields: list[StructField]):
+            super().__init__(fields)
+
 from napa_pipeline.silver_to_gold.environment import ReleaseEnvironment
 from napa_pipeline.silver_to_gold.io import (
     get_gold_stage_table_fqn,
@@ -23,6 +63,32 @@ from napa_pipeline.silver_to_gold.ratings import expected_win_probability
 NO_EVIDENCE = "NONE"
 LIMITED_EVIDENCE = "LIMITED"
 SUFFICIENT_EVIDENCE = "SUFFICIENT"
+
+PLAYER_DEVELOPMENT_FEATURES_SCHEMA = StructType(
+    [
+        StructField("player_id", StringType(), False),
+        StructField("analysis_as_of_date", DateType(), False),
+        StructField("display_name", StringType(), True),
+        StructField("country_code", StringType(), True),
+        StructField("active_flag", BooleanType(), False),
+        StructField("latest_analytical_rating_value", DoubleType(), True),
+        StructField("latest_assessment_value", DoubleType(), True),
+        StructField("latest_assessment_confidence", DoubleType(), True),
+        StructField("rating_change_90", DoubleType(), True),
+        StructField("rating_change_180", DoubleType(), True),
+        StructField("rating_change_total", DoubleType(), True),
+        StructField("rating_slope_per_30_days", DoubleType(), True),
+        StructField("assessment_change_180", DoubleType(), True),
+        StructField("assessment_slope_per_30_days", DoubleType(), True),
+        StructField("confidence_change_180", DoubleType(), True),
+        StructField("rated_match_count", IntegerType(), False),
+        StructField("experience_growth_180", IntegerType(), True),
+        StructField("days_since_registration", IntegerType(), True),
+        StructField("current_registration_flag", BooleanType(), False),
+        StructField("development_momentum_score", DoubleType(), True),
+        StructField("feature_evidence_status", StringType(), False),
+    ]
+)
 
 
 PLAYER_FEATURE_REGISTRY: tuple[dict[str, Any], ...] = (
@@ -545,6 +611,7 @@ def publish_player_development_features(
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
         records=result.rows,
+        schema=PLAYER_DEVELOPMENT_FEATURES_SCHEMA,
         validation_fn=lambda _spark, table_fqn: _validate_key_constraints(
             _spark,
             table_fqn,

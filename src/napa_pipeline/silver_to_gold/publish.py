@@ -68,12 +68,18 @@ def publish_records_table(
     spark: Any,
     table_fqn: str,
     records: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    *,
+    schema: Any | None = None,
 ) -> int:
     """Publish Python-built records to a Delta table and return the verified row count."""
     try:
         if records:
-            dataframe = spark.createDataFrame(list(records))
+            dataframe = spark.createDataFrame(list(records), schema=schema)
             dataframe.write.format("delta").mode("overwrite").saveAsTable(table_fqn)
+        elif schema is not None:
+            spark.createDataFrame([], schema=schema).write.format("delta").mode("overwrite").saveAsTable(
+                table_fqn
+            )
         elif spark.catalog.tableExists(table_fqn):
             spark.table(table_fqn).limit(0).write.format("delta").mode("overwrite").saveAsTable(
                 table_fqn
@@ -99,6 +105,7 @@ def publish_stage_records_to_gold_table(
     stage_table_fqn: str,
     target_table_fqn: str,
     records: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    schema: Any | None = None,
     validation_fn: Callable[[Any, str], None] | None = None,
     count_fn: Callable[[Any, str], int] | None = None,
 ) -> tuple[int, int]:
@@ -106,7 +113,7 @@ def publish_stage_records_to_gold_table(
     source_count_fn = count_fn or _count_rows
 
     try:
-        stage_row_count = publish_records_table(spark, stage_table_fqn, records)
+        stage_row_count = publish_records_table(spark, stage_table_fqn, records, schema=schema)
         if validation_fn is not None:
             validation_fn(spark, stage_table_fqn)
 

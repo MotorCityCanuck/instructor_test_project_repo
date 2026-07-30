@@ -7,6 +7,46 @@ from datetime import date, datetime
 import math
 from typing import Any
 
+try:
+    from pyspark.sql.types import (
+        BooleanType,
+        DateType,
+        DoubleType,
+        IntegerType,
+        StringType,
+        StructField,
+        StructType,
+    )
+except ModuleNotFoundError:  # pragma: no cover - local test fallback when pyspark is unavailable
+    class _FallbackType:
+        def __repr__(self) -> str:
+            return self.__class__.__name__
+
+    class BooleanType(_FallbackType):
+        pass
+
+    class DateType(_FallbackType):
+        pass
+
+    class DoubleType(_FallbackType):
+        pass
+
+    class IntegerType(_FallbackType):
+        pass
+
+    class StringType(_FallbackType):
+        pass
+
+    class StructField:
+        def __init__(self, name: str, dataType: Any, nullable: bool):
+            self.name = name
+            self.dataType = dataType
+            self.nullable = nullable
+
+    class StructType(list):
+        def __init__(self, fields: list[StructField]):
+            super().__init__(fields)
+
 from napa_pipeline.silver_to_gold.environment import ReleaseEnvironment
 from napa_pipeline.silver_to_gold.io import (
     get_gold_stage_table_fqn,
@@ -26,6 +66,83 @@ VOLUME_SCALE_DEFAULT = 10.0
 RECENCY_HALF_LIFE_DAYS = 180.0
 MAX_UNCERTAINTY_DEFAULT = 200.0
 DEFAULT_RATING_SCALE = 400.0
+
+
+PLAYER_RATING_EVENTS_SCHEMA = StructType(
+    [
+        StructField("match_id", StringType(), False),
+        StructField("match_date", DateType(), False),
+        StructField("batch_id", StringType(), True),
+        StructField("batch_sequence", IntegerType(), True),
+        StructField("batch_date", DateType(), True),
+        StructField("team_number", IntegerType(), True),
+        StructField("player_id", StringType(), False),
+        StructField("partner_player_id", StringType(), False),
+        StructField("opponent_player_one_id", StringType(), False),
+        StructField("opponent_player_two_id", StringType(), False),
+        StructField("source_pre_match_player_rating", DoubleType(), True),
+        StructField("pre_match_rating", DoubleType(), False),
+        StructField("team_pre_match_rating", DoubleType(), False),
+        StructField("opponent_team_pre_match_rating", DoubleType(), False),
+        StructField("expected_win_probability", DoubleType(), False),
+        StructField("actual_result", DoubleType(), False),
+        StructField("won_flag", BooleanType(), False),
+        StructField("lost_flag", BooleanType(), False),
+        StructField("k_factor", DoubleType(), False),
+        StructField("margin_multiplier", DoubleType(), False),
+        StructField("rating_delta", DoubleType(), False),
+        StructField("post_match_rating", DoubleType(), False),
+        StructField("prior_match_count", IntegerType(), False),
+        StructField("post_match_count", IntegerType(), False),
+        StructField("wins_to_date", IntegerType(), False),
+        StructField("losses_to_date", IntegerType(), False),
+        StructField("event_sequence", IntegerType(), False),
+    ]
+)
+
+PLAYER_RATING_HISTORY_SCHEMA = StructType(
+    [
+        StructField("player_id", StringType(), False),
+        StructField("rating_effective_date", DateType(), False),
+        StructField("latest_match_id", StringType(), False),
+        StructField("latest_event_sequence", IntegerType(), False),
+        StructField("batch_id", StringType(), True),
+        StructField("batch_sequence", IntegerType(), True),
+        StructField("batch_date", DateType(), True),
+        StructField("analytical_rating_value", DoubleType(), False),
+        StructField("rating_change_from_prior", DoubleType(), True),
+        StructField("rated_match_count", IntegerType(), False),
+        StructField("wins_to_date", IntegerType(), False),
+        StructField("losses_to_date", IntegerType(), False),
+        StructField("last_rated_match_date", DateType(), False),
+        StructField("rating_reliability_score", DoubleType(), False),
+        StructField("rating_evidence_band", StringType(), False),
+        StructField("rating_uncertainty_proxy", DoubleType(), False),
+        StructField("is_current_flag", BooleanType(), False),
+    ]
+)
+
+PLAYER_CURRENT_RATINGS_SCHEMA = StructType(
+    [
+        StructField("player_id", StringType(), False),
+        StructField("display_name", StringType(), True),
+        StructField("country_code", StringType(), True),
+        StructField("active_flag", BooleanType(), False),
+        StructField("source_rating_value", DoubleType(), True),
+        StructField("source_confidence_score", DoubleType(), True),
+        StructField("analytical_rating_value", DoubleType(), False),
+        StructField("rating_difference_from_source", DoubleType(), True),
+        StructField("rating_reliability_score", DoubleType(), False),
+        StructField("rating_evidence_band", StringType(), False),
+        StructField("rating_uncertainty_proxy", DoubleType(), False),
+        StructField("rated_match_count", IntegerType(), False),
+        StructField("wins_to_date", IntegerType(), False),
+        StructField("losses_to_date", IntegerType(), False),
+        StructField("last_rated_match_date", DateType(), True),
+        StructField("current_rating_effective_date", DateType(), True),
+        StructField("analytical_rating_rank_overall", IntegerType(), False),
+    ]
+)
 
 
 @dataclass(frozen=True)
@@ -412,6 +529,7 @@ def publish_player_rating_events(
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
         records=result.rows,
+        schema=PLAYER_RATING_EVENTS_SCHEMA,
         validation_fn=lambda _spark, table_fqn: _validate_key_constraints(
             _spark,
             table_fqn,
@@ -450,6 +568,7 @@ def publish_player_rating_history(
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
         records=result.rows,
+        schema=PLAYER_RATING_HISTORY_SCHEMA,
         validation_fn=lambda _spark, table_fqn: _validate_key_constraints(
             _spark,
             table_fqn,
@@ -488,6 +607,7 @@ def publish_player_current_ratings(
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
         records=result.rows,
+        schema=PLAYER_CURRENT_RATINGS_SCHEMA,
         validation_fn=lambda _spark, table_fqn: _validate_key_constraints(
             _spark,
             table_fqn,

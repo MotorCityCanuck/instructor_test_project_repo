@@ -6,6 +6,7 @@ from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
 from napa_pipeline.silver_to_gold.environment import resolve_release_environment
 from napa_pipeline.silver_to_gold.match_models import (
     BASELINE_ALGORITHM,
+    MATCH_MODEL_METRICS_SCHEMA,
     build_match_model_metric_records,
     build_match_outcome_predictions_sql,
     build_match_outcome_training_set_sql,
@@ -288,9 +289,16 @@ FROM {predictions_fqn}
         },
     )
 
+    published = {}
+
+    def _fake_publish_stage_records_to_gold_table(*args, **kwargs):
+        published["schema"] = kwargs.get("schema")
+        published["records"] = kwargs.get("records")
+        return 24, 24
+
     monkeypatch.setattr(
         "napa_pipeline.silver_to_gold.match_models.publish_stage_records_to_gold_table",
-        lambda *args, **kwargs: (24, 24),
+        _fake_publish_stage_records_to_gold_table,
     )
 
     summary = publish_match_model_metrics(
@@ -306,6 +314,8 @@ FROM {predictions_fqn}
     assert summary.target_table_fqn == target_fqn
     assert summary.input_row_count == len(summary.metric_records)
     assert summary.output_row_count == 24
+    assert published["schema"] is MATCH_MODEL_METRICS_SCHEMA
+    assert tuple(published["records"]) == summary.metric_records
 
 
 def test_publish_phase9_tables_returns_three_summaries(monkeypatch) -> None:

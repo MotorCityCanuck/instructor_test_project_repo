@@ -5,6 +5,8 @@ from datetime import date
 from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
 from napa_pipeline.silver_to_gold.environment import resolve_release_environment
 from napa_pipeline.silver_to_gold.team_selection import (
+    OLYMPIC_TEAM_CANDIDATES_SCHEMA,
+    TEAM_SELECTION_SCORECARDS_SCHEMA,
     build_olympic_team_candidates_sql,
     build_olympic_team_candidates,
     build_team_selection_scorecards_sql,
@@ -465,9 +467,15 @@ def test_publish_team_selection_scorecards_returns_summary(monkeypatch) -> None:
     stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.team_selection_scorecards"
     spark = _FakeSpark({target_fqn: _FakeTable(row_count=3)})
 
+    published = {}
+
+    def _fake_publish_stage_records_to_gold_table(*args, **kwargs):
+        published["schema"] = kwargs.get("schema")
+        return 3, 3
+
     monkeypatch.setattr(
         "napa_pipeline.silver_to_gold.team_selection.publish_stage_records_to_gold_table",
-        lambda *args, **kwargs: (3, 3),
+        _fake_publish_stage_records_to_gold_table,
     )
 
     summary = publish_team_selection_scorecards(
@@ -479,6 +487,7 @@ def test_publish_team_selection_scorecards_returns_summary(monkeypatch) -> None:
     assert summary.stage_table_fqn == stage_fqn
     assert summary.target_table_fqn == target_fqn
     assert summary.output_row_count == 3
+    assert published["schema"] is TEAM_SELECTION_SCORECARDS_SCHEMA
 
 
 def test_publish_team_selection_scorecards_from_sql_returns_summary(monkeypatch) -> None:
@@ -514,9 +523,15 @@ def test_publish_olympic_team_candidates_returns_summary(monkeypatch) -> None:
     stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.olympic_team_candidates"
     spark = _FakeSpark({target_fqn: _FakeTable(row_count=1)})
 
+    published = {}
+
+    def _fake_publish_stage_records_to_gold_table(*args, **kwargs):
+        published["schema"] = kwargs.get("schema")
+        return 1, 1
+
     monkeypatch.setattr(
         "napa_pipeline.silver_to_gold.team_selection.publish_stage_records_to_gold_table",
-        lambda *args, **kwargs: (1, 1),
+        _fake_publish_stage_records_to_gold_table,
     )
 
     summary = publish_olympic_team_candidates(
@@ -535,6 +550,7 @@ def test_publish_olympic_team_candidates_returns_summary(monkeypatch) -> None:
     assert summary.stage_table_fqn == stage_fqn
     assert summary.target_table_fqn == target_fqn
     assert summary.output_row_count == 1
+    assert published["schema"] is OLYMPIC_TEAM_CANDIDATES_SCHEMA
 
 
 def test_publish_olympic_team_candidates_from_sql_returns_summary(monkeypatch) -> None:

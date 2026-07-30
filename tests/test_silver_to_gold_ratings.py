@@ -5,6 +5,9 @@ from datetime import date
 from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
 from napa_pipeline.silver_to_gold.environment import resolve_release_environment
 from napa_pipeline.silver_to_gold.ratings import (
+    PLAYER_CURRENT_RATINGS_SCHEMA,
+    PLAYER_RATING_EVENTS_SCHEMA,
+    PLAYER_RATING_HISTORY_SCHEMA,
     build_player_current_ratings,
     build_player_rating_events,
     build_player_rating_history,
@@ -357,12 +360,14 @@ def test_publish_player_rating_events_returns_summary(monkeypatch) -> None:
         stage_table_fqn: str,
         target_table_fqn: str,
         records,
+        schema=None,
         validation_fn=None,
         count_fn=None,
     ):
         published["stage_table_fqn"] = stage_table_fqn
         published["target_table_fqn"] = target_table_fqn
         published["row_count"] = len(records)
+        published["schema"] = schema
         return len(records), len(records)
 
     monkeypatch.setattr(
@@ -382,6 +387,127 @@ def test_publish_player_rating_events_returns_summary(monkeypatch) -> None:
     assert summary.input_row_count == 8
     assert summary.output_row_count == 8
     assert published["row_count"] == 8
+    assert published["schema"] is PLAYER_RATING_EVENTS_SCHEMA
+
+
+def test_publish_player_rating_history_passes_explicit_schema(monkeypatch) -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+    events_fqn = f"{environment.catalog}.{environment.gold_schema}.player_rating_events"
+    players_fqn = f"{environment.catalog}.{environment.silver_schema}.players"
+    target_fqn = f"{environment.catalog}.{environment.gold_schema}.player_rating_history"
+    stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.player_rating_history"
+    spark = _FakeSpark(
+        {
+            events_fqn: _FakeTable(row_count=8, rows=build_player_rating_events(
+                _competition_player_matches_rows(),
+                analysis_as_of_date=date(2026, 6, 30),
+                ratings_config=_ratings_config(),
+            ).rows),
+            players_fqn: _FakeTable(row_count=5, rows=_players_rows()),
+            target_fqn: _FakeTable(row_count=4),
+        }
+    )
+    published = {}
+
+    def _fake_publish_stage_records_to_gold_table(
+        _spark,
+        *,
+        stage_table_fqn: str,
+        target_table_fqn: str,
+        records,
+        schema=None,
+        validation_fn=None,
+        count_fn=None,
+    ):
+        published["stage_table_fqn"] = stage_table_fqn
+        published["target_table_fqn"] = target_table_fqn
+        published["row_count"] = len(records)
+        published["schema"] = schema
+        return len(records), len(records)
+
+    monkeypatch.setattr(
+        "napa_pipeline.silver_to_gold.ratings.publish_stage_records_to_gold_table",
+        _fake_publish_stage_records_to_gold_table,
+    )
+
+    from napa_pipeline.silver_to_gold.ratings import publish_player_rating_history
+
+    summary = publish_player_rating_history(
+        spark,
+        environment,
+        analysis_as_of_date=date(2026, 6, 30),
+        ratings_config=_ratings_config(),
+    )
+
+    assert summary.stage_table_fqn == stage_fqn
+    assert summary.target_table_fqn == target_fqn
+    assert summary.input_row_count == 8
+    assert summary.output_row_count == 4
+    assert published["schema"] is PLAYER_RATING_HISTORY_SCHEMA
+
+
+def test_publish_player_current_ratings_passes_explicit_schema(monkeypatch) -> None:
+    config = load_silver_to_gold_config("napa_5k")
+    environment = resolve_release_environment(config)
+    history_rows = build_player_rating_history(
+        build_player_rating_events(
+            _competition_player_matches_rows(),
+            analysis_as_of_date=date(2026, 6, 30),
+            ratings_config=_ratings_config(),
+        ).rows,
+        _players_rows(),
+        analysis_as_of_date=date(2026, 6, 30),
+        ratings_config=_ratings_config(),
+    ).rows
+    history_fqn = f"{environment.catalog}.{environment.gold_schema}.player_rating_history"
+    players_fqn = f"{environment.catalog}.{environment.silver_schema}.players"
+    target_fqn = f"{environment.catalog}.{environment.gold_schema}.player_current_ratings"
+    stage_fqn = f"{environment.catalog}.{environment.gold_stage_schema}.player_current_ratings"
+    spark = _FakeSpark(
+        {
+            history_fqn: _FakeTable(row_count=4, rows=history_rows),
+            players_fqn: _FakeTable(row_count=5, rows=_players_rows()),
+            target_fqn: _FakeTable(row_count=5),
+        }
+    )
+    published = {}
+
+    def _fake_publish_stage_records_to_gold_table(
+        _spark,
+        *,
+        stage_table_fqn: str,
+        target_table_fqn: str,
+        records,
+        schema=None,
+        validation_fn=None,
+        count_fn=None,
+    ):
+        published["stage_table_fqn"] = stage_table_fqn
+        published["target_table_fqn"] = target_table_fqn
+        published["row_count"] = len(records)
+        published["schema"] = schema
+        return len(records), len(records)
+
+    monkeypatch.setattr(
+        "napa_pipeline.silver_to_gold.ratings.publish_stage_records_to_gold_table",
+        _fake_publish_stage_records_to_gold_table,
+    )
+
+    from napa_pipeline.silver_to_gold.ratings import publish_player_current_ratings
+
+    summary = publish_player_current_ratings(
+        spark,
+        environment,
+        analysis_as_of_date=date(2026, 6, 30),
+        ratings_config=_ratings_config(),
+    )
+
+    assert summary.stage_table_fqn == stage_fqn
+    assert summary.target_table_fqn == target_fqn
+    assert summary.input_row_count == 5
+    assert summary.output_row_count == 5
+    assert published["schema"] is PLAYER_CURRENT_RATINGS_SCHEMA
 
 
 def test_publish_phase5_rating_tables_returns_three_summaries(monkeypatch) -> None:
