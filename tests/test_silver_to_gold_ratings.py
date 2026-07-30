@@ -26,6 +26,21 @@ def _ratings_config():
     return load_silver_to_gold_config("napa_5k").data["ratings"]
 
 
+def test_phase5_explicit_schemas_use_long_types_for_count_and_sequence_fields() -> None:
+    assert PLAYER_RATING_EVENTS_SCHEMA[3].name == "batch_sequence"
+    assert PLAYER_RATING_EVENTS_SCHEMA[3].dataType.__class__.__name__ == "LongType"
+    assert PLAYER_RATING_EVENTS_SCHEMA[22].name == "prior_match_count"
+    assert PLAYER_RATING_EVENTS_SCHEMA[22].dataType.__class__.__name__ == "LongType"
+    assert PLAYER_RATING_EVENTS_SCHEMA[26].name == "event_sequence"
+    assert PLAYER_RATING_EVENTS_SCHEMA[26].dataType.__class__.__name__ == "LongType"
+    assert PLAYER_RATING_HISTORY_SCHEMA[3].name == "latest_event_sequence"
+    assert PLAYER_RATING_HISTORY_SCHEMA[3].dataType.__class__.__name__ == "LongType"
+    assert PLAYER_RATING_HISTORY_SCHEMA[5].name == "batch_sequence"
+    assert PLAYER_RATING_HISTORY_SCHEMA[5].dataType.__class__.__name__ == "LongType"
+    assert PLAYER_CURRENT_RATINGS_SCHEMA[11].name == "rated_match_count"
+    assert PLAYER_CURRENT_RATINGS_SCHEMA[11].dataType.__class__.__name__ == "LongType"
+
+
 def _competition_player_matches_rows():
     return [
         {

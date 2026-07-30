@@ -12,7 +12,7 @@ try:
         BooleanType,
         DateType,
         DoubleType,
-        IntegerType,
+        LongType,
         StringType,
         StructField,
         StructType,
@@ -31,7 +31,7 @@ except ModuleNotFoundError:  # pragma: no cover - local test fallback when pyspa
     class DoubleType(_FallbackType):
         pass
 
-    class IntegerType(_FallbackType):
+    class LongType(_FallbackType):
         pass
 
     class StringType(_FallbackType):
@@ -73,9 +73,9 @@ PLAYER_RATING_EVENTS_SCHEMA = StructType(
         StructField("match_id", StringType(), False),
         StructField("match_date", DateType(), False),
         StructField("batch_id", StringType(), True),
-        StructField("batch_sequence", IntegerType(), True),
+        StructField("batch_sequence", LongType(), True),
         StructField("batch_date", DateType(), True),
-        StructField("team_number", IntegerType(), True),
+        StructField("team_number", LongType(), True),
         StructField("player_id", StringType(), False),
         StructField("partner_player_id", StringType(), False),
         StructField("opponent_player_one_id", StringType(), False),
@@ -92,11 +92,11 @@ PLAYER_RATING_EVENTS_SCHEMA = StructType(
         StructField("margin_multiplier", DoubleType(), False),
         StructField("rating_delta", DoubleType(), False),
         StructField("post_match_rating", DoubleType(), False),
-        StructField("prior_match_count", IntegerType(), False),
-        StructField("post_match_count", IntegerType(), False),
-        StructField("wins_to_date", IntegerType(), False),
-        StructField("losses_to_date", IntegerType(), False),
-        StructField("event_sequence", IntegerType(), False),
+        StructField("prior_match_count", LongType(), False),
+        StructField("post_match_count", LongType(), False),
+        StructField("wins_to_date", LongType(), False),
+        StructField("losses_to_date", LongType(), False),
+        StructField("event_sequence", LongType(), False),
     ]
 )
 
@@ -105,15 +105,15 @@ PLAYER_RATING_HISTORY_SCHEMA = StructType(
         StructField("player_id", StringType(), False),
         StructField("rating_effective_date", DateType(), False),
         StructField("latest_match_id", StringType(), False),
-        StructField("latest_event_sequence", IntegerType(), False),
+        StructField("latest_event_sequence", LongType(), False),
         StructField("batch_id", StringType(), True),
-        StructField("batch_sequence", IntegerType(), True),
+        StructField("batch_sequence", LongType(), True),
         StructField("batch_date", DateType(), True),
         StructField("analytical_rating_value", DoubleType(), False),
         StructField("rating_change_from_prior", DoubleType(), True),
-        StructField("rated_match_count", IntegerType(), False),
-        StructField("wins_to_date", IntegerType(), False),
-        StructField("losses_to_date", IntegerType(), False),
+        StructField("rated_match_count", LongType(), False),
+        StructField("wins_to_date", LongType(), False),
+        StructField("losses_to_date", LongType(), False),
         StructField("last_rated_match_date", DateType(), False),
         StructField("rating_reliability_score", DoubleType(), False),
         StructField("rating_evidence_band", StringType(), False),
@@ -135,12 +135,12 @@ PLAYER_CURRENT_RATINGS_SCHEMA = StructType(
         StructField("rating_reliability_score", DoubleType(), False),
         StructField("rating_evidence_band", StringType(), False),
         StructField("rating_uncertainty_proxy", DoubleType(), False),
-        StructField("rated_match_count", IntegerType(), False),
-        StructField("wins_to_date", IntegerType(), False),
-        StructField("losses_to_date", IntegerType(), False),
+        StructField("rated_match_count", LongType(), False),
+        StructField("wins_to_date", LongType(), False),
+        StructField("losses_to_date", LongType(), False),
         StructField("last_rated_match_date", DateType(), True),
         StructField("current_rating_effective_date", DateType(), True),
-        StructField("analytical_rating_rank_overall", IntegerType(), False),
+        StructField("analytical_rating_rank_overall", LongType(), False),
     ]
 )
 
