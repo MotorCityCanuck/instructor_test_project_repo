@@ -152,6 +152,26 @@ def test_publish_records_table_passes_explicit_schema_to_create_dataframe() -> N
     assert row_count == 1
     assert spark.created_records == [{"player_id": "player-1", "rating_change_from_prior": None}]
     assert spark.created_schema is schema
+    assert spark.sql_queries == ["DROP TABLE IF EXISTS workspace.instructor_5k_gold_stage.test_table"]
+
+
+def test_publish_records_table_drops_existing_table_before_writing_empty_schema() -> None:
+    spark = FakeSparkSession(
+        counts_by_table={"workspace.instructor_5k_gold_stage.test_table": 0}
+    )
+    schema = object()
+
+    row_count = publish_records_table(
+        spark,
+        "workspace.instructor_5k_gold_stage.test_table",
+        [],
+        schema=schema,
+    )
+
+    assert row_count == 0
+    assert spark.created_records == []
+    assert spark.created_schema is schema
+    assert spark.sql_queries == ["DROP TABLE IF EXISTS workspace.instructor_5k_gold_stage.test_table"]
 
 
 def test_publish_stage_records_to_gold_table_forwards_explicit_schema() -> None:

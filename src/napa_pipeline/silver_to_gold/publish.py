@@ -74,9 +74,13 @@ def publish_records_table(
     """Publish Python-built records to a Delta table and return the verified row count."""
     try:
         if records:
+            # Replace any stale table definition first so Delta does not try to merge
+            # incompatible existing field types during an overwrite write.
+            spark.sql(f"DROP TABLE IF EXISTS {table_fqn}")
             dataframe = spark.createDataFrame(list(records), schema=schema)
             dataframe.write.format("delta").mode("overwrite").saveAsTable(table_fqn)
         elif schema is not None:
+            spark.sql(f"DROP TABLE IF EXISTS {table_fqn}")
             spark.createDataFrame([], schema=schema).write.format("delta").mode("overwrite").saveAsTable(
                 table_fqn
             )
