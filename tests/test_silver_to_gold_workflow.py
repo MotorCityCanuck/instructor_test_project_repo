@@ -288,17 +288,17 @@ LIMIT 1
         resolve_latest_successful_upstream_run_id(spark, config, environment)
 
 
-def test_collect_match_rows_for_analysis_date_returns_minimal_rows() -> None:
+def test_collect_match_rows_for_analysis_date_returns_max_match_date_row() -> None:
     _config, environment = _config_environment()
     query = f"""
 SELECT
-    match_date
+    MAX(CAST(match_date AS DATE)) AS match_date
 FROM {environment.catalog}.{environment.silver_schema}.matches
+WHERE match_date IS NOT NULL
 """.strip()
     spark = FakeSparkSession(
         sql_rows_by_query={
             query: [
-                {"match_date": "2026-06-24"},
                 {"match_date": "2026-06-25"},
             ]
         }
@@ -307,7 +307,6 @@ FROM {environment.catalog}.{environment.silver_schema}.matches
     rows = collect_match_rows_for_analysis_date(spark, environment)
 
     assert rows == [
-        {"match_date": "2026-06-24"},
         {"match_date": "2026-06-25"},
     ]
 

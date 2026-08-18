@@ -354,6 +354,8 @@ side_players AS (
         MAX(CASE WHEN COALESCE(CAST(mtp.membership_history_warning_flag AS BOOLEAN), FALSE) THEN 1 ELSE 0 END)
             AS membership_history_warning_int
     FROM {match_team_players_fqn} AS mtp
+    INNER JOIN valid_match_records AS vm
+      ON CAST(mtp.match_id AS STRING) = vm.match_id
     WHERE mtp.match_team_id IS NOT NULL
       AND mtp.player_id IS NOT NULL
     GROUP BY CAST(mtp.match_team_id AS STRING), CAST(mtp.match_id AS STRING)
@@ -370,8 +372,11 @@ match_sides AS (
         sp.player_count,
         CAST(sp.membership_history_warning_int AS BOOLEAN) AS membership_history_warning_flag
     FROM {match_teams_fqn} AS mt
+    INNER JOIN valid_match_records AS vm
+      ON CAST(mt.match_id AS STRING) = vm.match_id
     INNER JOIN side_players AS sp
       ON CAST(mt.match_team_id AS STRING) = sp.match_team_id
+     AND CAST(mt.match_id AS STRING) = sp.match_id
 ),
 side_stats AS (
     SELECT
@@ -403,12 +408,14 @@ valid_sides AS (
 ),
 game_base AS (
     SELECT
-        CAST(match_id AS STRING) AS match_id,
-        CAST(team_one_score AS INT) AS team_one_score,
-        CAST(team_two_score AS INT) AS team_two_score,
-        CAST(winning_team_number AS INT) AS winning_team_number,
-        COALESCE(CAST(close_game_flag AS BOOLEAN), FALSE) AS close_game_flag
-    FROM {match_games_fqn}
+        CAST(mg.match_id AS STRING) AS match_id,
+        CAST(mg.team_one_score AS INT) AS team_one_score,
+        CAST(mg.team_two_score AS INT) AS team_two_score,
+        CAST(mg.winning_team_number AS INT) AS winning_team_number,
+        COALESCE(CAST(mg.close_game_flag AS BOOLEAN), FALSE) AS close_game_flag
+    FROM {match_games_fqn} AS mg
+    INNER JOIN valid_match_records AS vm
+      ON CAST(mg.match_id AS STRING) = vm.match_id
 ),
 valid_games AS (
     SELECT
@@ -621,14 +628,15 @@ WITH side_rows AS (
 ),
 player_rows AS (
     SELECT DISTINCT
-        CAST(match_team_id AS STRING) AS match_team_id,
-        CAST(player_id AS STRING) AS player_id,
-        UPPER(TRIM(CAST(player_position AS STRING))) AS player_position,
-        CAST(player_rating_at_match AS DOUBLE) AS player_rating_at_match,
-        CAST(membership_history_warning_flag AS BOOLEAN) AS membership_history_warning_flag
-    FROM {match_team_players_fqn}
-    WHERE match_team_id IS NOT NULL
-      AND player_id IS NOT NULL
+        CAST(mtp.match_team_id AS STRING) AS match_team_id,
+        CAST(mtp.player_id AS STRING) AS player_id,
+        UPPER(TRIM(CAST(mtp.player_position AS STRING))) AS player_position,
+        CAST(mtp.player_rating_at_match AS DOUBLE) AS player_rating_at_match,
+        CAST(mtp.membership_history_warning_flag AS BOOLEAN) AS membership_history_warning_flag
+    FROM {match_team_players_fqn} AS mtp
+    INNER JOIN side_rows AS sr
+      ON CAST(mtp.match_team_id AS STRING) = sr.match_team_id
+    WHERE mtp.player_id IS NOT NULL
 ),
 player_pairs AS (
     SELECT

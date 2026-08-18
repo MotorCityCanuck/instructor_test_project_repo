@@ -191,19 +191,22 @@ def collect_match_rows_for_analysis_date(
     spark: Any,
     environment: ReleaseEnvironment,
 ) -> list[dict[str, Any]]:
-    """Collect the minimal match fields needed to resolve analysis_as_of_date."""
+    """Collect the resolved max match date needed to derive analysis_as_of_date."""
     matches_fqn = get_silver_source_table_fqn(environment, "matches")
     rows = spark.sql(
         f"""
 SELECT
-    match_date
+    MAX(CAST(match_date AS DATE)) AS match_date
 FROM {matches_fqn}
+WHERE match_date IS NOT NULL
 """.strip()
     ).collect()
-    return [
-        row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
-        for row in rows
-    ]
+    match_rows = []
+    for row in rows:
+        mapping = row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
+        if mapping.get("match_date") is not None:
+            match_rows.append(mapping)
+    return match_rows
 
 
 def initialize_pipeline_run(
