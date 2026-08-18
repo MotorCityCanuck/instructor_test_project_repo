@@ -32,14 +32,23 @@ from napa_pipeline.silver_to_gold.operations import (
 )
 
 
+class FakeSqlResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def collect(self):
+        return self._rows
+
+
 class FakeSparkSession:
     """Capture SQL statements executed by operations helpers."""
 
-    def __init__(self):
+    def __init__(self, *, sql_rows_by_query=None):
         self.executed_queries: list[str] = []
         self.table_requests: list[str] = []
         self.created_records: list[dict] | None = None
         self.created_schema = None
+        self.sql_rows_by_query = sql_rows_by_query or {}
         self.tables: dict[str, object] = {}
         self.catalog = type(
             "FakeCatalog",
@@ -49,7 +58,7 @@ class FakeSparkSession:
 
     def sql(self, query: str):
         self.executed_queries.append(query)
-        return None
+        return FakeSqlResult(self.sql_rows_by_query.get(query, []))
 
     def table(self, table_name: str):
         self.table_requests.append(table_name)
@@ -359,7 +368,30 @@ def test_complete_pipeline_run_merges_completion_into_open_record() -> None:
             "error_message": None,
         }
     )
-    spark = FakeSparkSession()
+    existing_run_query = f"""
+SELECT
+    pipeline_run_id,
+    pipeline_name,
+    pipeline_version,
+    release_name,
+    processing_mode,
+    configuration_hash,
+    workflow_run_id,
+    upstream_pipeline_run_id,
+    analysis_as_of_date,
+    scoring_scenario,
+    authoritative_recommendation_flag,
+    status,
+    started_ts,
+    completed_ts,
+    duration_seconds,
+    triggered_by,
+    error_class,
+    error_message
+FROM {pipeline_runs_fqn}
+WHERE pipeline_run_id = 'run-123'
+""".strip()
+    spark = FakeSparkSession(sql_rows_by_query={existing_run_query: [open_row]})
     spark.tables[pipeline_runs_fqn] = FakePipelineTable(schema, [open_row])
 
     complete_pipeline_run(spark, context, status="SUCCEEDED")

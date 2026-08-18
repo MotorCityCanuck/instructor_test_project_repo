@@ -314,7 +314,14 @@ WHERE match_date IS NOT NULL
 def test_initialize_pipeline_run_creates_shared_pipeline_run_once() -> None:
     context = _pipeline_context()
     pipeline_runs_fqn = f"{context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}"
+    existing_run_query = f"""
+SELECT pipeline_run_id
+FROM {pipeline_runs_fqn}
+WHERE pipeline_run_id = 'gold-run-123'
+LIMIT 1
+""".strip()
     spark = FakeSparkSession(
+        sql_rows_by_query={existing_run_query: []},
         tables={
             pipeline_runs_fqn: FakeTable(rows=[]),
         }
@@ -330,7 +337,14 @@ def test_initialize_pipeline_run_creates_shared_pipeline_run_once() -> None:
 def test_initialize_pipeline_run_skips_existing_pipeline_run() -> None:
     context = _pipeline_context()
     pipeline_runs_fqn = f"{context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}"
+    existing_run_query = f"""
+SELECT pipeline_run_id
+FROM {pipeline_runs_fqn}
+WHERE pipeline_run_id = 'gold-run-123'
+LIMIT 1
+""".strip()
     spark = FakeSparkSession(
+        sql_rows_by_query={existing_run_query: [{"pipeline_run_id": "gold-run-123"}]},
         tables={
             pipeline_runs_fqn: FakeTable(rows=[{"pipeline_run_id": "gold-run-123"}]),
         }

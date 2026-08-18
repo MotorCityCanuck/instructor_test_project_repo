@@ -583,9 +583,31 @@ def complete_pipeline_run(
     table_fqn = get_operations_table_fqn(context, PIPELINE_RUNS_TABLE)
     existing_rows = [
         row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
-        for row in spark.table(table_fqn).toLocalIterator()
-        if (row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)).get("pipeline_run_id")
-        == context.pipeline_run_id
+        for row in spark.sql(
+            f"""
+SELECT
+    pipeline_run_id,
+    pipeline_name,
+    pipeline_version,
+    release_name,
+    processing_mode,
+    configuration_hash,
+    workflow_run_id,
+    upstream_pipeline_run_id,
+    analysis_as_of_date,
+    scoring_scenario,
+    authoritative_recommendation_flag,
+    status,
+    started_ts,
+    completed_ts,
+    duration_seconds,
+    triggered_by,
+    error_class,
+    error_message
+FROM {table_fqn}
+WHERE pipeline_run_id = '{context.pipeline_run_id}'
+""".strip()
+        ).collect()
     ]
     open_row = next(
         (row for row in existing_rows if row.get("completed_ts") is None),

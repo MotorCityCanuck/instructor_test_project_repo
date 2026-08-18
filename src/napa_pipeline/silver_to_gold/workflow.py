@@ -215,13 +215,15 @@ def initialize_pipeline_run(
 ) -> None:
     """Ensure operations tables exist and append the Gold pipeline start record once."""
     ensure_operations_tables(spark, context)
-    existing_rows = [
-        row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
-        for row in spark.table(f"{context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}").toLocalIterator()
-        if (row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)).get("pipeline_run_id")
-        == context.pipeline_run_id
-    ]
-    if existing_rows:
+    existing_row = spark.sql(
+        f"""
+SELECT pipeline_run_id
+FROM {context.operations_schema_fqn}.{PIPELINE_RUNS_TABLE}
+WHERE pipeline_run_id = '{context.pipeline_run_id}'
+LIMIT 1
+""".strip()
+    ).collect()
+    if existing_row:
         return
     append_records(
         spark,
