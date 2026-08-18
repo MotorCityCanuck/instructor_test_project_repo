@@ -369,25 +369,26 @@ def test_publish_player_rating_events_returns_summary(monkeypatch) -> None:
     )
     published = {}
 
-    def _fake_publish_stage_records_to_gold_table(
+    def _fake_publish_player_rating_events_streaming(
         _spark,
         *,
+        source_table_fqn: str,
         stage_table_fqn: str,
         target_table_fqn: str,
-        records,
-        schema=None,
         validation_fn=None,
-        count_fn=None,
+        analysis_as_of_date=None,
+        ratings_config=None,
     ):
+        published["source_table_fqn"] = source_table_fqn
         published["stage_table_fqn"] = stage_table_fqn
         published["target_table_fqn"] = target_table_fqn
-        published["row_count"] = len(records)
-        published["schema"] = schema
-        return len(records), len(records)
+        published["analysis_as_of_date"] = analysis_as_of_date
+        published["ratings_config"] = ratings_config
+        return 8, 8
 
     monkeypatch.setattr(
-        "napa_pipeline.silver_to_gold.ratings.publish_stage_records_to_gold_table",
-        _fake_publish_stage_records_to_gold_table,
+        "napa_pipeline.silver_to_gold.ratings._publish_player_rating_events_streaming",
+        _fake_publish_player_rating_events_streaming,
     )
 
     summary = publish_player_rating_events(
@@ -401,8 +402,9 @@ def test_publish_player_rating_events_returns_summary(monkeypatch) -> None:
     assert summary.target_table_fqn == target_fqn
     assert summary.input_row_count == 8
     assert summary.output_row_count == 8
-    assert published["row_count"] == 8
-    assert published["schema"] is PLAYER_RATING_EVENTS_SCHEMA
+    assert published["source_table_fqn"] == source_fqn
+    assert published["analysis_as_of_date"] == date(2026, 6, 30)
+    assert published["ratings_config"] == _ratings_config()
 
 
 def test_publish_player_rating_history_passes_explicit_schema(monkeypatch) -> None:
@@ -425,25 +427,23 @@ def test_publish_player_rating_history_passes_explicit_schema(monkeypatch) -> No
     )
     published = {}
 
-    def _fake_publish_stage_records_to_gold_table(
+    def _fake_publish_stage_to_gold_table(
         _spark,
         *,
         stage_table_fqn: str,
         target_table_fqn: str,
-        records,
-        schema=None,
+        stage_sql: str,
         validation_fn=None,
         count_fn=None,
     ):
         published["stage_table_fqn"] = stage_table_fqn
         published["target_table_fqn"] = target_table_fqn
-        published["row_count"] = len(records)
-        published["schema"] = schema
-        return len(records), len(records)
+        published["stage_sql"] = stage_sql
+        return 4, 4
 
     monkeypatch.setattr(
-        "napa_pipeline.silver_to_gold.ratings.publish_stage_records_to_gold_table",
-        _fake_publish_stage_records_to_gold_table,
+        "napa_pipeline.silver_to_gold.ratings.publish_stage_to_gold_table",
+        _fake_publish_stage_to_gold_table,
     )
 
     from napa_pipeline.silver_to_gold.ratings import publish_player_rating_history
@@ -459,7 +459,8 @@ def test_publish_player_rating_history_passes_explicit_schema(monkeypatch) -> No
     assert summary.target_table_fqn == target_fqn
     assert summary.input_row_count == 8
     assert summary.output_row_count == 4
-    assert published["schema"] is PLAYER_RATING_HISTORY_SCHEMA
+    assert events_fqn in published["stage_sql"]
+    assert players_fqn in published["stage_sql"]
 
 
 def test_publish_player_current_ratings_passes_explicit_schema(monkeypatch) -> None:
@@ -488,25 +489,23 @@ def test_publish_player_current_ratings_passes_explicit_schema(monkeypatch) -> N
     )
     published = {}
 
-    def _fake_publish_stage_records_to_gold_table(
+    def _fake_publish_stage_to_gold_table(
         _spark,
         *,
         stage_table_fqn: str,
         target_table_fqn: str,
-        records,
-        schema=None,
+        stage_sql: str,
         validation_fn=None,
         count_fn=None,
     ):
         published["stage_table_fqn"] = stage_table_fqn
         published["target_table_fqn"] = target_table_fqn
-        published["row_count"] = len(records)
-        published["schema"] = schema
-        return len(records), len(records)
+        published["stage_sql"] = stage_sql
+        return 5, 5
 
     monkeypatch.setattr(
-        "napa_pipeline.silver_to_gold.ratings.publish_stage_records_to_gold_table",
-        _fake_publish_stage_records_to_gold_table,
+        "napa_pipeline.silver_to_gold.ratings.publish_stage_to_gold_table",
+        _fake_publish_stage_to_gold_table,
     )
 
     from napa_pipeline.silver_to_gold.ratings import publish_player_current_ratings
@@ -522,7 +521,8 @@ def test_publish_player_current_ratings_passes_explicit_schema(monkeypatch) -> N
     assert summary.target_table_fqn == target_fqn
     assert summary.input_row_count == 5
     assert summary.output_row_count == 5
-    assert published["schema"] is PLAYER_CURRENT_RATINGS_SCHEMA
+    assert history_fqn in published["stage_sql"]
+    assert players_fqn in published["stage_sql"]
 
 
 def test_publish_phase5_rating_tables_returns_three_summaries(monkeypatch) -> None:

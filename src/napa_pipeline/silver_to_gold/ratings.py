@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import date, datetime
 import math
@@ -53,7 +54,10 @@ from napa_pipeline.silver_to_gold.io import (
     get_gold_target_table_fqn,
     get_silver_source_table_fqn,
 )
-from napa_pipeline.silver_to_gold.publish import publish_stage_records_to_gold_table
+from napa_pipeline.silver_to_gold.publish import (
+    publish_sql_table,
+    publish_stage_to_gold_table,
+)
 
 
 VERY_HIGH = "VERY_HIGH"
@@ -66,6 +70,7 @@ VOLUME_SCALE_DEFAULT = 10.0
 RECENCY_HALF_LIFE_DAYS = 180.0
 MAX_UNCERTAINTY_DEFAULT = 200.0
 DEFAULT_RATING_SCALE = 400.0
+RATING_EVENT_BATCH_SIZE = 10000
 
 
 PLAYER_RATING_EVENTS_SCHEMA = StructType(
@@ -220,98 +225,18 @@ def build_player_rating_events(
 
     for match_id in ordered_match_ids:
         match_rows = matches_by_id[match_id]
-        match_date = _parse_date_value(match_rows[0].get("match_date"))
-        if match_date is None or match_date > analysis_as_of_date:
-            continue
-
-        team_rows = _normalize_match_player_teams(match_rows)
-        if team_rows is None:
-            continue
-
-        team_one_rows = team_rows[1]
-        team_two_rows = team_rows[2]
-        team_one_player_ids = [_normalize_required_string(row.get("player_id")) for row in team_one_rows]
-        team_two_player_ids = [_normalize_required_string(row.get("player_id")) for row in team_two_rows]
-
-        team_one_pre_ratings = [
-            _get_player_state(player_state, player_id, default_rating)["rating"]
-            for player_id in team_one_player_ids
-        ]
-        team_two_pre_ratings = [
-            _get_player_state(player_state, player_id, default_rating)["rating"]
-            for player_id in team_two_player_ids
-        ]
-        team_one_pre_match_rating = sum(team_one_pre_ratings) / 2.0
-        team_two_pre_match_rating = sum(team_two_pre_ratings) / 2.0
-        team_one_expected = expected_win_probability(
-            team_one_pre_match_rating,
-            team_two_pre_match_rating,
+        event_sequence, built_rows = _build_rating_event_rows_for_match(
+            match_rows,
+            analysis_as_of_date=analysis_as_of_date,
+            default_rating=default_rating,
+            base_k_factor=base_k_factor,
+            margin_multiplier=margin_multiplier,
+            rating_floor=rating_floor,
+            rating_ceiling=rating_ceiling,
+            player_state=player_state,
+            event_sequence=event_sequence,
         )
-        team_two_expected = 1.0 - team_one_expected
-
-        team_one_prior_counts = [
-            int(_get_player_state(player_state, player_id, default_rating)["match_count"])
-            for player_id in team_one_player_ids
-        ]
-        team_two_prior_counts = [
-            int(_get_player_state(player_state, player_id, default_rating)["match_count"])
-            for player_id in team_two_player_ids
-        ]
-        match_k_factor = base_k_factor * (
-            (
-                sum(experience_multiplier(count) for count in team_one_prior_counts)
-                + sum(experience_multiplier(count) for count in team_two_prior_counts)
-            )
-            / 4.0
-        )
-
-        team_one_won = _coerce_bool(team_one_rows[0].get("won_flag"))
-        team_two_won = _coerce_bool(team_two_rows[0].get("won_flag"))
-        if team_one_won == team_two_won:
-            continue
-
-        team_one_actual = 1.0 if team_one_won else 0.0
-        team_two_actual = 1.0 if team_two_won else 0.0
-        team_one_delta = match_k_factor * margin_multiplier * (team_one_actual - team_one_expected)
-        team_two_delta = -team_one_delta
-
-        event_sequence += 1
-        rows.extend(
-            _build_match_player_event_rows(
-                match_rows=team_one_rows,
-                opponent_player_ids=team_two_player_ids,
-                expected_win=team_one_expected,
-                actual_result=team_one_actual,
-                team_pre_match_rating=team_one_pre_match_rating,
-                opponent_pre_match_rating=team_two_pre_match_rating,
-                rating_delta=team_one_delta,
-                k_factor=match_k_factor,
-                margin_multiplier=margin_multiplier,
-                player_state=player_state,
-                default_rating=default_rating,
-                rating_floor=rating_floor,
-                rating_ceiling=rating_ceiling,
-                event_sequence=event_sequence,
-            )
-        )
-        rows.extend(
-            _build_match_player_event_rows(
-                match_rows=team_two_rows,
-                opponent_player_ids=team_one_player_ids,
-                expected_win=team_two_expected,
-                actual_result=team_two_actual,
-                team_pre_match_rating=team_two_pre_match_rating,
-                opponent_pre_match_rating=team_one_pre_match_rating,
-                rating_delta=team_two_delta,
-                k_factor=match_k_factor,
-                margin_multiplier=margin_multiplier,
-                player_state=player_state,
-                default_rating=default_rating,
-                rating_floor=rating_floor,
-                rating_ceiling=rating_ceiling,
-                event_sequence=event_sequence,
-            )
-        )
+        rows.extend(built_rows)
 
     rows.sort(
         key=lambda row: (
@@ -519,17 +444,13 @@ def publish_player_rating_events(
     source_table_fqn = get_gold_target_table_fqn(environment, "competition_player_matches")
     stage_table_fqn = get_gold_stage_table_fqn(environment, "player_rating_events")
     target_table_fqn = get_gold_target_table_fqn(environment, "player_rating_events")
-    result = build_player_rating_events(
-        _collect_table_rows(spark, source_table_fqn),
-        analysis_as_of_date=analysis_as_of_date,
-        ratings_config=ratings_config,
-    )
-    publish_stage_records_to_gold_table(
+    _publish_player_rating_events_streaming(
         spark,
+        source_table_fqn=source_table_fqn,
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
-        records=result.rows,
-        schema=PLAYER_RATING_EVENTS_SCHEMA,
+        analysis_as_of_date=analysis_as_of_date,
+        ratings_config=ratings_config,
         validation_fn=lambda _spark, table_fqn: _validate_key_constraints(
             _spark,
             table_fqn,
@@ -557,18 +478,16 @@ def publish_player_rating_history(
     players_table_fqn = get_silver_source_table_fqn(environment, "players")
     stage_table_fqn = get_gold_stage_table_fqn(environment, "player_rating_history")
     target_table_fqn = get_gold_target_table_fqn(environment, "player_rating_history")
-    result = build_player_rating_history(
-        _collect_table_rows(spark, events_table_fqn),
-        _collect_table_rows(spark, players_table_fqn),
-        analysis_as_of_date=analysis_as_of_date,
-        ratings_config=ratings_config,
-    )
-    publish_stage_records_to_gold_table(
+    publish_stage_to_gold_table(
         spark,
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
-        records=result.rows,
-        schema=PLAYER_RATING_HISTORY_SCHEMA,
+        stage_sql=build_player_rating_history_sql(
+            events_table_fqn=events_table_fqn,
+            players_table_fqn=players_table_fqn,
+            analysis_as_of_date=analysis_as_of_date,
+            ratings_config=ratings_config,
+        ),
         validation_fn=lambda _spark, table_fqn: _validate_key_constraints(
             _spark,
             table_fqn,
@@ -596,18 +515,16 @@ def publish_player_current_ratings(
     players_table_fqn = get_silver_source_table_fqn(environment, "players")
     stage_table_fqn = get_gold_stage_table_fqn(environment, "player_current_ratings")
     target_table_fqn = get_gold_target_table_fqn(environment, "player_current_ratings")
-    result = build_player_current_ratings(
-        _collect_table_rows(spark, history_table_fqn),
-        _collect_table_rows(spark, players_table_fqn),
-        analysis_as_of_date=analysis_as_of_date,
-        ratings_config=ratings_config,
-    )
-    publish_stage_records_to_gold_table(
+    publish_stage_to_gold_table(
         spark,
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
-        records=result.rows,
-        schema=PLAYER_CURRENT_RATINGS_SCHEMA,
+        stage_sql=build_player_current_ratings_sql(
+            history_table_fqn=history_table_fqn,
+            players_table_fqn=players_table_fqn,
+            analysis_as_of_date=analysis_as_of_date,
+            ratings_config=ratings_config,
+        ),
         validation_fn=lambda _spark, table_fqn: _validate_key_constraints(
             _spark,
             table_fqn,
@@ -621,6 +538,220 @@ def publish_player_current_ratings(
         input_row_count=int(spark.table(players_table_fqn).count()),
         output_row_count=int(spark.table(target_table_fqn).count()),
     )
+
+
+def build_player_rating_history_sql(
+    *,
+    events_table_fqn: str,
+    players_table_fqn: str,
+    analysis_as_of_date: date,
+    ratings_config: dict[str, Any],
+) -> str:
+    """Return the Spark SQL used to build player_rating_history."""
+    analysis_date_literal = analysis_as_of_date.isoformat()
+    minimum_matches_for_reliability = int(
+        ratings_config.get("minimum_matches_for_reliability", VOLUME_SCALE_DEFAULT)
+    )
+    reliability_sql = _rating_reliability_score_sql(
+        rated_match_count_sql="collapsed.rated_match_count",
+        days_since_last_match_sql=f"DATEDIFF(DATE('{analysis_date_literal}'), collapsed.rating_effective_date)",
+        source_confidence_score_sql="players.rating_confidence",
+        minimum_matches_for_reliability=minimum_matches_for_reliability,
+        null_days_since_last_match=False,
+    )
+
+    return f"""
+WITH daily_latest_events AS (
+    SELECT
+        event.player_id,
+        CAST(event.match_date AS DATE) AS rating_effective_date,
+        event.match_id AS latest_match_id,
+        event.event_sequence AS latest_event_sequence,
+        event.batch_id,
+        event.batch_sequence,
+        CAST(event.batch_date AS DATE) AS batch_date,
+        event.post_match_rating AS analytical_rating_value,
+        event.post_match_count AS rated_match_count,
+        event.wins_to_date,
+        event.losses_to_date,
+        ROW_NUMBER() OVER (
+            PARTITION BY event.player_id, CAST(event.match_date AS DATE)
+            ORDER BY event.event_sequence DESC, event.match_id DESC
+        ) AS event_rank_within_day
+    FROM {events_table_fqn} AS event
+),
+collapsed AS (
+    SELECT
+        player_id,
+        rating_effective_date,
+        latest_match_id,
+        latest_event_sequence,
+        batch_id,
+        batch_sequence,
+        batch_date,
+        analytical_rating_value,
+        rated_match_count,
+        wins_to_date,
+        losses_to_date
+    FROM daily_latest_events
+    WHERE event_rank_within_day = 1
+),
+history_base AS (
+    SELECT
+        collapsed.player_id,
+        collapsed.rating_effective_date,
+        collapsed.latest_match_id,
+        collapsed.latest_event_sequence,
+        collapsed.batch_id,
+        collapsed.batch_sequence,
+        collapsed.batch_date,
+        collapsed.analytical_rating_value,
+        LAG(collapsed.analytical_rating_value) OVER (
+            PARTITION BY collapsed.player_id
+            ORDER BY collapsed.rating_effective_date, collapsed.latest_event_sequence
+        ) AS prior_analytical_rating_value,
+        collapsed.rated_match_count,
+        collapsed.wins_to_date,
+        collapsed.losses_to_date,
+        collapsed.rating_effective_date AS last_rated_match_date,
+        {reliability_sql} AS rating_reliability_score,
+        MAX(collapsed.rating_effective_date) OVER (
+            PARTITION BY collapsed.player_id
+        ) AS current_rating_effective_date
+    FROM collapsed
+    LEFT JOIN {players_table_fqn} AS players
+        ON players.player_id = collapsed.player_id
+)
+SELECT
+    player_id,
+    rating_effective_date,
+    latest_match_id,
+    latest_event_sequence,
+    batch_id,
+    batch_sequence,
+    batch_date,
+    analytical_rating_value,
+    CASE
+        WHEN prior_analytical_rating_value IS NULL THEN NULL
+        ELSE analytical_rating_value - prior_analytical_rating_value
+    END AS rating_change_from_prior,
+    rated_match_count,
+    wins_to_date,
+    losses_to_date,
+    last_rated_match_date,
+    rating_reliability_score,
+    CASE
+        WHEN rating_reliability_score >= 90.0 THEN '{VERY_HIGH}'
+        WHEN rating_reliability_score >= 75.0 THEN '{HIGH}'
+        WHEN rating_reliability_score >= 50.0 THEN '{MODERATE}'
+        WHEN rating_reliability_score >= 25.0 THEN '{LOW}'
+        ELSE '{VERY_LOW}'
+    END AS rating_evidence_band,
+    {MAX_UNCERTAINTY_DEFAULT} * (
+        1.0 - (GREATEST(0.0, LEAST(rating_reliability_score, 100.0)) / 100.0)
+    ) AS rating_uncertainty_proxy,
+    rating_effective_date = current_rating_effective_date AS is_current_flag
+FROM history_base
+""".strip()
+
+
+def build_player_current_ratings_sql(
+    *,
+    history_table_fqn: str,
+    players_table_fqn: str,
+    analysis_as_of_date: date,
+    ratings_config: dict[str, Any],
+) -> str:
+    """Return the Spark SQL used to build player_current_ratings."""
+    default_rating = float(ratings_config.get("default_rating", 1500.0))
+    minimum_matches_for_reliability = int(
+        ratings_config.get("minimum_matches_for_reliability", VOLUME_SCALE_DEFAULT)
+    )
+    reliability_sql = _rating_reliability_score_sql(
+        rated_match_count_sql="0",
+        days_since_last_match_sql="NULL",
+        source_confidence_score_sql="players.rating_confidence",
+        minimum_matches_for_reliability=minimum_matches_for_reliability,
+        null_days_since_last_match=True,
+    )
+
+    return f"""
+WITH history_current AS (
+    SELECT
+        history.player_id,
+        history.rating_effective_date,
+        history.analytical_rating_value,
+        history.rating_reliability_score,
+        history.rating_evidence_band,
+        history.rating_uncertainty_proxy,
+        history.rated_match_count,
+        history.wins_to_date,
+        history.losses_to_date,
+        history.last_rated_match_date
+    FROM {history_table_fqn} AS history
+    WHERE history.is_current_flag = true
+),
+current_rows AS (
+    SELECT
+        players.player_id,
+        players.display_name,
+        players.country_code,
+        players.active_flag,
+        CAST(players.rating AS DOUBLE) AS source_rating_value,
+        CAST(players.rating_confidence AS DOUBLE) AS source_confidence_score,
+        COALESCE(history_current.analytical_rating_value, {default_rating}) AS analytical_rating_value,
+        CASE
+            WHEN players.rating IS NULL THEN NULL
+            ELSE COALESCE(history_current.analytical_rating_value, {default_rating}) - CAST(players.rating AS DOUBLE)
+        END AS rating_difference_from_source,
+        COALESCE(history_current.rating_reliability_score, {reliability_sql}) AS rating_reliability_score,
+        COALESCE(
+            history_current.rating_evidence_band,
+            CASE
+                WHEN {reliability_sql} >= 90.0 THEN '{VERY_HIGH}'
+                WHEN {reliability_sql} >= 75.0 THEN '{HIGH}'
+                WHEN {reliability_sql} >= 50.0 THEN '{MODERATE}'
+                WHEN {reliability_sql} >= 25.0 THEN '{LOW}'
+                ELSE '{VERY_LOW}'
+            END
+        ) AS rating_evidence_band,
+        COALESCE(
+            history_current.rating_uncertainty_proxy,
+            {MAX_UNCERTAINTY_DEFAULT} * (
+                1.0 - (GREATEST(0.0, LEAST({reliability_sql}, 100.0)) / 100.0)
+            )
+        ) AS rating_uncertainty_proxy,
+        COALESCE(history_current.rated_match_count, 0) AS rated_match_count,
+        COALESCE(history_current.wins_to_date, 0) AS wins_to_date,
+        COALESCE(history_current.losses_to_date, 0) AS losses_to_date,
+        history_current.last_rated_match_date,
+        history_current.rating_effective_date AS current_rating_effective_date
+    FROM {players_table_fqn} AS players
+    LEFT JOIN history_current
+        ON history_current.player_id = players.player_id
+)
+SELECT
+    player_id,
+    display_name,
+    country_code,
+    active_flag,
+    source_rating_value,
+    source_confidence_score,
+    analytical_rating_value,
+    rating_difference_from_source,
+    rating_reliability_score,
+    rating_evidence_band,
+    rating_uncertainty_proxy,
+    rated_match_count,
+    wins_to_date,
+    losses_to_date,
+    last_rated_match_date,
+    current_rating_effective_date,
+    ROW_NUMBER() OVER (
+        ORDER BY analytical_rating_value DESC, player_id ASC
+    ) AS analytical_rating_rank_overall
+FROM current_rows
+""".strip()
 
 
 def expected_win_probability(
@@ -683,6 +814,310 @@ def rating_evidence_band(score: float) -> str:
 def rating_uncertainty_proxy(score: float) -> float:
     """Return a simple uncertainty proxy that declines as reliability increases."""
     return MAX_UNCERTAINTY_DEFAULT * (1.0 - max(0.0, min(score, 100.0)) / 100.0)
+
+
+def _publish_player_rating_events_streaming(
+    spark: Any,
+    *,
+    source_table_fqn: str,
+    stage_table_fqn: str,
+    target_table_fqn: str,
+    analysis_as_of_date: date,
+    ratings_config: dict[str, Any],
+    validation_fn: Any | None = None,
+) -> tuple[int, int]:
+    player_state: dict[str, dict[str, Any]] = {}
+    event_batches = _build_player_rating_event_batches(
+        _iter_competition_player_match_rows(
+            spark,
+            table_fqn=source_table_fqn,
+            analysis_as_of_date=analysis_as_of_date,
+        ),
+        analysis_as_of_date=analysis_as_of_date,
+        ratings_config=ratings_config,
+        player_state=player_state,
+    )
+    stage_row_count = _write_record_batches_table(
+        spark,
+        table_fqn=stage_table_fqn,
+        schema=PLAYER_RATING_EVENTS_SCHEMA,
+        record_batches=event_batches,
+    )
+    if validation_fn is not None:
+        validation_fn(spark, stage_table_fqn)
+    target_row_count = publish_sql_table(
+        spark,
+        target_table_fqn,
+        f"SELECT * FROM {stage_table_fqn}",
+    )
+    verified_row_count = int(spark.table(target_table_fqn).count())
+    if target_row_count != verified_row_count:
+        raise ValueError(
+            f"Published Gold table {target_table_fqn} did not verify: "
+            f"published_row_count={target_row_count}, verified_row_count={verified_row_count}."
+        )
+    return stage_row_count, verified_row_count
+
+
+def _iter_competition_player_match_rows(
+    spark: Any,
+    *,
+    table_fqn: str,
+    analysis_as_of_date: date,
+) -> Iterator[dict[str, Any]]:
+    analysis_date_literal = analysis_as_of_date.isoformat()
+    query = f"""
+SELECT
+    match_id,
+    CAST(match_date AS DATE) AS match_date,
+    batch_id,
+    batch_sequence,
+    CAST(batch_date AS DATE) AS batch_date,
+    team_number,
+    player_id,
+    partner_player_id,
+    pre_match_player_rating,
+    won_flag,
+    lost_flag,
+    player_position
+FROM {table_fqn}
+WHERE CAST(match_date AS DATE) <= DATE('{analysis_date_literal}')
+ORDER BY
+    CAST(match_date AS DATE),
+    COALESCE(batch_sequence, 0),
+    COALESCE(batch_id, ''),
+    match_id,
+    COALESCE(team_number, 0),
+    COALESCE(player_position, ''),
+    player_id
+""".strip()
+    for row in spark.sql(query).toLocalIterator():
+        yield row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
+
+
+def _build_player_rating_event_batches(
+    competition_player_matches_rows: Iterable[dict[str, Any]],
+    *,
+    analysis_as_of_date: date,
+    ratings_config: dict[str, Any],
+    player_state: dict[str, dict[str, Any]],
+    batch_size: int = RATING_EVENT_BATCH_SIZE,
+) -> Iterator[list[dict[str, Any]]]:
+    default_rating = float(ratings_config.get("default_rating", 1500.0))
+    base_k_factor = float(ratings_config.get("k_factor", 32.0))
+    margin_multiplier = float(ratings_config.get("margin_multiplier", 1.0))
+    rating_floor = float(ratings_config.get("rating_floor", 1000.0))
+    rating_ceiling = float(ratings_config.get("rating_ceiling", 3000.0))
+
+    current_match_rows: list[dict[str, Any]] = []
+    current_match_id: str | None = None
+    event_sequence = 0
+    batch: list[dict[str, Any]] = []
+
+    for row in competition_player_matches_rows:
+        match_id = _normalize_required_string(row.get("match_id"))
+        if current_match_id is None:
+            current_match_id = match_id
+        if match_id != current_match_id:
+            event_sequence, built_rows = _build_rating_event_rows_for_match(
+                current_match_rows,
+                analysis_as_of_date=analysis_as_of_date,
+                default_rating=default_rating,
+                base_k_factor=base_k_factor,
+                margin_multiplier=margin_multiplier,
+                rating_floor=rating_floor,
+                rating_ceiling=rating_ceiling,
+                player_state=player_state,
+                event_sequence=event_sequence,
+            )
+            batch.extend(built_rows)
+            if len(batch) >= batch_size:
+                yield batch
+                batch = []
+            current_match_rows = []
+            current_match_id = match_id
+        current_match_rows.append(row)
+
+    if current_match_rows:
+        event_sequence, built_rows = _build_rating_event_rows_for_match(
+            current_match_rows,
+            analysis_as_of_date=analysis_as_of_date,
+            default_rating=default_rating,
+            base_k_factor=base_k_factor,
+            margin_multiplier=margin_multiplier,
+            rating_floor=rating_floor,
+            rating_ceiling=rating_ceiling,
+            player_state=player_state,
+            event_sequence=event_sequence,
+        )
+        batch.extend(built_rows)
+    if batch:
+        yield batch
+
+
+def _build_rating_event_rows_for_match(
+    match_rows: list[dict[str, Any]],
+    *,
+    analysis_as_of_date: date,
+    default_rating: float,
+    base_k_factor: float,
+    margin_multiplier: float,
+    rating_floor: float,
+    rating_ceiling: float,
+    player_state: dict[str, dict[str, Any]],
+    event_sequence: int,
+) -> tuple[int, list[dict[str, Any]]]:
+    match_date = _parse_date_value(match_rows[0].get("match_date"))
+    if match_date is None or match_date > analysis_as_of_date:
+        return event_sequence, []
+
+    team_rows = _normalize_match_player_teams(match_rows)
+    if team_rows is None:
+        return event_sequence, []
+
+    team_one_rows = team_rows[1]
+    team_two_rows = team_rows[2]
+    team_one_player_ids = [_normalize_required_string(row.get("player_id")) for row in team_one_rows]
+    team_two_player_ids = [_normalize_required_string(row.get("player_id")) for row in team_two_rows]
+
+    team_one_pre_ratings = [
+        _get_player_state(player_state, player_id, default_rating)["rating"]
+        for player_id in team_one_player_ids
+    ]
+    team_two_pre_ratings = [
+        _get_player_state(player_state, player_id, default_rating)["rating"]
+        for player_id in team_two_player_ids
+    ]
+    team_one_pre_match_rating = sum(team_one_pre_ratings) / 2.0
+    team_two_pre_match_rating = sum(team_two_pre_ratings) / 2.0
+    team_one_expected = expected_win_probability(
+        team_one_pre_match_rating,
+        team_two_pre_match_rating,
+    )
+    team_two_expected = 1.0 - team_one_expected
+
+    team_one_prior_counts = [
+        int(_get_player_state(player_state, player_id, default_rating)["match_count"])
+        for player_id in team_one_player_ids
+    ]
+    team_two_prior_counts = [
+        int(_get_player_state(player_state, player_id, default_rating)["match_count"])
+        for player_id in team_two_player_ids
+    ]
+    match_k_factor = base_k_factor * (
+        (
+            sum(experience_multiplier(count) for count in team_one_prior_counts)
+            + sum(experience_multiplier(count) for count in team_two_prior_counts)
+        )
+        / 4.0
+    )
+
+    team_one_won = _coerce_bool(team_one_rows[0].get("won_flag"))
+    team_two_won = _coerce_bool(team_two_rows[0].get("won_flag"))
+    if team_one_won == team_two_won:
+        return event_sequence, []
+
+    team_one_actual = 1.0 if team_one_won else 0.0
+    team_two_actual = 1.0 if team_two_won else 0.0
+    team_one_delta = match_k_factor * margin_multiplier * (team_one_actual - team_one_expected)
+    team_two_delta = -team_one_delta
+
+    next_event_sequence = event_sequence + 1
+    built_rows = _build_match_player_event_rows(
+        match_rows=team_one_rows,
+        opponent_player_ids=team_two_player_ids,
+        expected_win=team_one_expected,
+        actual_result=team_one_actual,
+        team_pre_match_rating=team_one_pre_match_rating,
+        opponent_pre_match_rating=team_two_pre_match_rating,
+        rating_delta=team_one_delta,
+        k_factor=match_k_factor,
+        margin_multiplier=margin_multiplier,
+        player_state=player_state,
+        default_rating=default_rating,
+        rating_floor=rating_floor,
+        rating_ceiling=rating_ceiling,
+        event_sequence=next_event_sequence,
+    )
+    built_rows.extend(
+        _build_match_player_event_rows(
+            match_rows=team_two_rows,
+            opponent_player_ids=team_one_player_ids,
+            expected_win=team_two_expected,
+            actual_result=team_two_actual,
+            team_pre_match_rating=team_two_pre_match_rating,
+            opponent_pre_match_rating=team_one_pre_match_rating,
+            rating_delta=team_two_delta,
+            k_factor=match_k_factor,
+            margin_multiplier=margin_multiplier,
+            player_state=player_state,
+            default_rating=default_rating,
+            rating_floor=rating_floor,
+            rating_ceiling=rating_ceiling,
+            event_sequence=next_event_sequence,
+        )
+    )
+    return next_event_sequence, built_rows
+
+
+def _write_record_batches_table(
+    spark: Any,
+    *,
+    table_fqn: str,
+    schema: Any,
+    record_batches: Iterable[list[dict[str, Any]]],
+) -> int:
+    spark.sql(f"DROP TABLE IF EXISTS {table_fqn}")
+    total_row_count = 0
+    wrote_rows = False
+    for batch_index, records in enumerate(record_batches):
+        if not records:
+            continue
+        write_mode = "overwrite" if batch_index == 0 else "append"
+        dataframe = spark.createDataFrame(records, schema=schema)
+        dataframe.write.format("delta").mode(write_mode).saveAsTable(table_fqn)
+        wrote_rows = True
+        total_row_count += len(records)
+    if not wrote_rows:
+        spark.createDataFrame([], schema=schema).write.format("delta").mode("overwrite").saveAsTable(
+            table_fqn
+        )
+    return total_row_count
+
+
+def _rating_reliability_score_sql(
+    *,
+    rated_match_count_sql: str,
+    days_since_last_match_sql: str,
+    source_confidence_score_sql: str,
+    minimum_matches_for_reliability: int,
+    null_days_since_last_match: bool,
+) -> str:
+    volume_scale = max(float(minimum_matches_for_reliability), VOLUME_SCALE_DEFAULT)
+    volume_component_sql = (
+        f"(1.0 - EXP(-(CAST(GREATEST({rated_match_count_sql}, 0) AS DOUBLE) / {volume_scale})))"
+    )
+    if null_days_since_last_match:
+        recency_component_sql = "0.25"
+    else:
+        recency_component_sql = (
+            f"POWER(0.5, CAST(GREATEST({days_since_last_match_sql}, 0) AS DOUBLE) / {RECENCY_HALF_LIFE_DAYS})"
+        )
+    quality_component_sql = (
+        "CASE "
+        f"WHEN {source_confidence_score_sql} IS NULL THEN 0.5 "
+        f"WHEN {source_confidence_score_sql} <= 1.0 THEN GREATEST(0.0, LEAST(1.0, CAST({source_confidence_score_sql} AS DOUBLE))) "
+        f"ELSE GREATEST(0.0, LEAST(1.0, CAST({source_confidence_score_sql} AS DOUBLE) / 100.0)) "
+        "END"
+    )
+    weighted_log_sum_sql = (
+        f"(0.5 * LN(GREATEST({volume_component_sql}, 1e-9))"
+        f" + 0.3 * LN(GREATEST({recency_component_sql}, 1e-9))"
+        f" + 0.2 * LN(GREATEST({quality_component_sql}, 1e-9)))"
+    )
+    return (
+        f"GREATEST(0.0, LEAST(100.0, 100.0 * EXP({weighted_log_sum_sql})))"
+    )
 
 
 def _build_match_player_event_rows(
@@ -807,13 +1242,6 @@ def _group_rows_by_key(
             continue
         grouped.setdefault(key_value, []).append(row)
     return grouped
-
-
-def _collect_table_rows(spark: Any, table_fqn: str) -> list[dict[str, Any]]:
-    return [
-        row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
-        for row in spark.table(table_fqn).toLocalIterator()
-    ]
 
 
 def _get_player_state(
