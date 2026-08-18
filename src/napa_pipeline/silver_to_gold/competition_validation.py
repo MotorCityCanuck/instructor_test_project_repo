@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from time import perf_counter
 from typing import Any
 
 from napa_pipeline.silver_to_gold.competition import (
@@ -102,12 +103,29 @@ def publish_phase3_competition_foundation(
     analysis_as_of_date: date,
 ) -> Phase3PublicationSummary:
     """Publish the two Gold Phase 3 competition foundation tables."""
+    started_at = perf_counter()
+    print("Starting Phase 3 publish: competition_match_sides")
     match_sides_summary = publish_competition_match_sides(
         spark,
         environment,
         analysis_as_of_date=analysis_as_of_date,
     )
+    match_sides_elapsed_seconds = perf_counter() - started_at
+    print(
+        "Completed Phase 3 publish: competition_match_sides "
+        f"output_rows={match_sides_summary.output_row_count} "
+        f"elapsed_seconds={match_sides_elapsed_seconds:.2f}"
+    )
+
+    player_matches_started_at = perf_counter()
+    print("Starting Phase 3 publish: competition_player_matches")
     player_matches_summary = publish_competition_player_matches(spark, environment)
+    player_matches_elapsed_seconds = perf_counter() - player_matches_started_at
+    print(
+        "Completed Phase 3 publish: competition_player_matches "
+        f"output_rows={player_matches_summary.output_row_count} "
+        f"elapsed_seconds={player_matches_elapsed_seconds:.2f}"
+    )
     return Phase3PublicationSummary(
         competition_match_sides=match_sides_summary,
         competition_player_matches=player_matches_summary,

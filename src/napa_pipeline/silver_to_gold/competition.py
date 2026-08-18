@@ -315,7 +315,7 @@ def build_competition_match_sides_sql(
     analysis_literal = analysis_as_of_date.isoformat()
 
     return f"""
-WITH matches_deduped AS (
+WITH matches_normalized AS (
     SELECT
         CAST(match_id AS STRING) AS match_id,
         CAST(batch_id AS STRING) AS batch_id,
@@ -325,25 +325,34 @@ WITH matches_deduped AS (
         UPPER(TRIM(CAST(competition_category AS STRING))) AS competition_category,
         CAST(winning_team_id AS STRING) AS winning_team_id,
         CAST(winning_team_number AS INT) AS winning_team_number,
-        CAST(completed_flag AS BOOLEAN) AS completed_flag,
-        COUNT(*) OVER (PARTITION BY CAST(match_id AS STRING)) AS match_row_count
+        CAST(completed_flag AS BOOLEAN) AS completed_flag
     FROM {matches_fqn}
+    WHERE match_id IS NOT NULL
+      AND CAST(match_date AS DATE) IS NOT NULL
+      AND CAST(match_date AS DATE) <= DATE('{analysis_literal}')
+),
+match_row_counts AS (
+    SELECT
+        match_id,
+        COUNT(*) AS match_row_count
+    FROM matches_normalized
+    GROUP BY match_id
 ),
 valid_match_records AS (
     SELECT
-        match_id,
-        batch_id,
-        region_id,
-        match_date,
-        match_type,
-        competition_category,
-        winning_team_id,
-        winning_team_number,
-        completed_flag
-    FROM matches_deduped
-    WHERE match_row_count = 1
-      AND match_date IS NOT NULL
-      AND match_date <= DATE('{analysis_literal}')
+        mn.match_id,
+        mn.batch_id,
+        mn.region_id,
+        mn.match_date,
+        mn.match_type,
+        mn.competition_category,
+        mn.winning_team_id,
+        mn.winning_team_number,
+        mn.completed_flag
+    FROM matches_normalized AS mn
+    INNER JOIN match_row_counts AS mrc
+      ON mn.match_id = mrc.match_id
+    WHERE mrc.match_row_count = 1
 ),
 side_players AS (
     SELECT
@@ -354,7 +363,7 @@ side_players AS (
         MAX(CASE WHEN COALESCE(CAST(mtp.membership_history_warning_flag AS BOOLEAN), FALSE) THEN 1 ELSE 0 END)
             AS membership_history_warning_int
     FROM {match_team_players_fqn} AS mtp
-    INNER JOIN valid_match_records AS vm
+    LEFT SEMI JOIN valid_match_records AS vm
       ON CAST(mtp.match_id AS STRING) = vm.match_id
     WHERE mtp.match_team_id IS NOT NULL
       AND mtp.player_id IS NOT NULL
@@ -372,7 +381,7 @@ match_sides AS (
         sp.player_count,
         CAST(sp.membership_history_warning_int AS BOOLEAN) AS membership_history_warning_flag
     FROM {match_teams_fqn} AS mt
-    INNER JOIN valid_match_records AS vm
+    LEFT SEMI JOIN valid_match_records AS vm
       ON CAST(mt.match_id AS STRING) = vm.match_id
     INNER JOIN side_players AS sp
       ON CAST(mt.match_team_id AS STRING) = sp.match_team_id
@@ -414,7 +423,7 @@ game_base AS (
         CAST(mg.winning_team_number AS INT) AS winning_team_number,
         COALESCE(CAST(mg.close_game_flag AS BOOLEAN), FALSE) AS close_game_flag
     FROM {match_games_fqn} AS mg
-    INNER JOIN valid_match_records AS vm
+    LEFT SEMI JOIN valid_match_records AS vm
       ON CAST(mg.match_id AS STRING) = vm.match_id
 ),
 valid_games AS (
@@ -634,7 +643,7 @@ player_rows AS (
         CAST(mtp.player_rating_at_match AS DOUBLE) AS player_rating_at_match,
         CAST(mtp.membership_history_warning_flag AS BOOLEAN) AS membership_history_warning_flag
     FROM {match_team_players_fqn} AS mtp
-    INNER JOIN side_rows AS sr
+    LEFT SEMI JOIN side_rows AS sr
       ON CAST(mtp.match_team_id AS STRING) = sr.match_team_id
     WHERE mtp.player_id IS NOT NULL
 ),
@@ -704,7 +713,7 @@ def publish_competition_match_sides(
     """Build and publish competition_match_sides using Spark-native SQL."""
     target_table_fqn = get_gold_target_table_fqn(environment, "competition_match_sides")
     stage_table_fqn = get_gold_stage_table_fqn(environment, "competition_match_sides")
-    publish_stage_to_gold_table(
+    _stage_row_count, output_row_count = publish_stage_to_gold_table(
         spark,
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
@@ -715,7 +724,6 @@ def publish_competition_match_sides(
         validation_fn=_validate_competition_match_sides_table,
     )
     input_row_count = int(spark.table(get_silver_source_table_fqn(environment, "match_teams")).count())
-    output_row_count = int(spark.table(target_table_fqn).count())
     return CompetitionMatchSidesPublicationSummary(
         target_table_fqn=target_table_fqn,
         stage_table_fqn=stage_table_fqn,
@@ -731,7 +739,7 @@ def publish_competition_player_matches(
     """Build and publish competition_player_matches using Spark-native SQL."""
     target_table_fqn = get_gold_target_table_fqn(environment, "competition_player_matches")
     stage_table_fqn = get_gold_stage_table_fqn(environment, "competition_player_matches")
-    publish_stage_to_gold_table(
+    _stage_row_count, output_row_count = publish_stage_to_gold_table(
         spark,
         stage_table_fqn=stage_table_fqn,
         target_table_fqn=target_table_fqn,
@@ -739,7 +747,6 @@ def publish_competition_player_matches(
         validation_fn=_validate_competition_player_matches_table,
     )
     input_row_count = int(spark.table(get_gold_target_table_fqn(environment, "competition_match_sides")).count())
-    output_row_count = int(spark.table(target_table_fqn).count())
     return CompetitionPlayerMatchesPublicationSummary(
         target_table_fqn=target_table_fqn,
         stage_table_fqn=stage_table_fqn,

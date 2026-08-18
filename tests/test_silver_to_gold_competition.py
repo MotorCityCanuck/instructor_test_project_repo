@@ -255,10 +255,13 @@ def test_build_competition_match_sides_sql_references_required_sources_and_as_of
     assert "DATE('2026-06-30')" in sql
     assert "canonical_player_pair_key" in sql
     assert "opponent_pre_match_team_rating" in sql
-    assert "INNER JOIN valid_match_records AS vm" in sql
+    assert "WITH matches_normalized AS" in sql
+    assert "match_row_counts AS" in sql
+    assert "LEFT SEMI JOIN valid_match_records AS vm" in sql
     assert "CAST(mt.match_id AS STRING) = vm.match_id" in sql
     assert "CAST(mtp.match_id AS STRING) = vm.match_id" in sql
     assert "FROM valid_match_records" in sql
+    assert "COUNT(*) OVER" not in sql
     assert "COUNT(DISTINCT ms.team_number) OVER" not in sql
     assert "COUNT(DISTINCT team_number) OVER" not in sql
     assert "collect_list(ms.player_ids) OVER" not in sql
@@ -275,6 +278,7 @@ def test_build_competition_player_matches_sql_reads_phase3_target() -> None:
     assert "partner_player_id" in sql
     assert "pre_match_opponent_team_rating" in sql
     assert "FROM side_rows" in sql
+    assert "LEFT SEMI JOIN side_rows AS sr" in sql
 
 
 class _FakeTable:
