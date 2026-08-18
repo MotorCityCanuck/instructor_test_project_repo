@@ -6,6 +6,7 @@ include:
   - config/bronze_to_silver/workflows/*.yml
   - config/silver_to_gold/workflows/*.yml
   - config/certification/workflows/*.yml
+  - config/orchestration/workflows/*.yml
 
 sync:
   include:
@@ -13,6 +14,7 @@ sync:
     - config/bronze_to_silver/**
     - config/silver_to_gold/**
     - config/certification/**
+    - config/orchestration/**
     - notebooks/**
     - src/**
     - requirements.txt

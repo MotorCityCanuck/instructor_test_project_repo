@@ -25,6 +25,8 @@ The root bundle includes workflow resources under:
 config/raw_to_bronze/workflows/*.yml
 config/bronze_to_silver/workflows/*.yml
 config/silver_to_gold/workflows/*.yml
+config/certification/workflows/*.yml
+config/orchestration/workflows/*.yml
 ```
 
 ## Release Progression
@@ -65,6 +67,36 @@ Detailed guide:
 
 ```text
 docs/raw_to_bronze_workflow.md
+```
+
+## Run Full Pipeline Orchestration
+
+Workflow resource:
+
+```text
+napa_full_pipeline_orchestration
+```
+
+Parameters:
+
+```text
+release_name = napa_5k | napa_50k | napa_250k
+analysis_as_of_date = optional YYYY-MM-DD
+```
+
+CLI examples:
+
+```bash
+databricks bundle run -t dev napa_full_pipeline_orchestration --params release_name=napa_5k
+databricks bundle run -t dev napa_full_pipeline_orchestration --params release_name=napa_50k
+databricks bundle run -t dev napa_full_pipeline_orchestration --params release_name=napa_250k
+databricks bundle run -t dev napa_full_pipeline_orchestration --params release_name=napa_5k,analysis_as_of_date=2025-12-31
+```
+
+Detailed guide:
+
+```text
+docs/full_pipeline_orchestration_workflow.md
 ```
 
 ## Run Bronze-To-Silver
@@ -251,4 +283,5 @@ Do not manually patch published Bronze, Silver, or Gold business tables. The imp
 - Bronze-to-Silver workflow: [bronze_to_silver_workflow.md](bronze_to_silver_workflow.md)
 - Silver-to-Gold workflow: [silver_to_gold_workflow.md](silver_to_gold_workflow.md)
 - Gold audit workflow: [silver_to_gold_audit_workflow.md](silver_to_gold_audit_workflow.md)
+- Full orchestration workflow: [full_pipeline_orchestration_workflow.md](full_pipeline_orchestration_workflow.md)
 - Gold table contracts: [gold_target_schema_registry.md](gold_target_schema_registry.md)

@@ -25,6 +25,7 @@ Primary workflow docs:
 - [`docs/bronze_to_silver_workflow.md`](docs/bronze_to_silver_workflow.md)
 - [`docs/silver_to_gold_workflow.md`](docs/silver_to_gold_workflow.md)
 - [`docs/silver_to_gold_audit_workflow.md`](docs/silver_to_gold_audit_workflow.md)
+- [`docs/full_pipeline_orchestration_workflow.md`](docs/full_pipeline_orchestration_workflow.md)
 
 ## Team Placeholders
 

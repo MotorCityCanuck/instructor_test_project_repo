@@ -1,0 +1,146 @@
+resources:
+  jobs:
+    napa_full_pipeline_orchestration:
+      name: NAPA Full Pipeline Orchestration
+      description: >
+        Databricks orchestration job that chains raw certification, raw-to-bronze,
+        bronze-to-silver, and silver-to-gold with success-only progression.
+        Start the job with release_name set to one of: napa_5k, napa_50k, napa_250k.
+      max_concurrent_runs: 1
+      parameters:
+        - name: release_name
+          default: napa_5k
+        - name: analysis_as_of_date
+          default: ""
+      tags:
+        pipeline_name: full_pipeline_orchestration
+        owner: instructor
+      tasks:
+        - task_key: release_is_5k
+          condition_task:
+            op: EQUAL_TO
+            left: "{{job.parameters.release_name}}"
+            right: napa_5k
+
+        - task_key: run_raw_certification_5k
+          depends_on:
+            - task_key: release_is_5k
+              outcome: "true"
+          run_job_task:
+            job_id: ${resources.jobs.napa_raw_certification.id}
+            job_parameters:
+              release_type: 5k
+              analysis_as_of_date: "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: run_raw_to_bronze_5k
+          depends_on:
+            - task_key: run_raw_certification_5k
+          run_job_task:
+            job_id: ${resources.jobs.napa_raw_to_bronze.id}
+            job_parameters:
+              release_type: 5k
+
+        - task_key: run_bronze_to_silver_5k
+          depends_on:
+            - task_key: run_raw_to_bronze_5k
+          run_job_task:
+            job_id: ${resources.jobs.napa_bronze_to_silver.id}
+            job_parameters:
+              release_name: napa_5k
+
+        - task_key: run_silver_to_gold_5k
+          depends_on:
+            - task_key: run_bronze_to_silver_5k
+          run_job_task:
+            job_id: ${resources.jobs.napa_silver_to_gold.id}
+            job_parameters:
+              release_name: napa_5k
+              analysis_as_of_date: "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: release_is_50k
+          depends_on:
+            - task_key: release_is_5k
+              outcome: "false"
+          condition_task:
+            op: EQUAL_TO
+            left: "{{job.parameters.release_name}}"
+            right: napa_50k
+
+        - task_key: run_raw_certification_50k
+          depends_on:
+            - task_key: release_is_50k
+              outcome: "true"
+          run_job_task:
+            job_id: ${resources.jobs.napa_raw_certification.id}
+            job_parameters:
+              release_type: 50k
+              analysis_as_of_date: "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: run_raw_to_bronze_50k
+          depends_on:
+            - task_key: run_raw_certification_50k
+          run_job_task:
+            job_id: ${resources.jobs.napa_raw_to_bronze.id}
+            job_parameters:
+              release_type: 50k
+
+        - task_key: run_bronze_to_silver_50k
+          depends_on:
+            - task_key: run_raw_to_bronze_50k
+          run_job_task:
+            job_id: ${resources.jobs.napa_bronze_to_silver.id}
+            job_parameters:
+              release_name: napa_50k
+
+        - task_key: run_silver_to_gold_50k
+          depends_on:
+            - task_key: run_bronze_to_silver_50k
+          run_job_task:
+            job_id: ${resources.jobs.napa_silver_to_gold.id}
+            job_parameters:
+              release_name: napa_50k
+              analysis_as_of_date: "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: release_is_250k
+          depends_on:
+            - task_key: release_is_50k
+              outcome: "false"
+          condition_task:
+            op: EQUAL_TO
+            left: "{{job.parameters.release_name}}"
+            right: napa_250k
+
+        - task_key: run_raw_certification_250k
+          depends_on:
+            - task_key: release_is_250k
+              outcome: "true"
+          run_job_task:
+            job_id: ${resources.jobs.napa_raw_certification.id}
+            job_parameters:
+              release_type: 250k
+              analysis_as_of_date: "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: run_raw_to_bronze_250k
+          depends_on:
+            - task_key: run_raw_certification_250k
+          run_job_task:
+            job_id: ${resources.jobs.napa_raw_to_bronze.id}
+            job_parameters:
+              release_type: 250k
+
+        - task_key: run_bronze_to_silver_250k
+          depends_on:
+            - task_key: run_raw_to_bronze_250k
+          run_job_task:
+            job_id: ${resources.jobs.napa_bronze_to_silver.id}
+            job_parameters:
+              release_name: napa_250k
+
+        - task_key: run_silver_to_gold_250k
+          depends_on:
+            - task_key: run_bronze_to_silver_250k
+          run_job_task:
+            job_id: ${resources.jobs.napa_silver_to_gold.id}
+            job_parameters:
+              release_name: napa_250k
+              analysis_as_of_date: "{{job.parameters.analysis_as_of_date}}"
