@@ -71,6 +71,7 @@ RECENCY_HALF_LIFE_DAYS = 180.0
 MAX_UNCERTAINTY_DEFAULT = 200.0
 DEFAULT_RATING_SCALE = 400.0
 RATING_EVENT_BATCH_SIZE = 10000
+RATING_EVENT_SOURCE_PAGE_SIZE = 50000
 
 
 PLAYER_RATING_EVENTS_SCHEMA = StructType(
@@ -864,9 +865,73 @@ def _iter_competition_player_match_rows(
     *,
     table_fqn: str,
     analysis_as_of_date: date,
+    page_size: int = RATING_EVENT_SOURCE_PAGE_SIZE,
 ) -> Iterator[dict[str, Any]]:
     analysis_date_literal = analysis_as_of_date.isoformat()
-    query = f"""
+    last_sort_key: tuple[date, int, str, str, int, str, str] | None = None
+
+    while True:
+        continuation_predicate = ""
+        if last_sort_key is not None:
+            (
+                last_match_date,
+                last_batch_sequence,
+                last_batch_id,
+                last_match_id,
+                last_team_number,
+                last_player_position,
+                last_player_id,
+            ) = last_sort_key
+            last_match_date_literal = last_match_date.isoformat()
+            last_batch_id_literal = _sql_string_literal(last_batch_id)
+            last_match_id_literal = _sql_string_literal(last_match_id)
+            last_player_position_literal = _sql_string_literal(last_player_position)
+            last_player_id_literal = _sql_string_literal(last_player_id)
+            continuation_predicate = f"""
+  AND (
+      CAST(match_date AS DATE) > DATE('{last_match_date_literal}')
+      OR (
+          CAST(match_date AS DATE) = DATE('{last_match_date_literal}')
+          AND COALESCE(batch_sequence, 0) > {last_batch_sequence}
+      )
+      OR (
+          CAST(match_date AS DATE) = DATE('{last_match_date_literal}')
+          AND COALESCE(batch_sequence, 0) = {last_batch_sequence}
+          AND COALESCE(batch_id, '') > '{last_batch_id_literal}'
+      )
+      OR (
+          CAST(match_date AS DATE) = DATE('{last_match_date_literal}')
+          AND COALESCE(batch_sequence, 0) = {last_batch_sequence}
+          AND COALESCE(batch_id, '') = '{last_batch_id_literal}'
+          AND match_id > '{last_match_id_literal}'
+      )
+      OR (
+          CAST(match_date AS DATE) = DATE('{last_match_date_literal}')
+          AND COALESCE(batch_sequence, 0) = {last_batch_sequence}
+          AND COALESCE(batch_id, '') = '{last_batch_id_literal}'
+          AND match_id = '{last_match_id_literal}'
+          AND COALESCE(team_number, 0) > {last_team_number}
+      )
+      OR (
+          CAST(match_date AS DATE) = DATE('{last_match_date_literal}')
+          AND COALESCE(batch_sequence, 0) = {last_batch_sequence}
+          AND COALESCE(batch_id, '') = '{last_batch_id_literal}'
+          AND match_id = '{last_match_id_literal}'
+          AND COALESCE(team_number, 0) = {last_team_number}
+          AND COALESCE(player_position, '') > '{last_player_position_literal}'
+      )
+      OR (
+          CAST(match_date AS DATE) = DATE('{last_match_date_literal}')
+          AND COALESCE(batch_sequence, 0) = {last_batch_sequence}
+          AND COALESCE(batch_id, '') = '{last_batch_id_literal}'
+          AND match_id = '{last_match_id_literal}'
+          AND COALESCE(team_number, 0) = {last_team_number}
+          AND COALESCE(player_position, '') = '{last_player_position_literal}'
+          AND player_id > '{last_player_id_literal}'
+      )
+  )
+""".rstrip()
+        query = f"""
 SELECT
     match_id,
     CAST(match_date AS DATE) AS match_date,
@@ -882,6 +947,7 @@ SELECT
     player_position
 FROM {table_fqn}
 WHERE CAST(match_date AS DATE) <= DATE('{analysis_date_literal}')
+{continuation_predicate}
 ORDER BY
     CAST(match_date AS DATE),
     COALESCE(batch_sequence, 0),
@@ -890,9 +956,21 @@ ORDER BY
     COALESCE(team_number, 0),
     COALESCE(player_position, ''),
     player_id
+LIMIT {int(page_size)}
 """.strip()
-    for row in spark.sql(query).toLocalIterator():
-        yield row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
+        rows = spark.sql(query).collect()
+        if not rows:
+            break
+
+        last_record: dict[str, Any] | None = None
+        for row in rows:
+            record = row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
+            last_record = record
+            yield record
+
+        if len(rows) < page_size or last_record is None:
+            break
+        last_sort_key = _competition_player_match_sort_key(last_record)
 
 
 def _build_player_rating_event_batches(
@@ -1231,6 +1309,20 @@ def _match_sort_key(match_rows: list[dict[str, Any]]) -> tuple[Any, ...]:
     )
 
 
+def _competition_player_match_sort_key(
+    row: dict[str, Any],
+) -> tuple[date, int, str, str, int, str, str]:
+    return (
+        _parse_required_date(row.get("match_date")),
+        _coerce_int(row.get("batch_sequence")) or 0,
+        _normalize_optional_string(row.get("batch_id")) or "",
+        _normalize_required_string(row.get("match_id")),
+        _coerce_int(row.get("team_number")) or 0,
+        _normalize_optional_string(row.get("player_position")) or "",
+        _normalize_required_string(row.get("player_id")),
+    )
+
+
 def _group_rows_by_key(
     rows: list[dict[str, Any]] | tuple[dict[str, Any], ...],
     key_name: str,
@@ -1314,6 +1406,10 @@ def _normalize_required_string(value: Any) -> str:
     if normalized is None:
         raise ValueError("Expected a non-empty string value.")
     return normalized
+
+
+def _sql_string_literal(value: str) -> str:
+    return value.replace("'", "''")
 
 
 def _parse_date_value(value: Any) -> date | None:
