@@ -63,6 +63,7 @@ from napa_pipeline.silver_to_gold.ratings import expected_win_probability
 NO_EVIDENCE = "NONE"
 LIMITED_EVIDENCE = "LIMITED"
 SUFFICIENT_EVIDENCE = "SUFFICIENT"
+FEATURE_SOURCE_PAGE_SIZE = 50000
 
 PLAYER_DEVELOPMENT_FEATURES_SCHEMA = StructType(
     [
@@ -598,10 +599,18 @@ def publish_player_development_features(
     stage_table_fqn = get_gold_stage_table_fqn(environment, "player_development_features")
     target_table_fqn = get_gold_target_table_fqn(environment, "player_development_features")
     result = build_player_development_features(
-        _collect_table_rows(spark, rating_history_fqn),
-        _collect_table_rows(spark, assessment_fqn),
-        _collect_table_rows(spark, registrations_fqn),
-        _collect_table_rows(spark, players_fqn),
+        _collect_player_rating_history_rows(
+            spark,
+            rating_history_fqn,
+            analysis_as_of_date=analysis_as_of_date,
+        ),
+        _collect_player_assessment_history_rows(
+            spark,
+            assessment_fqn,
+            analysis_as_of_date=analysis_as_of_date,
+        ),
+        _collect_player_registration_rows(spark, registrations_fqn),
+        _collect_player_rows(spark, players_fqn),
         analysis_as_of_date=analysis_as_of_date,
         features_config=features_config,
         evidence_windows_config=evidence_windows_config,
@@ -1103,11 +1112,125 @@ def _bounded_positive(value: float | None, *, scale: float) -> float:
     return max(0.0, min(1.0, value / scale))
 
 
-def _collect_table_rows(spark: Any, table_fqn: str) -> list[dict[str, Any]]:
-    return [
-        row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
-        for row in spark.table(table_fqn).toLocalIterator()
-    ]
+def _collect_player_rating_history_rows(
+    spark: Any,
+    table_fqn: str,
+    *,
+    analysis_as_of_date: date,
+) -> list[dict[str, Any]]:
+    analysis_date_literal = analysis_as_of_date.isoformat()
+    return _collect_paginated_rows(
+        spark,
+        query_builder=lambda last_key: f"""
+SELECT
+    player_id,
+    CAST(rating_effective_date AS DATE) AS rating_effective_date,
+    analytical_rating_value,
+    rated_match_count
+FROM {table_fqn}
+WHERE CAST(rating_effective_date AS DATE) <= DATE('{analysis_date_literal}')
+{_rating_history_continuation_sql(last_key)}
+ORDER BY
+    player_id,
+    CAST(rating_effective_date AS DATE),
+    COALESCE(rated_match_count, 0),
+    COALESCE(analytical_rating_value, 0.0)
+LIMIT {FEATURE_SOURCE_PAGE_SIZE}
+""".strip(),
+        key_builder=_rating_history_sort_key,
+    )
+
+
+def _collect_player_assessment_history_rows(
+    spark: Any,
+    table_fqn: str,
+    *,
+    analysis_as_of_date: date,
+) -> list[dict[str, Any]]:
+    analysis_date_literal = analysis_as_of_date.isoformat()
+    return _collect_paginated_rows(
+        spark,
+        query_builder=lambda last_key: f"""
+SELECT
+    player_id,
+    CAST(assessment_date AS DATE) AS assessment_date,
+    assessment_value,
+    assessment_confidence
+FROM {table_fqn}
+WHERE CAST(assessment_date AS DATE) <= DATE('{analysis_date_literal}')
+{_assessment_history_continuation_sql(last_key)}
+ORDER BY
+    player_id,
+    CAST(assessment_date AS DATE),
+    COALESCE(assessment_value, 0.0),
+    COALESCE(assessment_confidence, 0.0)
+LIMIT {FEATURE_SOURCE_PAGE_SIZE}
+""".strip(),
+        key_builder=_assessment_history_sort_key,
+    )
+
+
+def _collect_player_registration_rows(spark: Any, table_fqn: str) -> list[dict[str, Any]]:
+    return _collect_paginated_rows(
+        spark,
+        query_builder=lambda last_key: f"""
+SELECT
+    player_id,
+    CAST(registration_date AS DATE) AS registration_date,
+    current_registration_flag
+FROM {table_fqn}
+WHERE 1 = 1
+{_registration_continuation_sql(last_key)}
+ORDER BY
+    player_id,
+    COALESCE(CAST(registration_date AS DATE), DATE('9999-12-31')),
+    CASE WHEN current_registration_flag THEN 1 ELSE 0 END
+LIMIT {FEATURE_SOURCE_PAGE_SIZE}
+""".strip(),
+        key_builder=_registration_sort_key,
+    )
+
+
+def _collect_player_rows(spark: Any, table_fqn: str) -> list[dict[str, Any]]:
+    return _collect_paginated_rows(
+        spark,
+        query_builder=lambda last_key: f"""
+SELECT
+    player_id,
+    display_name,
+    country_code,
+    active_flag
+FROM {table_fqn}
+WHERE 1 = 1
+{_player_continuation_sql(last_key)}
+ORDER BY player_id
+LIMIT {FEATURE_SOURCE_PAGE_SIZE}
+""".strip(),
+        key_builder=_player_sort_key,
+    )
+
+
+def _collect_paginated_rows(
+    spark: Any,
+    *,
+    query_builder: Any,
+    key_builder: Any,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    last_key: Any = None
+    while True:
+        page = spark.sql(query_builder(last_key)).collect()
+        if not page:
+            break
+        last_record: dict[str, Any] | None = None
+        for row in page:
+            record = row.asDict(recursive=True) if hasattr(row, "asDict") else dict(row)
+            rows.append(record)
+            last_record = record
+        if len(page) < FEATURE_SOURCE_PAGE_SIZE or last_record is None:
+            break
+        last_key = key_builder(last_record)
+    return rows
 
 
 def _group_rows_by_key(
@@ -1121,6 +1244,115 @@ def _group_rows_by_key(
             continue
         grouped.setdefault(key_value, []).append(row)
     return grouped
+
+
+def _rating_history_sort_key(row: dict[str, Any]) -> tuple[str, date, int, float]:
+    return (
+        _normalize_required_string(row.get("player_id")),
+        _parse_required_date(row.get("rating_effective_date")),
+        _coerce_int(row.get("rated_match_count")) or 0,
+        _coerce_float(row.get("analytical_rating_value")) or 0.0,
+    )
+
+
+def _assessment_history_sort_key(row: dict[str, Any]) -> tuple[str, date, float, float]:
+    return (
+        _normalize_required_string(row.get("player_id")),
+        _parse_required_date(row.get("assessment_date")),
+        _coerce_float(row.get("assessment_value")) or 0.0,
+        _coerce_float(row.get("assessment_confidence")) or 0.0,
+    )
+
+
+def _registration_sort_key(row: dict[str, Any]) -> tuple[str, date, int]:
+    return (
+        _normalize_required_string(row.get("player_id")),
+        _parse_date_value(row.get("registration_date")) or date.max,
+        1 if _coerce_bool(row.get("current_registration_flag")) else 0,
+    )
+
+
+def _player_sort_key(row: dict[str, Any]) -> str:
+    return _normalize_required_string(row.get("player_id"))
+
+
+def _rating_history_continuation_sql(last_key: tuple[str, date, int, float] | None) -> str:
+    if last_key is None:
+        return ""
+    player_id, effective_date, rated_match_count, rating_value = last_key
+    return f"""
+  AND (
+      player_id > '{_sql_string_literal(player_id)}'
+      OR (
+          player_id = '{_sql_string_literal(player_id)}'
+          AND CAST(rating_effective_date AS DATE) > DATE('{effective_date.isoformat()}')
+      )
+      OR (
+          player_id = '{_sql_string_literal(player_id)}'
+          AND CAST(rating_effective_date AS DATE) = DATE('{effective_date.isoformat()}')
+          AND COALESCE(rated_match_count, 0) > {rated_match_count}
+      )
+      OR (
+          player_id = '{_sql_string_literal(player_id)}'
+          AND CAST(rating_effective_date AS DATE) = DATE('{effective_date.isoformat()}')
+          AND COALESCE(rated_match_count, 0) = {rated_match_count}
+          AND COALESCE(analytical_rating_value, 0.0) > {rating_value}
+      )
+  )
+""".rstrip()
+
+
+def _assessment_history_continuation_sql(last_key: tuple[str, date, float, float] | None) -> str:
+    if last_key is None:
+        return ""
+    player_id, assessment_date, assessment_value, assessment_confidence = last_key
+    return f"""
+  AND (
+      player_id > '{_sql_string_literal(player_id)}'
+      OR (
+          player_id = '{_sql_string_literal(player_id)}'
+          AND CAST(assessment_date AS DATE) > DATE('{assessment_date.isoformat()}')
+      )
+      OR (
+          player_id = '{_sql_string_literal(player_id)}'
+          AND CAST(assessment_date AS DATE) = DATE('{assessment_date.isoformat()}')
+          AND COALESCE(assessment_value, 0.0) > {assessment_value}
+      )
+      OR (
+          player_id = '{_sql_string_literal(player_id)}'
+          AND CAST(assessment_date AS DATE) = DATE('{assessment_date.isoformat()}')
+          AND COALESCE(assessment_value, 0.0) = {assessment_value}
+          AND COALESCE(assessment_confidence, 0.0) > {assessment_confidence}
+      )
+  )
+""".rstrip()
+
+
+def _registration_continuation_sql(last_key: tuple[str, date, int] | None) -> str:
+    if last_key is None:
+        return ""
+    player_id, registration_date, current_registration_flag = last_key
+    registration_date_literal = registration_date.isoformat() if registration_date != date.max else "9999-12-31"
+    return f"""
+  AND (
+      player_id > '{_sql_string_literal(player_id)}'
+      OR (
+          player_id = '{_sql_string_literal(player_id)}'
+          AND COALESCE(CAST(registration_date AS DATE), DATE('9999-12-31')) > DATE('{registration_date_literal}')
+      )
+      OR (
+          player_id = '{_sql_string_literal(player_id)}'
+          AND COALESCE(CAST(registration_date AS DATE), DATE('9999-12-31')) = DATE('{registration_date_literal}')
+          AND CASE WHEN current_registration_flag THEN 1 ELSE 0 END > {current_registration_flag}
+      )
+  )
+""".rstrip()
+
+
+def _player_continuation_sql(last_key: str | None) -> str:
+    if last_key is None:
+        return ""
+    return f"  AND player_id > '{_sql_string_literal(last_key)}'"
 
 
 def _validate_key_constraints(
@@ -1189,6 +1421,10 @@ def _normalize_required_string(value: Any) -> str:
     if normalized is None:
         raise ValueError("Expected a non-empty string value.")
     return normalized
+
+
+def _sql_string_literal(value: str) -> str:
+    return value.replace("'", "''")
 
 
 def _parse_date_value(value: Any) -> date | None:
