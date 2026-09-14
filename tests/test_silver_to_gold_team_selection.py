@@ -299,6 +299,69 @@ def test_build_team_selection_scorecards_excludes_inactive_teams_and_classifies_
     assert {row["team_id"] for row in rows} == {"team-1", "team-2"}
 
 
+def test_build_team_selection_scorecards_applies_context_before_confidence() -> None:
+    (
+        teams,
+        memberships,
+        team_features,
+        partnerships,
+        player_scorecards,
+        quality,
+        resolved,
+        predictions,
+    ) = _sample_team_selection_inputs()
+
+    baseline_rows = build_team_selection_scorecards(
+        teams_rows=teams,
+        team_memberships_rows=memberships,
+        team_performance_features_rows=team_features,
+        partnership_effectiveness_rows=partnerships,
+        player_scorecard_rows=player_scorecards,
+        entity_data_quality_confidence_rows=quality,
+        resolved_match_teams_rows=resolved,
+        match_outcome_predictions_rows=predictions,
+        analysis_as_of_date=date(2025, 12, 31),
+        scoring_scenario="BALANCED",
+        scorecards_config=_scorecards_config(),
+        eligibility_config=_eligibility_config(),
+    )
+    context_rows = build_team_selection_scorecards(
+        teams_rows=teams,
+        team_memberships_rows=memberships,
+        team_performance_features_rows=team_features,
+        partnership_effectiveness_rows=partnerships,
+        player_scorecard_rows=player_scorecards,
+        entity_data_quality_confidence_rows=quality,
+        resolved_match_teams_rows=resolved,
+        match_outcome_predictions_rows=predictions,
+        team_context_adjustment_rows=(
+            {
+                "team_id": "team-1",
+                "analysis_as_of_date": date(2025, 12, 31),
+                "team_regional_strength_factor": 1.0,
+                "team_age_factor": 0.98,
+                "team_fatigue_factor": 0.97,
+                "context_adjustment_factor": 0.9506,
+                "context_evidence_status": "COMPLETE",
+            },
+        ),
+        analysis_as_of_date=date(2025, 12, 31),
+        scoring_scenario="BALANCED",
+        scorecards_config=_scorecards_config(),
+        eligibility_config=_eligibility_config(),
+    )
+    baseline = next(row for row in baseline_rows if row["team_id"] == "team-1")
+    adjusted = next(row for row in context_rows if row["team_id"] == "team-1")
+
+    assert adjusted["raw_team_selection_score"] == baseline["raw_team_selection_score"]
+    assert adjusted["context_adjusted_team_score"] == round(
+        adjusted["raw_team_selection_score"] * 0.9506, 4
+    )
+    assert adjusted["confidence_adjusted_team_score"] == round(
+        adjusted["context_adjusted_team_score"] * adjusted["confidence_factor"], 4
+    )
+
+
 def test_build_team_selection_scorecards_uses_membership_dates_not_only_current_flag() -> None:
     (
         teams,

@@ -44,6 +44,8 @@ build_match_outcome_products
         |
 build_scorecards_and_rankings
         |
+build_team_context_adjustments
+        |
 build_olympic_candidates
         |
 build_olympic_recommendations
@@ -113,6 +115,7 @@ This workflow resource currently orchestrates the validated Phase 3 through Phas
 - `27_g2g_phase8_entity_quality_confidence_harness.py`
 - `28_g2g_phase9_match_outcome_harness.py`
 - `29_g2g_phase10_player_scorecard_harness.py`
+- `38_g2g_context_adjustment_harness.py`
 - `30_g2g_phase11_team_selection_harness.py`
 - `31_g2g_phase12_recommendation_harness.py`
 - `32_g2g_phase13_sensitivity_harness.py`

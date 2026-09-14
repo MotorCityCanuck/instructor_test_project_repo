@@ -42,6 +42,7 @@ def test_workflow_tasks_form_linear_silver_to_gold_graph() -> None:
         "build_quality_confidence",
         "build_match_outcome_products",
         "build_scorecards_and_rankings",
+        "build_team_context_adjustments",
         "build_olympic_candidates",
         "build_olympic_recommendations",
         "build_sensitivity_and_explanations",
@@ -59,7 +60,8 @@ def test_workflow_tasks_form_linear_silver_to_gold_graph() -> None:
     assert depends_on["build_quality_confidence"] == ["build_team_features"]
     assert depends_on["build_match_outcome_products"] == ["build_quality_confidence"]
     assert depends_on["build_scorecards_and_rankings"] == ["build_match_outcome_products"]
-    assert depends_on["build_olympic_candidates"] == ["build_scorecards_and_rankings"]
+    assert depends_on["build_team_context_adjustments"] == ["build_scorecards_and_rankings"]
+    assert depends_on["build_olympic_candidates"] == ["build_team_context_adjustments"]
     assert depends_on["build_olympic_recommendations"] == ["build_olympic_candidates"]
     assert depends_on["build_sensitivity_and_explanations"] == ["build_olympic_recommendations"]
 
@@ -91,6 +93,7 @@ def test_workflow_uses_python_script_tasks() -> None:
         "27_g2g_phase8_entity_quality_confidence_harness.py",
         "28_g2g_phase9_match_outcome_harness.py",
         "29_g2g_phase10_player_scorecard_harness.py",
+        "38_g2g_context_adjustment_harness.py",
         "30_g2g_phase11_team_selection_harness.py",
         "31_g2g_phase12_recommendation_harness.py",
         "32_g2g_phase13_sensitivity_harness.py",

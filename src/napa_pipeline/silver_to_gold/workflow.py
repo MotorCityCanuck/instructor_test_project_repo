@@ -72,6 +72,10 @@ PHASE10_TARGET_TABLES = (
     "national_player_rankings",
 )
 
+PHASE_CONTEXT_TARGET_TABLES = (
+    "team_context_adjustment_features",
+)
+
 PHASE11_TARGET_TABLES = (
     "team_selection_scorecards",
     "olympic_team_candidates",
@@ -95,6 +99,7 @@ MATERIALIZED_GOLD_TARGET_TABLES = (
     *PHASE8_TARGET_TABLES,
     *PHASE9_TARGET_TABLES,
     *PHASE10_TARGET_TABLES,
+    *PHASE_CONTEXT_TARGET_TABLES,
     *PHASE11_TARGET_TABLES,
     *PHASE12_TARGET_TABLES,
     *PHASE13_TARGET_TABLES,

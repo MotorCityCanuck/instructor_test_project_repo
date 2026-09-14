@@ -127,6 +127,14 @@ gold_tables:
     transform: build_national_player_rankings
     primary_key: [country_code, ranking_group, player_id, scoring_scenario]
 
+  team_context_adjustment_features:
+    enabled: true
+    build_order: 165
+    stage: context_adjustments
+    target: team_context_adjustment_features
+    transform: build_team_context_adjustment_features
+    primary_key: [team_id, analysis_as_of_date]
+
   team_selection_scorecards:
     enabled: true
     build_order: 170

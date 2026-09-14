@@ -1,0 +1,27 @@
+context_adjustments:
+  enabled: true
+
+  regional:
+    lookback_days: 365
+    min_effective_observations: 100.0
+    shrinkage_k: 1000.0
+    residual_multiplier: 2.0
+    factor_floor: 0.98
+    factor_ceiling: 1.02
+
+  age:
+    neutral_through_age: 35
+    quadratic_coefficient: 0.00006
+    max_penalty: 0.06
+
+  fatigue:
+    lookback_days: 10
+    decay_days: 3.0
+    points_scale: 100.0
+    threshold: 0.75
+    penalty_rate: 0.03
+    max_penalty: 0.05
+
+  composite:
+    factor_floor: 0.92
+    factor_ceiling: 1.02

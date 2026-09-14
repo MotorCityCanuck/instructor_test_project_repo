@@ -69,9 +69,10 @@ REQUIRED_SOURCE_COLUMNS = (
     "eligible_team_flag",
     "final_team_selection_score",
     "combined_team_confidence",
-    "regional_adjustment",
-    "age_adjustment",
-    "fatigue_adjustment",
+    "team_regional_strength_factor",
+    "team_age_factor",
+    "team_fatigue_factor",
+    "context_adjustment_factor",
 )
 
 
@@ -196,9 +197,9 @@ WITH required_groups AS (
         scorecard.country_code,
         scorecard.team_category AS division,
         scorecard.final_team_selection_score AS selection_score,
-        scorecard.regional_adjustment,
-        scorecard.age_adjustment,
-        scorecard.fatigue_adjustment,
+        scorecard.team_regional_strength_factor - 1.0 AS regional_adjustment,
+        scorecard.team_age_factor - 1.0 AS age_adjustment,
+        scorecard.team_fatigue_factor - 1.0 AS fatigue_adjustment,
         scorecard.combined_team_confidence AS confidence_metric
     FROM {scorecards_fqn} AS scorecard
     INNER JOIN required_groups AS required_group

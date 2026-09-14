@@ -64,6 +64,7 @@ The Silver-to-Gold workflow publishes Gold outputs in phase order.
 | 8 | `entity_data_quality_confidence` |
 | 9 | `match_outcome_training_set`, `match_outcome_predictions`, `match_model_metrics` |
 | 10 | `player_evaluation_scorecards`, `national_player_rankings` |
+| Context | `team_context_adjustment_features` |
 | 11 | `team_selection_scorecards`, `olympic_team_candidates` |
 | 12 | `olympic_team_recommendations` |
 | 13 | `selection_sensitivity_results`, `recommendation_explanations` |
@@ -89,9 +90,10 @@ To trace a recommendation:
 2. Join to `recommendation_explanations` for rationale text and stability summary.
 3. Join to `selection_sensitivity_results` by country, category, team, and scenario.
 4. Join to `team_selection_scorecards` for component scores and eligibility reason codes.
-5. Trace team evidence through `team_performance_features`, `partnership_effectiveness`, and `entity_data_quality_confidence`.
-6. Trace player evidence through `player_evaluation_scorecards`, `player_performance_features`, `player_development_features`, and `player_current_ratings`.
-7. Trace competition evidence back through `competition_match_sides`, `competition_player_matches`, and Silver `matches` / `match_teams` / `match_team_players` / `match_games`.
+5. Trace contextual evidence through `team_context_adjustment_features`, which derives regional factors from `competition_match_sides`, age from Silver `players`, and fatigue from `competition_player_matches`.
+6. Trace team evidence through `team_performance_features`, `partnership_effectiveness`, and `entity_data_quality_confidence`.
+7. Trace player evidence through `player_evaluation_scorecards`, `player_performance_features`, `player_development_features`, and `player_current_ratings`.
+8. Trace competition evidence back through `competition_match_sides`, `competition_player_matches`, and Silver `matches` / `match_teams` / `match_team_players` / `match_games`.
 
 ## Known Lineage Gaps
 

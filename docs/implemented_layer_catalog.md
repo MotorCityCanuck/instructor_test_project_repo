@@ -31,6 +31,7 @@ Configured runtime defaults:
 | `napa_bronze_to_silver` | Validate Bronze sources and publish Silver tables, rejects, and convenience views | `release_name` | `config/bronze_to_silver/workflows/napa_bronze_to_silver.job.yml` |
 | `napa_silver_to_gold` | Publish Gold analytical products from Phase 3 through Phase 13 | `release_name`, optional `analysis_as_of_date` | `config/silver_to_gold/workflows/napa_silver_to_gold.job.yml` |
 | `napa_silver_to_gold_audit` | Profile and validate published Gold-layer contents | `release_name`, optional `analysis_as_of_date` | `config/silver_to_gold/workflows/napa_silver_to_gold_audit.job.yml` |
+| `napa_olympic_team_selection` | Select configurable Olympic team sets from governed Gold scorecards | `release_name`, `team_set_count` | `config/silver_to_gold/workflows/napa_olympic_team_selection.job.yml` |
 
 ## Raw Layer
 
@@ -145,6 +146,7 @@ Gold publishes business-ready analytical outputs from the conformed Silver layer
 | `match_model_metrics` | 9 | `modeling` | 140 | `model_run_id`, `split_name`, `metric_name` | Published model metrics |
 | `player_evaluation_scorecards` | 10 | `scorecards` | 150 | `player_id`, `scoring_scenario` | Player evaluation scorecards |
 | `national_player_rankings` | 10 | `scorecards` | 160 | `country_code`, `ranking_group`, `player_id`, `scoring_scenario` | National player ranking outputs |
+| `team_context_adjustment_features` | Context | `context_adjustments` | 165 | `team_id`, `analysis_as_of_date` | Regional, age, and recent-workload context evidence and bounded team factors |
 | `team_selection_scorecards` | 11 | `scorecards` | 170 | `team_id`, `scoring_scenario` | Team selection scorecards |
 | `olympic_team_candidates` | 11 | `recommendations` | 180 | `country_code`, `category_code`, `team_id`, `scoring_scenario` | Ranked team-candidate layer |
 | `olympic_team_recommendations` | 12 | `recommendations` | 190 | `country_code`, `category_code`, `team_id`, `scoring_scenario` | Recommendation statuses and rationale |

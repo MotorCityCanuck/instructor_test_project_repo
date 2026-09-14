@@ -68,6 +68,7 @@ match_outcome_predictions
 match_model_metrics
 player_evaluation_scorecards
 national_player_rankings
+team_context_adjustment_features
 team_selection_scorecards
 olympic_team_candidates
 olympic_team_recommendations

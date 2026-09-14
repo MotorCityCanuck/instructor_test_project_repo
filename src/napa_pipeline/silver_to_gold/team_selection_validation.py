@@ -63,6 +63,19 @@ PHASE11_REQUIRED_SOURCE_COLUMNS: dict[str, tuple[str, str, tuple[str, ...]]] = {
             "feature_evidence_status",
         ),
     ),
+    "team_context_adjustment_features": (
+        "gold",
+        "team_context_adjustment_features",
+        (
+            "team_id",
+            "analysis_as_of_date",
+            "team_regional_strength_factor",
+            "team_age_factor",
+            "team_fatigue_factor",
+            "context_adjustment_factor",
+            "context_evidence_status",
+        ),
+    ),
     "partnership_effectiveness": (
         "gold",
         "partnership_effectiveness",

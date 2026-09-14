@@ -92,7 +92,7 @@ def test_gold_source_contract_rejects_missing_governed_adjustments() -> None:
     environment = resolve_release_environment(config)
     spark = _FakeSpark(_FakeTable(["team_id", "final_team_selection_score"]))
 
-    with pytest.raises(OlympicTeamSelectionError, match="regional_adjustment"):
+    with pytest.raises(OlympicTeamSelectionError, match="team_regional_strength_factor"):
         validate_gold_source_contract(spark, environment)
 
 
@@ -109,9 +109,9 @@ def test_selection_sql_uses_governed_score_and_deterministic_tie_breakers() -> N
 
     assert "team_selection_scorecards" in sql
     assert "final_team_selection_score AS selection_score" in sql
-    assert "regional_adjustment" in sql
-    assert "age_adjustment" in sql
-    assert "fatigue_adjustment" in sql
+    assert "team_regional_strength_factor - 1.0 AS regional_adjustment" in sql
+    assert "team_age_factor - 1.0 AS age_adjustment" in sql
+    assert "team_fatigue_factor - 1.0 AS fatigue_adjustment" in sql
     assert "confidence_metric DESC NULLS LAST" in sql
     assert "team_id ASC" in sql
     assert "selection_rank <= 4" in sql

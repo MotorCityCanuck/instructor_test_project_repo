@@ -124,11 +124,24 @@ resources:
               - --analysis-as-of-date
               - "{{job.parameters.analysis_as_of_date}}"
 
-        - task_key: build_olympic_candidates
+        - task_key: build_team_context_adjustments
           environment_key: napa_serverless_python
           timeout_seconds: 7200
           depends_on:
             - task_key: build_scorecards_and_rankings
+          spark_python_task:
+            python_file: ${var.script_root}/38_g2g_context_adjustment_harness.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --analysis-as-of-date
+              - "{{job.parameters.analysis_as_of_date}}"
+
+        - task_key: build_olympic_candidates
+          environment_key: napa_serverless_python
+          timeout_seconds: 7200
+          depends_on:
+            - task_key: build_team_context_adjustments
           spark_python_task:
             python_file: ${var.script_root}/30_g2g_phase11_team_selection_harness.py
             parameters:

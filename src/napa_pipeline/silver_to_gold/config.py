@@ -34,6 +34,7 @@ REQUIRED_TOP_LEVEL_KEYS = (
     "features",
     "models",
     "scorecards",
+    "context_adjustments",
     "sensitivity",
     "quality_rules",
     "logging",
@@ -109,6 +110,7 @@ def load_silver_to_gold_config(
         "features.yml",
         "models.yml",
         "scorecards.yml",
+        "context_adjustments.yml",
         "sensitivity.yml",
         "quality_rules.yml",
         "logging.yml",
@@ -192,6 +194,7 @@ def validate_config(config: dict[str, Any], expected_release_name: str) -> None:
     _validate_model_config(config["models"])
     _validate_eligibility(config["eligibility"])
     _validate_scorecards(config["scorecards"])
+    _validate_context_adjustments(config["context_adjustments"])
 
     unresolved = list(PLACEHOLDER_PATTERN.finditer(yaml.safe_dump(config)))
     if unresolved:
@@ -322,6 +325,37 @@ def _validate_scorecards(scorecards: dict[str, Any]) -> None:
             )
 
 
+def _validate_context_adjustments(context_adjustments: dict[str, Any]) -> None:
+    if not isinstance(context_adjustments.get("enabled"), bool):
+        raise SilverToGoldConfigError("context_adjustments.enabled must be boolean.")
+    for section_name in ("regional", "age", "fatigue", "composite"):
+        if not isinstance(context_adjustments.get(section_name), dict):
+            raise SilverToGoldConfigError(
+                f"context_adjustments.{section_name} must be a mapping."
+            )
+
+    regional = context_adjustments["regional"]
+    fatigue = context_adjustments["fatigue"]
+    composite = context_adjustments["composite"]
+    for name, value in (
+        ("regional.lookback_days", regional.get("lookback_days")),
+        ("regional.min_effective_observations", regional.get("min_effective_observations")),
+        ("regional.shrinkage_k", regional.get("shrinkage_k")),
+        ("fatigue.lookback_days", fatigue.get("lookback_days")),
+        ("fatigue.decay_days", fatigue.get("decay_days")),
+        ("fatigue.points_scale", fatigue.get("points_scale")),
+    ):
+        if not isinstance(value, (int, float)) or float(value) <= 0:
+            raise SilverToGoldConfigError(f"context_adjustments.{name} must be positive.")
+    for section_name, section in (("regional", regional), ("composite", composite)):
+        floor = section.get("factor_floor")
+        ceiling = section.get("factor_ceiling")
+        if not isinstance(floor, (int, float)) or not isinstance(ceiling, (int, float)) or floor > ceiling:
+            raise SilverToGoldConfigError(
+                f"context_adjustments.{section_name} factor bounds are invalid."
+            )
+
+
 def parse_optional_analysis_as_of_date(value: str | None) -> date | None:
     """Parse an optional analysis-as-of date string."""
     if value is None:
@@ -391,4 +425,3 @@ def _coerce_resolved_scalar(value: str) -> Any:
     if re.fullmatch(r"[0-9]+", value):
         return int(value)
     return value
-

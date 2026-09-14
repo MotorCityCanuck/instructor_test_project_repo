@@ -734,6 +734,37 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 - Unresolved items:
   - current rankings do not yet publish a separate category-specific grouping beyond the available gender split
 
+### `team_context_adjustment_features`
+
+- Status: `implemented`
+- Phase: `Context`
+- Intended purpose: transparent per-team regional strength, current-performance age, and recent-workload context factors
+- Expected Silver / Gold dependencies:
+  - `players`
+  - `teams`
+  - `team_memberships`
+  - `competition_match_sides`
+  - `competition_player_matches`
+- Current contract notes:
+  - regional residuals are country-centered and reliability-shrunk using only completed, as-of-date match sides
+  - age and fatigue factors are calculated per player and combined with geometric means
+  - missing regional or age evidence is neutral and marked `PARTIAL`; no recent matches is a neutral fatigue signal
+- Current implemented columns:
+  - `team_id`
+  - `analysis_as_of_date`
+  - `player_one_id`, `player_two_id`
+  - `player_one_home_region_id`, `player_two_home_region_id`
+  - `player_one_regional_effective_observations`, `player_two_regional_effective_observations`
+  - `player_one_regional_mean_residual`, `player_two_regional_mean_residual`
+  - `player_one_country_mean_residual`, `player_two_country_mean_residual`
+  - `player_one_regional_reliability`, `player_two_regional_reliability`
+  - `player_one_regional_strength_factor`, `player_two_regional_strength_factor`, `team_regional_strength_factor`
+  - `player_one_age`, `player_two_age`, `player_one_age_factor`, `player_two_age_factor`, `team_age_factor`
+  - `player_one_matches_last_10_days`, `player_two_matches_last_10_days`
+  - `player_one_fatigue_load`, `player_two_fatigue_load`
+  - `player_one_fatigue_factor`, `player_two_fatigue_factor`, `team_fatigue_factor`
+  - `unbounded_context_adjustment_factor`, `context_adjustment_factor`, `context_evidence_status`
+
 ### `team_selection_scorecards`
 
 - Status: `implemented`
@@ -748,11 +779,12 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
   - `entity_data_quality_confidence`
   - `resolved_match_teams`
   - `match_outcome_predictions`
+  - `team_context_adjustment_features`
 - Current contract notes:
   - current implementation is country-and-category scoped from the configured eligibility universe rather than a global ranking table
   - all configured teams are classified, including inactive or currently ineligible teams
   - current score uses the configured Phase 11 team weights from `scorecards.yml`
-  - confidence adjustment follows the documented bounded factor approach; risk penalties remain a transparent reference implementation
+  - context adjustment is applied after the raw score and before the documented confidence factor; risk penalties remain a transparent reference implementation
 - Current implemented columns:
   - `team_id`
   - `scoring_scenario`
@@ -793,6 +825,12 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
   - `confidence_component_score`
   - `combined_team_confidence`
   - `raw_team_selection_score`
+  - `team_regional_strength_factor`
+  - `team_age_factor`
+  - `team_fatigue_factor`
+  - `context_adjustment_factor`
+  - `context_adjusted_team_score`
+  - `context_evidence_status`
   - `confidence_factor`
   - `confidence_adjusted_team_score`
   - `risk_penalty_score`

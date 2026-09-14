@@ -34,7 +34,7 @@ def test_load_silver_to_gold_config_returns_gold_tables_in_build_order() -> None
 
     assert table_names[0] == "competition_match_sides"
     assert table_names[-1] == "gold_run_summary"
-    assert len(table_names) == 22
+    assert len(table_names) == 23
 
 
 def test_load_silver_to_gold_config_rejects_unsupported_release() -> None:
@@ -192,6 +192,7 @@ def _copy_config_tree(tmp_path: Path) -> Path:
         Path("features.yml"),
         Path("models.yml"),
         Path("scorecards.yml"),
+        Path("context_adjustments.yml"),
         Path("sensitivity.yml"),
         Path("quality_rules.yml"),
         Path("logging.yml"),

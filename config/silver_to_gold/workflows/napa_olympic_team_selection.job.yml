@@ -1,0 +1,34 @@
+resources:
+  jobs:
+    napa_olympic_team_selection:
+      name: NAPA Olympic Team Selection
+      description: >
+        Databricks job for selecting configured sets of existing Olympic doubles teams
+        from governed Gold team-selection scorecards.
+      max_concurrent_runs: 1
+      performance_target: STANDARD
+      environments:
+        - environment_key: napa_serverless_python
+          spec:
+            environment_version: "4"
+            dependencies:
+              - pyyaml
+      parameters:
+        - name: release_name
+          default: napa_5k
+        - name: team_set_count
+          default: "1"
+      tags:
+        pipeline_name: olympic_team_selection
+        owner: instructor
+      tasks:
+        - task_key: select_olympic_teams
+          environment_key: napa_serverless_python
+          timeout_seconds: 3600
+          spark_python_task:
+            python_file: ${var.script_root}/37_select_olympic_teams.py
+            parameters:
+              - --release-name
+              - "{{job.parameters.release_name}}"
+              - --team-set-count
+              - "{{job.parameters.team_set_count}}"

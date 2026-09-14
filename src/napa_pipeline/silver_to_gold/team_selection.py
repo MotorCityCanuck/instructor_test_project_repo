@@ -137,6 +137,12 @@ TEAM_SELECTION_SCORECARDS_SCHEMA = StructType(
         StructField("confidence_component_score", DoubleType(), True),
         StructField("combined_team_confidence", DoubleType(), True),
         StructField("raw_team_selection_score", DoubleType(), True),
+        StructField("team_regional_strength_factor", DoubleType(), True),
+        StructField("team_age_factor", DoubleType(), True),
+        StructField("team_fatigue_factor", DoubleType(), True),
+        StructField("context_adjustment_factor", DoubleType(), True),
+        StructField("context_adjusted_team_score", DoubleType(), True),
+        StructField("context_evidence_status", StringType(), True),
         StructField("confidence_factor", DoubleType(), True),
         StructField("confidence_adjusted_team_score", DoubleType(), True),
         StructField("risk_penalty_score", DoubleType(), False),
@@ -217,6 +223,7 @@ def build_team_selection_scorecards(
     scoring_scenario: str,
     scorecards_config: dict[str, Any],
     eligibility_config: dict[str, Any],
+    team_context_adjustment_rows: list[dict[str, Any]] | tuple[dict[str, Any], ...] = (),
 ) -> tuple[dict[str, Any], ...]:
     """Build one team selection scorecard row per relevant team and scenario."""
     countries = {str(country).upper() for country in eligibility_config["countries"]}
@@ -266,6 +273,12 @@ def build_team_selection_scorecards(
         match_outcome_predictions_rows,
         analysis_as_of_date=analysis_as_of_date,
     )
+    context_by_team_id = {
+        _normalize_required_string(row.get("team_id")): row
+        for row in team_context_adjustment_rows
+        if _normalize_optional_string(row.get("team_id")) is not None
+        and row.get("analysis_as_of_date") == analysis_as_of_date
+    }
 
     base_rows: list[dict[str, Any]] = []
     for team_row in teams_rows:
@@ -300,6 +313,7 @@ def build_team_selection_scorecards(
         team_quality_row = team_quality_by_id.get(team_id, {})
         team_resolution_confidence = team_resolution_confidence_by_id.get(team_id)
         prediction_strength_raw = prediction_strength_by_id.get(team_id)
+        context_row = context_by_team_id.get(team_id, {})
 
         partnership_strength_raw = _weighted_average(
             (
@@ -404,6 +418,17 @@ def build_team_selection_scorecards(
                 "material_limitation_text": _normalize_optional_string(
                     team_quality_row.get("material_limitation_text")
                 ),
+                "team_regional_strength_factor": _coerce_float(
+                    context_row.get("team_regional_strength_factor")
+                ) or 1.0,
+                "team_age_factor": _coerce_float(context_row.get("team_age_factor")) or 1.0,
+                "team_fatigue_factor": _coerce_float(context_row.get("team_fatigue_factor")) or 1.0,
+                "context_adjustment_factor": _coerce_float(
+                    context_row.get("context_adjustment_factor")
+                ) or 1.0,
+                "context_evidence_status": _normalize_optional_string(
+                    context_row.get("context_evidence_status")
+                ) or "PARTIAL",
             }
         )
 
@@ -451,10 +476,19 @@ def build_team_selection_scorecards(
             if combined_team_confidence is None
             else round(0.5 + (0.5 * combined_team_confidence / 100.0), 6)
         )
+        context_adjusted_team_score = (
+            None
+            if raw_team_selection_score is None
+            else round(
+                raw_team_selection_score
+                * float(row.get("context_adjustment_factor") or 1.0),
+                4,
+            )
+        )
         confidence_adjusted_team_score = (
             None
-            if raw_team_selection_score is None or confidence_factor is None
-            else round(raw_team_selection_score * confidence_factor, 4)
+            if context_adjusted_team_score is None or confidence_factor is None
+            else round(context_adjusted_team_score * confidence_factor, 4)
         )
         risk_penalty_score = _risk_penalty_score(row, combined_team_confidence)
         final_team_selection_score = (
@@ -474,6 +508,12 @@ def build_team_selection_scorecards(
         ranking_rationale = (
             f"Final={final_team_selection_score if final_team_selection_score is not None else 'NA'}; "
             f"Confidence={round(combined_team_confidence or 0.0, 4)}; "
+            + (
+                f"Context={round(float(row.get('context_adjustment_factor') or 1.0), 4)}; "
+                if abs(float(row.get("context_adjustment_factor") or 1.0) - 1.0) >= 0.01
+                else ""
+            )
+            +
             f"Eligibility={row['eligibility_status']}"
         )
 
@@ -483,6 +523,7 @@ def build_team_selection_scorecards(
                 "confidence_component_score": confidence_component_score,
                 "combined_team_confidence": combined_team_confidence,
                 "raw_team_selection_score": raw_team_selection_score,
+                "context_adjusted_team_score": context_adjusted_team_score,
                 "confidence_factor": confidence_factor,
                 "confidence_adjusted_team_score": confidence_adjusted_team_score,
                 "risk_penalty_score": risk_penalty_score,
@@ -510,6 +551,7 @@ def build_team_selection_scorecards_sql(
     teams_fqn = get_silver_source_table_fqn(environment, "teams")
     memberships_fqn = get_silver_source_table_fqn(environment, "team_memberships")
     team_perf_fqn = get_gold_target_table_fqn(environment, "team_performance_features")
+    context_fqn = get_gold_target_table_fqn(environment, "team_context_adjustment_features")
     partnership_fqn = get_gold_target_table_fqn(environment, "partnership_effectiveness")
     player_scorecards_fqn = get_gold_target_table_fqn(environment, "player_evaluation_scorecards")
     quality_fqn = get_gold_target_table_fqn(environment, "entity_data_quality_confidence")
@@ -592,6 +634,17 @@ team_perf_career AS (
         CAST(feature_evidence_status AS STRING) AS feature_evidence_status
     FROM {team_perf_fqn}
     WHERE evidence_window = 'career'
+),
+team_context AS (
+    SELECT
+        CAST(team_id AS STRING) AS team_id,
+        CAST(team_regional_strength_factor AS DOUBLE) AS team_regional_strength_factor,
+        CAST(team_age_factor AS DOUBLE) AS team_age_factor,
+        CAST(team_fatigue_factor AS DOUBLE) AS team_fatigue_factor,
+        CAST(context_adjustment_factor AS DOUBLE) AS context_adjustment_factor,
+        CAST(context_evidence_status AS STRING) AS context_evidence_status
+    FROM {context_fqn}
+    WHERE CAST(analysis_as_of_date AS DATE) = DATE('{analysis_date_literal}')
 ),
 partnership_by_team AS (
     SELECT
@@ -711,6 +764,11 @@ base_rows AS (
         tq.data_quality_confidence_score AS data_quality_confidence_raw,
         tr.team_resolution_confidence_raw,
         tq.material_limitation_text,
+        COALESCE(context.team_regional_strength_factor, 1.0) AS team_regional_strength_factor,
+        COALESCE(context.team_age_factor, 1.0) AS team_age_factor,
+        COALESCE(context.team_fatigue_factor, 1.0) AS team_fatigue_factor,
+        COALESCE(context.context_adjustment_factor, 1.0) AS context_adjustment_factor,
+        COALESCE(context.context_evidence_status, 'PARTIAL') AS context_evidence_status,
         CASE
             WHEN tpc.team_id IS NULL OR pbt.team_id IS NULL THEN '{NONE_EVIDENCE}'
             WHEN tpc.feature_evidence_status IS NULL OR pbt.feature_evidence_status IS NULL THEN '{NONE_EVIDENCE}'
@@ -744,6 +802,8 @@ base_rows AS (
       ON tr.team_id = et.team_id
     LEFT JOIN prediction_strength AS pr
       ON pr.team_id = et.team_id
+    LEFT JOIN team_context AS context
+      ON context.team_id = et.team_id
 ),
 scored_rows AS (
     SELECT
@@ -821,7 +881,7 @@ eligibility_rows AS (
         ) AS eligibility_reason_codes
     FROM scored_rows AS scored
 ),
-final_rows AS (
+pre_context_rows AS (
     SELECT
         team_id,
         scoring_scenario,
@@ -899,6 +959,11 @@ final_rows AS (
                 4
             )
         END AS raw_team_selection_score,
+        team_regional_strength_factor,
+        team_age_factor,
+        team_fatigue_factor,
+        context_adjustment_factor,
+        context_evidence_status,
         CASE
             WHEN combined_team_confidence IS NULL THEN NULL
             ELSE ROUND(0.5 + (0.5 * combined_team_confidence / 100.0), 6)
@@ -938,7 +1003,7 @@ final_rows AS (
                             4
                         )
                     END
-                ) * (0.5 + (0.5 * combined_team_confidence / 100.0)),
+                ) * context_adjustment_factor * (0.5 + (0.5 * combined_team_confidence / 100.0)),
                 4
             )
         END AS confidence_adjusted_team_score,
@@ -991,7 +1056,7 @@ final_rows AS (
                                         4
                                     )
                                 END
-                            ) * (0.5 + (0.5 * combined_team_confidence / 100.0)),
+                            ) * context_adjustment_factor * (0.5 + (0.5 * combined_team_confidence / 100.0)),
                             4
                         )
                     END
@@ -1064,7 +1129,7 @@ final_rows AS (
                                                 4
                                             )
                                         END
-                                    ) * (0.5 + (0.5 * combined_team_confidence / 100.0)),
+                                    ) * context_adjustment_factor * (0.5 + (0.5 * combined_team_confidence / 100.0)),
                                     4
                                 )
                             END
@@ -1088,9 +1153,25 @@ final_rows AS (
                 WHEN eligibility_reason_codes IS NOT NULL AND eligibility_reason_codes <> '' THEN '{INELIGIBLE_STATUS}'
                 WHEN evidence_sufficiency_status = '{LIMITED_EVIDENCE}' THEN '{REVIEW_REQUIRED_STATUS}'
                 ELSE '{ELIGIBLE_STATUS}'
+            END,
+            CASE
+                WHEN ABS(context_adjustment_factor - 1.0) >= 0.01 THEN CONCAT(
+                    '; Context=',
+                    CAST(ROUND(context_adjustment_factor, 4) AS STRING)
+                )
+                ELSE ''
             END
         ) AS ranking_rationale
     FROM eligibility_rows
+),
+final_rows AS (
+    SELECT
+        pre_context_rows.*,
+        CASE
+            WHEN raw_team_selection_score IS NULL THEN NULL
+            ELSE ROUND(raw_team_selection_score * context_adjustment_factor, 4)
+        END AS context_adjusted_team_score
+    FROM pre_context_rows
 )
 SELECT * FROM final_rows
 """.strip()
