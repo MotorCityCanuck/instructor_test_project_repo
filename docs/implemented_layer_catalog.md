@@ -150,8 +150,11 @@ Gold publishes business-ready analytical outputs from the conformed Silver layer
 | `olympic_team_recommendations` | 12 | `recommendations` | 190 | `country_code`, `category_code`, `team_id`, `scoring_scenario` | Recommendation statuses and rationale |
 | `selection_sensitivity_results` | 13 | `sensitivity` | 200 | `country_code`, `category_code`, `team_id`, `scenario_name` | Scenario sensitivity results |
 | `recommendation_explanations` | 13 | `sensitivity` | 210 | `country_code`, `category_code`, `team_id`, `scoring_scenario` | Recommendation explanation rows |
+| `olympic_team_selections` | Post-Gold | `selection` | Standalone script | `country_code`, `division`, `team_number`, `selection_run_id` | Instructor-only configurable Olympic team-set selections |
 
 `gold_run_summary` remains configured as a planned publication table at build order 220, but it is not part of the current materialized Phase 3 through Phase 13 workflow.
+
+The standalone post-Gold selection script requires governed `regional_adjustment`, `age_adjustment`, and `fatigue_adjustment` fields on `team_selection_scorecards`. The current Phase 11 contract does not yet publish those fields, so the script fails before publication until an approved upstream contract extension is available.
 
 Column-level Gold contracts are maintained in `docs/gold_target_schema_registry.md`.
 
