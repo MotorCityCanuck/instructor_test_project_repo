@@ -1,5 +1,6 @@
 """Tests for Silver-to-Gold Phase 11 team selection builders."""
 
+from copy import deepcopy
 from datetime import date
 
 from napa_pipeline.silver_to_gold.config import load_silver_to_gold_config
@@ -16,6 +17,9 @@ from napa_pipeline.silver_to_gold.team_selection import (
     publish_phase11_team_tables,
     publish_team_selection_scorecards,
     publish_team_selection_scorecards_from_sql,
+    _derive_evidence_sufficiency_status,
+    _normalize_team_resolution_confidence,
+    _weighted_team_confidence,
 )
 from napa_pipeline.silver_to_gold.team_selection_validation import (
     PHASE11_REQUIRED_SOURCE_COLUMNS,
@@ -237,9 +241,9 @@ def _sample_team_selection_inputs():
         },
     ]
     resolved = [
-        {"match_id": "m1", "match_date": "2025-06-01", "resolved_team_id": "team-1", "team_resolution_confidence": 95.0},
-        {"match_id": "m2", "match_date": "2025-07-01", "resolved_team_id": "team-1", "team_resolution_confidence": 90.0},
-        {"match_id": "m3", "match_date": "2025-06-15", "resolved_team_id": "team-2", "team_resolution_confidence": 65.0},
+        {"match_id": "m1", "match_date": "2025-06-01", "resolved_team_id": "team-1", "team_resolution_confidence": 0.95},
+        {"match_id": "m2", "match_date": "2025-07-01", "resolved_team_id": "team-1", "team_resolution_confidence": 0.90},
+        {"match_id": "m3", "match_date": "2025-06-15", "resolved_team_id": "team-2", "team_resolution_confidence": 0.65},
     ]
     predictions = [
         {
@@ -258,6 +262,109 @@ def _sample_team_selection_inputs():
         },
     ]
     return teams, memberships, team_features, partnerships, player_scorecards, quality, resolved, predictions
+
+
+def test_team_evidence_uses_only_team_and_partnership_statuses() -> None:
+    sufficient = {"feature_evidence_status": "SUFFICIENT"}
+    limited = {"feature_evidence_status": "LIMITED"}
+    none = {"feature_evidence_status": "NONE"}
+
+    assert _derive_evidence_sufficiency_status(sufficient, sufficient) == "SUFFICIENT"
+    assert _derive_evidence_sufficiency_status(limited, sufficient) == "LIMITED"
+    assert _derive_evidence_sufficiency_status(sufficient, limited) == "LIMITED"
+    assert _derive_evidence_sufficiency_status(none, sufficient) == "NONE"
+    assert _derive_evidence_sufficiency_status(sufficient, {}) == "NONE"
+
+
+def test_player_evidence_does_not_change_sufficient_team_evidence() -> None:
+    team_features = {"feature_evidence_status": "SUFFICIENT"}
+    partnership = {"feature_evidence_status": "SUFFICIENT"}
+
+    assert _derive_evidence_sufficiency_status(team_features, partnership) == "SUFFICIENT"
+
+
+def test_team_resolution_confidence_normalizes_and_bounds_raw_probability() -> None:
+    assert _normalize_team_resolution_confidence(1.0) == 100.0
+    assert _normalize_team_resolution_confidence(0.9) == 90.0
+    assert _normalize_team_resolution_confidence(0.6) == 60.0
+    assert _normalize_team_resolution_confidence(0.0) == 0.0
+    assert _normalize_team_resolution_confidence(1.5) == 100.0
+    assert _normalize_team_resolution_confidence(-0.5) == 0.0
+
+
+def test_team_confidence_excludes_player_confidence_and_reweights_nulls() -> None:
+    weights = _scorecards_config()["team_confidence_weights"]
+    first_score, first_weight, first_count = _weighted_team_confidence(
+        (
+            (80.0, weights["team_feature"]),
+            (90.0, weights["data_quality"]),
+            (60.0, weights["team_resolution"]),
+        )
+    )
+    second_score, second_weight, second_count = _weighted_team_confidence(
+        (
+            (80.0, weights["team_feature"]),
+            (None, weights["data_quality"]),
+            (100.0, weights["team_resolution"]),
+        )
+    )
+
+    assert first_score == 78.0
+    assert first_weight == 1.0
+    assert first_count == 3
+    assert second_score == 88.0
+    assert second_weight == 0.666667
+    assert second_count == 2
+
+
+def test_team_confidence_returns_null_when_no_component_is_available() -> None:
+    score, available_weight, component_count = _weighted_team_confidence(
+        ((None, 0.4), (None, 0.333333), (None, 0.266667))
+    )
+
+    assert score is None
+    assert available_weight == 0.0
+    assert component_count == 0
+
+
+def test_player_confidence_is_diagnostic_only_for_team_confidence() -> None:
+    inputs = _sample_team_selection_inputs()
+    baseline_rows = build_team_selection_scorecards(
+        teams_rows=inputs[0],
+        team_memberships_rows=inputs[1],
+        team_performance_features_rows=inputs[2],
+        partnership_effectiveness_rows=inputs[3],
+        player_scorecard_rows=inputs[4],
+        entity_data_quality_confidence_rows=inputs[5],
+        resolved_match_teams_rows=inputs[6],
+        match_outcome_predictions_rows=inputs[7],
+        analysis_as_of_date=date(2025, 12, 31),
+        scoring_scenario="BALANCED",
+        scorecards_config=_scorecards_config(),
+        eligibility_config=_eligibility_config(),
+    )
+    changed_player_scorecards = deepcopy(inputs[4])
+    for scorecard in changed_player_scorecards:
+        scorecard["combined_confidence_score"] = 10.0
+    changed_rows = build_team_selection_scorecards(
+        teams_rows=inputs[0],
+        team_memberships_rows=inputs[1],
+        team_performance_features_rows=inputs[2],
+        partnership_effectiveness_rows=inputs[3],
+        player_scorecard_rows=changed_player_scorecards,
+        entity_data_quality_confidence_rows=inputs[5],
+        resolved_match_teams_rows=inputs[6],
+        match_outcome_predictions_rows=inputs[7],
+        analysis_as_of_date=date(2025, 12, 31),
+        scoring_scenario="BALANCED",
+        scorecards_config=_scorecards_config(),
+        eligibility_config=_eligibility_config(),
+    )
+
+    baseline = next(row for row in baseline_rows if row["team_id"] == "team-1")
+    changed = next(row for row in changed_rows if row["team_id"] == "team-1")
+    assert baseline["player_confidence_raw"] != changed["player_confidence_raw"]
+    assert baseline["combined_team_confidence"] == changed["combined_team_confidence"]
 
 
 def test_build_team_selection_scorecards_excludes_inactive_teams_and_classifies_hard_failures() -> None:

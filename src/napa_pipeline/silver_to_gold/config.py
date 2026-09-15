@@ -302,7 +302,12 @@ def _validate_eligibility(eligibility: dict[str, Any]) -> None:
 
 
 def _validate_scorecards(scorecards: dict[str, Any]) -> None:
-    for weights_name in ("player_weights", "team_weights", "development_weights"):
+    for weights_name in (
+        "player_weights",
+        "team_weights",
+        "development_weights",
+        "team_confidence_weights",
+    ):
         weights = scorecards.get(weights_name)
         if not isinstance(weights, dict) or not weights:
             raise SilverToGoldConfigError(f"{weights_name} must be a non-empty mapping.")

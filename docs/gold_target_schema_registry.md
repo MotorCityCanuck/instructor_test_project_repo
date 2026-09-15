@@ -784,6 +784,9 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
   - current implementation is country-and-category scoped from the configured eligibility universe rather than a global ranking table
   - all configured teams are classified, including inactive or currently ineligible teams
   - current score uses the configured Phase 11 team weights from `scorecards.yml`
+  - team evidence sufficiency is based only on team-performance and partnership evidence; player evidence remains diagnostic
+  - combined team confidence uses bounded team-feature, data-quality, and normalized team-resolution components with null-aware configured reweighting
+  - data-quality confidence includes team-resolution coverage, while the explicit team-resolution component represents average resolution certainty; these are related but distinct signals
   - context adjustment is applied after the raw score and before the documented confidence factor; risk penalties remain a transparent reference implementation
 - Current implemented columns:
   - `team_id`
@@ -818,6 +821,12 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
   - `player_confidence_raw`
   - `data_quality_confidence_raw`
   - `team_resolution_confidence_raw`
+  - `team_resolution_confidence`
+  - `confidence_available_weight`
+  - `confidence_component_count`
+  - `player_one_evidence_band`
+  - `player_two_evidence_band`
+  - `player_evidence_limitation_flag`
   - `material_limitation_text`
   - `partnership_score`
   - `player_strength_score`
@@ -841,6 +850,7 @@ Do not mark a table `validated` until it has been run and checked in Databricks.
 - Unresolved items:
   - current team-selection normalization is country-and-category percentile based and may still need instructor review before it becomes the final roster methodology
   - current prediction support uses average implied win probability from published historical match predictions rather than a dedicated forward-looking matchup simulator
+  - current Silver `players.rating_confidence` values limit player-level evidence discrimination; player confidence is retained as diagnostic information and is not part of team confidence
 
 ### `olympic_team_candidates`
 

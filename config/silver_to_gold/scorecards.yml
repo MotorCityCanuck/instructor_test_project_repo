@@ -12,8 +12,14 @@ scorecards:
     prediction: 0.20
     confidence: 0.15
 
+  # Preserves the prior 0.30 / 0.25 / 0.20 relative weighting after
+  # player confidence was removed from team-confidence scoring.
+  team_confidence_weights:
+    team_feature: 0.400000
+    data_quality: 0.333333
+    team_resolution: 0.266667
+
   development_weights:
     trend: 0.50
     headroom: 0.30
     confidence: 0.20
-

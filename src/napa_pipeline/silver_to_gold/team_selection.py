@@ -130,6 +130,12 @@ TEAM_SELECTION_SCORECARDS_SCHEMA = StructType(
         StructField("player_confidence_raw", DoubleType(), True),
         StructField("data_quality_confidence_raw", DoubleType(), True),
         StructField("team_resolution_confidence_raw", DoubleType(), True),
+        StructField("team_resolution_confidence", DoubleType(), True),
+        StructField("confidence_available_weight", DoubleType(), False),
+        StructField("confidence_component_count", IntegerType(), False),
+        StructField("player_one_evidence_band", StringType(), True),
+        StructField("player_two_evidence_band", StringType(), True),
+        StructField("player_evidence_limitation_flag", BooleanType(), False),
         StructField("material_limitation_text", StringType(), True),
         StructField("partnership_score", DoubleType(), True),
         StructField("player_strength_score", DoubleType(), True),
@@ -233,6 +239,7 @@ def build_team_selection_scorecards(
         str(component): float(weight)
         for component, weight in scorecards_config["team_weights"].items()
     }
+    team_confidence_weights = _team_confidence_weights(scorecards_config)
 
     current_members_by_team = _current_members_by_team(
         team_memberships_rows,
@@ -307,6 +314,8 @@ def build_team_selection_scorecards(
         player_two_score = _coerce_float(player_two_row.get("confidence_adjusted_player_score"))
         player_one_confidence = _coerce_float(player_one_row.get("combined_confidence_score"))
         player_two_confidence = _coerce_float(player_two_row.get("combined_confidence_score"))
+        player_one_evidence_band = _normalize_optional_string(player_one_row.get("evidence_band"))
+        player_two_evidence_band = _normalize_optional_string(player_two_row.get("evidence_band"))
 
         team_perf_row = team_perf_career_by_id.get(team_id, {})
         partnership_row = partnership_by_team_id.get(team_id, {})
@@ -346,8 +355,6 @@ def build_team_selection_scorecards(
         evidence_sufficiency_status = _derive_evidence_sufficiency_status(
             team_perf_row,
             partnership_row,
-            player_one_row,
-            player_two_row,
         )
 
         candidate_attribution_allowed_flag = (
@@ -415,6 +422,12 @@ def build_team_selection_scorecards(
                 "player_confidence_raw": player_confidence_raw,
                 "data_quality_confidence_raw": data_quality_confidence_raw,
                 "team_resolution_confidence_raw": team_resolution_confidence,
+                "player_one_evidence_band": player_one_evidence_band,
+                "player_two_evidence_band": player_two_evidence_band,
+                "player_evidence_limitation_flag": _player_evidence_limitation_flag(
+                    player_one_evidence_band,
+                    player_two_evidence_band,
+                ),
                 "material_limitation_text": _normalize_optional_string(
                     team_quality_row.get("material_limitation_text")
                 ),
@@ -453,12 +466,22 @@ def build_team_selection_scorecards(
 
     final_rows: list[dict[str, Any]] = []
     for row in base_rows:
-        combined_team_confidence = _weighted_average(
-            (
-                (_coerce_float(row.get("team_feature_confidence_raw")), 0.30),
-                (_coerce_float(row.get("player_confidence_raw")), 0.25),
-                (_coerce_float(row.get("data_quality_confidence_raw")), 0.25),
-                (_coerce_float(row.get("team_resolution_confidence_raw")), 0.20),
+        team_feature_confidence = _bound_confidence_score(
+            row.get("team_feature_confidence_raw")
+        )
+        data_quality_confidence = _bound_confidence_score(
+            row.get("data_quality_confidence_raw")
+        )
+        team_resolution_confidence = _normalize_team_resolution_confidence(
+            row.get("team_resolution_confidence_raw")
+        )
+        combined_team_confidence, confidence_available_weight, confidence_component_count = (
+            _weighted_team_confidence(
+                (
+                    (team_feature_confidence, team_confidence_weights["team_feature"]),
+                    (data_quality_confidence, team_confidence_weights["data_quality"]),
+                    (team_resolution_confidence, team_confidence_weights["team_resolution"]),
+                )
             )
         )
         confidence_component_score = combined_team_confidence
@@ -520,6 +543,9 @@ def build_team_selection_scorecards(
         final_row = dict(row)
         final_row.update(
             {
+                "team_resolution_confidence": team_resolution_confidence,
+                "confidence_available_weight": confidence_available_weight,
+                "confidence_component_count": confidence_component_count,
                 "confidence_component_score": confidence_component_score,
                 "combined_team_confidence": combined_team_confidence,
                 "raw_team_selection_score": raw_team_selection_score,
@@ -566,6 +592,10 @@ def build_team_selection_scorecards_sql(
     player_strength_weight = float(scorecards_config["team_weights"]["player_strength"])
     prediction_weight = float(scorecards_config["team_weights"]["prediction"])
     confidence_weight = float(scorecards_config["team_weights"]["confidence"])
+    team_confidence_weights = _team_confidence_weights(scorecards_config)
+    team_feature_confidence_weight = team_confidence_weights["team_feature"]
+    data_quality_confidence_weight = team_confidence_weights["data_quality"]
+    team_resolution_confidence_weight = team_confidence_weights["team_resolution"]
 
     return f"""
 WITH source_teams AS (
@@ -722,6 +752,11 @@ base_rows AS (
         get(mr.player_ids, 1) AS player_two_id,
         ps1.display_name AS player_one_display_name,
         ps2.display_name AS player_two_display_name,
+        ps1.evidence_band AS player_one_evidence_band,
+        ps2.evidence_band AS player_two_evidence_band,
+        COALESCE(ps1.evidence_band, '') IN ('VERY_LOW', 'LOW', 'MODERATE', 'CRITICAL')
+            OR COALESCE(ps2.evidence_band, '') IN ('VERY_LOW', 'LOW', 'MODERATE', 'CRITICAL')
+            AS player_evidence_limitation_flag,
         COALESCE(mr.current_member_count, 0) AS current_member_count,
         COALESCE(mr.membership_overlap_warning_flag, FALSE) AS membership_overlap_warning_flag,
         pbt.partnership_key,
@@ -774,8 +809,6 @@ base_rows AS (
             WHEN tpc.feature_evidence_status IS NULL OR pbt.feature_evidence_status IS NULL THEN '{NONE_EVIDENCE}'
             WHEN tpc.feature_evidence_status = '{NONE_EVIDENCE}' OR pbt.feature_evidence_status = '{NONE_EVIDENCE}' THEN '{NONE_EVIDENCE}'
             WHEN tpc.feature_evidence_status = '{LIMITED_EVIDENCE}' OR pbt.feature_evidence_status = '{LIMITED_EVIDENCE}'
-                OR COALESCE(ps1.evidence_band, 'LOW') IN ('LOW', 'MODERATE')
-                OR COALESCE(ps2.evidence_band, 'LOW') IN ('LOW', 'MODERATE')
                 THEN '{LIMITED_EVIDENCE}'
             ELSE '{SUFFICIENT_EVIDENCE}'
         END AS evidence_sufficiency_status,
@@ -834,40 +867,48 @@ scored_rows AS (
         END AS prediction_score
     FROM base_rows AS base
 ),
-eligibility_rows AS (
+bounded_confidence_rows AS (
     SELECT
         scored.*,
         CASE
-            WHEN team_feature_confidence_raw IS NOT NULL
-             AND player_confidence_raw IS NOT NULL
-             AND data_quality_confidence_raw IS NOT NULL
-             AND team_resolution_confidence_raw IS NOT NULL
-                THEN ROUND(
-                    (team_feature_confidence_raw * 0.30)
-                    + (player_confidence_raw * 0.25)
-                    + (data_quality_confidence_raw * 0.25)
-                    + (team_resolution_confidence_raw * 0.20),
-                    4
-                )
-            WHEN team_feature_confidence_raw IS NOT NULL
-              OR player_confidence_raw IS NOT NULL
-              OR data_quality_confidence_raw IS NOT NULL
-              OR team_resolution_confidence_raw IS NOT NULL
-                THEN ROUND(
-                    (
-                        COALESCE(team_feature_confidence_raw, 0.0) * 0.30
-                        + COALESCE(player_confidence_raw, 0.0) * 0.25
-                        + COALESCE(data_quality_confidence_raw, 0.0) * 0.25
-                        + COALESCE(team_resolution_confidence_raw, 0.0) * 0.20
-                    )
-                    / (
-                        CASE WHEN team_feature_confidence_raw IS NOT NULL THEN 0.30 ELSE 0.0 END
-                        + CASE WHEN player_confidence_raw IS NOT NULL THEN 0.25 ELSE 0.0 END
-                        + CASE WHEN data_quality_confidence_raw IS NOT NULL THEN 0.25 ELSE 0.0 END
-                        + CASE WHEN team_resolution_confidence_raw IS NOT NULL THEN 0.20 ELSE 0.0 END
-                    ),
-                    4
-                )
+            WHEN team_feature_confidence_raw IS NULL THEN NULL
+            ELSE GREATEST(0.0, LEAST(100.0, team_feature_confidence_raw))
+        END AS team_feature_confidence,
+        CASE
+            WHEN data_quality_confidence_raw IS NULL THEN NULL
+            ELSE GREATEST(0.0, LEAST(100.0, data_quality_confidence_raw))
+        END AS data_quality_confidence,
+        CASE
+            WHEN team_resolution_confidence_raw IS NULL THEN NULL
+            ELSE GREATEST(0.0, LEAST(100.0, team_resolution_confidence_raw * 100.0))
+        END AS team_resolution_confidence
+    FROM scored_rows AS scored
+),
+confidence_component_rows AS (
+    SELECT
+        bounded.*,
+        (CASE WHEN team_feature_confidence IS NOT NULL THEN {team_feature_confidence_weight} ELSE 0.0 END)
+        + (CASE WHEN data_quality_confidence IS NOT NULL THEN {data_quality_confidence_weight} ELSE 0.0 END)
+        + (CASE WHEN team_resolution_confidence IS NOT NULL THEN {team_resolution_confidence_weight} ELSE 0.0 END)
+            AS confidence_available_weight,
+        (CASE WHEN team_feature_confidence IS NOT NULL THEN 1 ELSE 0 END)
+        + (CASE WHEN data_quality_confidence IS NOT NULL THEN 1 ELSE 0 END)
+        + (CASE WHEN team_resolution_confidence IS NOT NULL THEN 1 ELSE 0 END)
+            AS confidence_component_count,
+        (COALESCE(team_feature_confidence, 0.0) * {team_feature_confidence_weight})
+        + (COALESCE(data_quality_confidence, 0.0) * {data_quality_confidence_weight})
+        + (COALESCE(team_resolution_confidence, 0.0) * {team_resolution_confidence_weight})
+            AS confidence_weighted_numerator
+    FROM bounded_confidence_rows AS bounded
+),
+eligibility_rows AS (
+    SELECT
+        components.*,
+        CASE
+            WHEN confidence_available_weight > 0.0 THEN ROUND(
+                LEAST(100.0, GREATEST(0.0, confidence_weighted_numerator / confidence_available_weight)),
+                4
+            )
             ELSE NULL
         END AS combined_team_confidence,
         CONCAT_WS(
@@ -879,7 +920,7 @@ eligibility_rows AS (
             CASE WHEN player_two_id IS NOT NULL AND player_two_score IS NULL THEN 'UNKNOWN_PLAYER' END,
             CASE WHEN evidence_sufficiency_status = '{NONE_EVIDENCE}' THEN 'NO_VALID_TEAM_ID' END
         ) AS eligibility_reason_codes
-    FROM scored_rows AS scored
+    FROM confidence_component_rows AS components
 ),
 pre_context_rows AS (
     SELECT
@@ -896,6 +937,9 @@ pre_context_rows AS (
         player_two_id,
         player_one_display_name,
         player_two_display_name,
+        player_one_evidence_band,
+        player_two_evidence_band,
+        player_evidence_limitation_flag,
         current_member_count,
         membership_overlap_warning_flag,
         CASE
@@ -922,6 +966,9 @@ pre_context_rows AS (
         player_confidence_raw,
         data_quality_confidence_raw,
         team_resolution_confidence_raw,
+        team_resolution_confidence,
+        confidence_available_weight,
+        confidence_component_count,
         material_limitation_text,
         partnership_score,
         player_strength_score,
@@ -1607,22 +1654,59 @@ def _prediction_strength_by_team_id(
 def _derive_evidence_sufficiency_status(
     team_perf_row: dict[str, Any],
     partnership_row: dict[str, Any],
-    player_one_row: dict[str, Any],
-    player_two_row: dict[str, Any],
 ) -> str:
-    statuses = {
-        _normalize_optional_string(team_perf_row.get("feature_evidence_status")),
-        _normalize_optional_string(partnership_row.get("feature_evidence_status")),
-        _normalize_optional_string(player_one_row.get("evidence_band")),
-        _normalize_optional_string(player_two_row.get("evidence_band")),
-    }
     if not team_perf_row or not partnership_row:
         return NONE_EVIDENCE
-    if NONE_EVIDENCE in statuses or None in statuses:
+    team_status = _normalize_optional_string(team_perf_row.get("feature_evidence_status"))
+    partnership_status = _normalize_optional_string(partnership_row.get("feature_evidence_status"))
+    if team_status is None or partnership_status is None:
         return NONE_EVIDENCE
-    if LIMITED_EVIDENCE in statuses or "LOW" in statuses or "MODERATE" in statuses:
+    if team_status == NONE_EVIDENCE or partnership_status == NONE_EVIDENCE:
+        return NONE_EVIDENCE
+    if team_status == LIMITED_EVIDENCE or partnership_status == LIMITED_EVIDENCE:
         return LIMITED_EVIDENCE
     return SUFFICIENT_EVIDENCE
+
+
+def _team_confidence_weights(scorecards_config: dict[str, Any]) -> dict[str, float]:
+    """Return configured weights for the team-only confidence composite."""
+    return {
+        component: float(weight)
+        for component, weight in scorecards_config["team_confidence_weights"].items()
+    }
+
+
+def _bound_confidence_score(value: Any) -> float | None:
+    score = _coerce_float(value)
+    if score is None:
+        return None
+    return max(0.0, min(100.0, score))
+
+
+def _normalize_team_resolution_confidence(value: Any) -> float | None:
+    raw_score = _coerce_float(value)
+    if raw_score is None:
+        return None
+    return max(0.0, min(100.0, raw_score * 100.0))
+
+
+def _weighted_team_confidence(
+    components: tuple[tuple[float | None, float], ...],
+) -> tuple[float | None, float, int]:
+    """Return the bounded confidence score plus its available-weight audit fields."""
+    available = [(float(value), float(weight)) for value, weight in components if value is not None]
+    available_weight = sum(weight for _value, weight in available)
+    if available_weight == 0.0:
+        return None, 0.0, 0
+    score = sum(value * weight for value, weight in available) / available_weight
+    return round(max(0.0, min(100.0, score)), 4), round(available_weight, 6), len(available)
+
+
+def _player_evidence_limitation_flag(*evidence_bands: str | None) -> bool:
+    return any(
+        band in {"VERY_LOW", "LOW", "MODERATE", "CRITICAL"}
+        for band in evidence_bands
+    )
 
 
 def _derive_eligibility_reason_codes(
