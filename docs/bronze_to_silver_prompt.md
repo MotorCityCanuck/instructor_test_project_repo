@@ -16,7 +16,7 @@ Build a reusable, configuration-driven **Bronze-to-Silver** pipeline for the NAP
 
 Work in stages. At each stage, explain the files changed, assumptions, tests executed, and remaining issues. Inspect before editing. Preserve existing work. Do not introduce a new framework merely for preference. Do not claim that local tests prove a Spark SQL job or bundle has run successfully.
 
-Include typed and standardized entities, deterministic key handling, deduplication, parent-key validation, reject tables, quality evidence, reconciliation, operational auditing, convenience views, and full-refresh execution. Read Bronze managed Delta tables; do not rebuild Bronze or modify Raw files as part of Silver. Existing Raw files and their manifest remain available for release-quality evidence when needed.
+Include typed and standardized entities, deterministic key handling, deduplication, parent-key validation, reject tables, quality evidence, reconciliation, operational auditing, convenience views, and full-refresh execution. Read the selected profile's freshly refreshed Bronze managed Delta tables; do not rebuild Bronze or modify Raw files as part of Silver. The Raw-to-Bronze stage performs the destructive refresh of the selected dedicated Bronze schema before publication, and this Bronze-to-Silver stage must likewise destructively refresh the selected Silver and Silver-reject schemas before publication. Each run is a unique standalone load: Silver and reject rows/tables from prior runs or partial runs must not remain. Existing Raw files and their colocated manifest remain available for release-quality evidence when needed.
 
 Exclude Gold feature engineering, model selection/training, chemistry scores, confidence models, roster selection, business conclusions, hidden simulation parameters, streaming, Auto Loader, CDC, and incremental upserts into Silver. Do not invent athletes, teams, source columns, measurements, numeric acceptance thresholds, or successful run results. Existing `ad_hoc` teams are real source entities, not permission to manufacture new teams.
 
@@ -34,21 +34,23 @@ Deliverable: an implementation plan, contract matrix, configuration inventory, a
 
 ### Stage 1 — Configuration and release isolation
 
-Use one implementation for these independent, complete historical releases. They are dataset scales, not successive monthly increments:
+Use one implementation for these five independent, complete historical dataset profiles. They are dataset profiles, not successive monthly increments:
 
-| Release | Role | Expected player scale | Final decision dataset | Schema suffix |
-|---|---|---:|---|---|
-| `napa_5k` | development | 5,000 | false | `5k` |
-| `napa_50k` | validation | 50,000 | false | `50k` |
-| `napa_250k` | production-scale case data | 250,000 | true | `250k` |
+| Dataset profile / release name | Role | Data condition | Expected player scale | Final decision dataset | Schema suffix |
+|---|---|---|---:|---|---|
+| `napa_5k_clean` | development | clean | 5,000 | false | `5k_clean` |
+| `napa_5k_tainted` | development | tainted | 5,000 | false | `5k_tainted` |
+| `napa_50k_clean` | validation | clean | 50,000 | false | `50k_clean` |
+| `napa_50k_tainted` | validation | tainted | 50,000 | false | `50k_tainted` |
+| `napa_250k_production` | production-scale case data | production | 250,000 | true | `250k` |
 
-The guide assigns these to development, Silver validation, and production-scale analysis respectively. Use configuration changes, not forks of transformation code. These scale values are labels/expectations, not a reason to invent exact row-count assertions for every file. The manifest supplies actual counts.
+The guide assigns these to development, Silver validation, and production-scale analysis respectively. Use configuration changes, not forks of transformation code. These scale values are labels/expectations, not a reason to invent exact row-count assertions for every file. The colocated manifest supplies actual counts. Do not permit a clean or tainted selector for the 250K production dataset.
 
-Reference defaults are catalog `workspace`, prefix `instructor`, pipeline name `bronze_to_silver`, version `1.0.0`, project `napa_olympic_analytics`, and processing mode `full_refresh`. Externalize them. Resolve fully qualified tables as `<catalog>.<schema>.<table>`:
+Reference defaults are catalog `workspace`, prefix `napa_platform`, pipeline name `bronze_to_silver`, version `1.0.0`, project `napa_olympic_analytics`, and processing mode `full_refresh`. Externalize them. Resolve fully qualified tables as `<catalog>.<schema>.<table>`:
 
-- Bronze: `<team_prefix>_<scale>_bronze`.
-- Silver: `<team_prefix>_<scale>_silver`.
-- Rejects: `<team_prefix>_<scale>_silver_reject`.
+- Bronze: `<team_prefix>_<scale>_<condition>_bronze` for 5K/50K clean and tainted profiles; `<team_prefix>_250k_bronze` for 250K production.
+- Silver: `<team_prefix>_<scale>_<condition>_silver` for 5K/50K clean and tainted profiles; `<team_prefix>_250k_silver` for 250K production.
+- Rejects: `<team_prefix>_<scale>_<condition>_silver_reject` for 5K/50K clean and tainted profiles; `<team_prefix>_250k_silver_reject` for 250K production.
 - Shared operations: `<team_prefix>_ops`.
 
 Use the repository's configuration layout, or document an equivalent:
@@ -56,9 +58,11 @@ Use the repository's configuration layout, or document an equivalent:
 ```text
 config/bronze_to_silver/
   base.yml
-  environments/napa_5k.yml
-  environments/napa_50k.yml
-  environments/napa_250k.yml
+  environments/napa_5k_clean.yml
+  environments/napa_5k_tainted.yml
+  environments/napa_50k_clean.yml
+  environments/napa_50k_tainted.yml
+  environments/napa_250k_production.yml
   sources.yml
   silver_tables.yml
   domains.yml
@@ -70,15 +74,15 @@ notebooks/11_b2s_resolve_configuration.py ... 20_b2s_finalize_pipeline_summary.p
 tests/
 ```
 
-Load and recursively merge, in order: base, selected environment, sources, Silver tables, domains, quality rules, logging. Resolve `${path.to.value}` placeholders, including nested references. Validate required sections, supported release names, `full_refresh`, source table/file/natural-key definitions, unique integer build orders, valid stages/transforms, nonempty primary keys, and rule references. Hash the resolved configuration using SHA-256 of UTF-8 `yaml.safe_dump(..., sort_keys=True)` for reference compatibility. Test invalid placeholders and missing files clearly.
+Load and recursively merge, in order: base, selected environment, sources, Silver tables, domains, quality rules, logging. Resolve `${path.to.value}` placeholders, including nested references. Validate required sections, supported dataset profiles (`napa_5k_clean`, `napa_5k_tainted`, `napa_50k_clean`, `napa_50k_tainted`, `napa_250k_production`), matching `release.dataset_profile`/`release.release_name`, valid `release.data_condition`, `full_refresh`, source table/file/natural-key definitions, unique integer build orders, valid stages/transforms, nonempty primary keys, and rule references. Reject clean/tainted conditions for 250K and production for 5K/50K. Hash the resolved configuration using SHA-256 of UTF-8 `yaml.safe_dump(..., sort_keys=True)` for reference compatibility. Test invalid placeholders and missing files clearly.
 
 Preserve these configuration values and distinguish declarative settings from actual runtime support:
 
 | Section | Reference values |
 |---|---|
-| runtime | `catalog`, `team_prefix`, `default_release: napa_5k`, `timezone: America/New_York` |
-| execution | `fail_fast: true`, `publish_only_after_validation: true`, `stop_dependents_on_failure: true`, `unexpected_column_policy: warn`, `missing_required_column_policy: fail`, `duplicate_strategy_default: keep_best`, `create_convenience_views: true` |
-| publication | `format: delta`, `mode: overwrite`, `overwrite_schema: true`, `use_staging: true` |
+| runtime | `catalog`, `team_prefix`, `default_release: napa_5k_clean`, `timezone: America/New_York` |
+| execution | `fail_fast: true`, `publish_only_after_validation: true`, `stop_dependents_on_failure: true`, `unexpected_column_policy: warn`, `missing_required_column_policy: fail`, `duplicate_strategy_default: keep_best`, `create_convenience_views: true`, `destructive_silver_refresh: true`, `cleanup_silver_on_failure: true` |
+| publication | `format: delta`, `mode: overwrite`, `overwrite_schema: true`, `use_staging: false`; publish directly into freshly recreated Silver and Silver-reject schemas; Bronze schema reset is performed upstream by Raw-to-Bronze |
 | metadata | seven `add_*` settings for run ID, version, source dataset, source table, load timestamp, record hash, quality status; all true |
 | thresholds | `close_game_margin: 2`, `score_share_tolerance: 0.0001`, `warning_quality_deduction: 5`, `expected_match_team_count: 2`, `expected_match_team_player_count: 2`, `duplicate_active_team_pair_severity: WARNING` |
 | age groups | `UNDER_18` 0–17; `AGE_18_34` 18–34; `AGE_35_49` 35–49; `AGE_50_64` 50–64; `AGE_65_PLUS` 65+ |
@@ -106,7 +110,7 @@ Keep legacy division-valued `team_type` support separate from the schema 1.6 ide
 
 ### Stage 2 — Environment, run context, and operations tables
 
-Validate catalog access and create the Bronze, Silver, reject, and operations schemas with `CREATE SCHEMA IF NOT EXISTS`. The reference does not create catalogs, grant permissions, upload files, or create a Raw Volume here. Creation of an empty Bronze schema does not satisfy the source-table prerequisites.
+Validate catalog access and resolve the selected profile's Bronze, Silver, Silver-reject, and operations schemas. The selected profile's Bronze schema is created and destructively refreshed by Raw-to-Bronze; Silver must validate that it is reading the expected fully qualified Bronze schema and must not drop, recreate, or repopulate it. After confirming that the resolved Silver and Silver-reject schemas are the configured dedicated targets for the selected profile, perform the required destructive reset: drop each with `DROP SCHEMA IF EXISTS <catalog>.<schema> CASCADE`, then recreate each with `CREATE SCHEMA <catalog>.<schema>`. Do not drop or recreate the Bronze, Raw, Raw Volume, or operations schemas. Do not proceed if either fully qualified target cannot be resolved safely. This reset intentionally removes all Silver/reject tables, views, rows, and prior partial-run artifacts; the operations schema and its audit evidence remain available. The reference does not create catalogs, grant permissions, upload files, or create a Raw Volume here. Creation of an empty Bronze schema does not satisfy the source-table prerequisites.
 
 Create a UUID pipeline run ID once and pass it to every task. Carry pipeline name/version, release, mode, configuration hash, and operations schema in the run context. Use UTC-aware operational timestamps, controlled clocks in tests, and structured messages that do not expose secrets or full sensitive records.
 
@@ -149,14 +153,14 @@ Preserve message codes `CONFIG_LOADED`, `ENVIRONMENT_VALIDATED`, `BRONZE_CONTRAC
 
 ### Stage 3 — Bronze and release-package readiness
 
-All 13 Bronze tables must exist and be readable. The deployed reference preflight only checks configured table existence. Do not describe it as validating source schemas, the manifest, physical files, foreign keys, or lineage.
+All 13 Bronze tables for the selected dataset profile must exist and be readable, with no profile mix-up or unexpected source-table substitution. The deployed reference preflight only checks configured table existence. Do not describe it as validating source schemas, the manifest, physical files, foreign keys, or lineage. The Raw-to-Bronze workflow is responsible for destructive Bronze schema refresh and manifest/file validation; Silver may reuse that run-scoped evidence but must not assume that table existence alone proves it.
 
 Guide-required coverage (PDF pp. 3–6, 14–17):
 
-1. Identify the complete release and clean/tainted variant. Each release contains 13 Parquet files plus required `manifest.json`, not a monthly delta that needs earlier packages. Preserve package provenance. Do not use hidden injection manifests or generator internals.
+1. Identify the complete dataset profile and its clean/tainted or production condition. Each profile contains 13 Parquet files plus required `manifest.json` in the same directory as those files, not a monthly delta that needs earlier packages. Preserve package provenance and the selected profile (`napa_5k_clean`, `napa_5k_tainted`, `napa_50k_clean`, `napa_50k_tainted`, or `napa_250k_production`). Do not use hidden injection manifests or generator internals.
 2. Validate manifest `release_name`, `student_dataset_schema_version`, `included_batch_months`, `included_batch_sequences`, `snapshot_month`, `snapshot_end_exclusive`, `parquet_compression`, `build_timestamp`, `validation_status`, and `validation_summary`.
 3. Reconcile file-level evidence from `output_files` and the manifest's `row_counts`, `ordered_columns`, `schema_hashes`, and `file_checksums`. Verify file inventory, actual counts, ordered columns, physical schema, checksums, and matching release identity. Use the published checksum/schema-hash definition; do not substitute a guessed canonicalization algorithm or the Silver audit hash.
-4. Reuse verified Raw-to-Bronze evidence when available, with an explicit provenance link to this run. Otherwise read package metadata/files read-only. Add configurable manifest/provenance locations if needed; the existing Silver configuration has no manifest input. Missing/inconsistent package evidence must be reported, not assumed good.
+4. Reuse verified Raw-to-Bronze manifest/readiness evidence when available, with an explicit provenance link to this run and selected dataset profile. Otherwise read the colocated package metadata/files read-only using a configurable manifest/provenance location. Do not require a new clean/tainted field inside the existing manifest; the selected profile and isolated Raw/Bronze schema path establish the dataset condition. Missing/inconsistent package evidence must be reported, not assumed good.
 5. Validate the physical contract in Appendix A before aliases or casts can hide drift. Bronze metadata columns are additional technical columns, not unexpected source fields. Count reconciliation against the manifest applies to Raw/Bronze source rows, not deduplicated/filtered Silver rows.
 6. Validate full historical coverage and snapshot boundaries as described in Stage 9. Do not infer completeness from one maximum batch date or the presence of a table.
 
@@ -227,9 +231,9 @@ Reference alias helpers for reference/athlete/organization tables choose the **f
 
 Reference uses `CAST`/`TO_DATE`, not uniformly safe casts. Under ANSI settings malformed values can raise before a reject row is produced. Establish/test the actual runtime cast policy; a safe-cast/quarantine implementation is a documented improvement, not unchanged behavior.
 
-Publish accepted then reject tables with `CREATE OR REPLACE TABLE <fqn> USING DELTA AS <select>`, including empty results with their declared SQL schema. Full refresh replaces each table; audit records accumulate. There is no cross-table transaction, atomic release swap, staging/promotion gate, or rollback despite the staging configuration. A failed later task can leave a partially refreshed release. Do not claim otherwise.
+After the schema reset, publish the complete expected set of 13 accepted Silver tables and 13 reject/exception tables with `CREATE OR REPLACE TABLE <fqn> USING DELTA AS <select>`, including empty results with their declared SQL schema. Table-level replacement remains required, but it is not sufficient by itself: do not append to existing Silver or reject tables, and do not retain unexpected tables from prior runs. There is no cross-table transaction, atomic release swap, staging/promotion gate, or rollback. If any later task fails, the failure path must drop/recreate the selected Silver and Silver-reject schemas again, leaving no Silver or reject tables from the failed run; if cleanup fails, surface that failure prominently in finalization and audit evidence. The Bronze, Raw, and operations schemas must remain intact. Audit records may accumulate according to the existing operations contract; Silver and reject data are standalone per-run outputs.
 
-For each table, record source/exact-duplicate/business-key-loser/accepted/rejected/warning/published counts, quality evidence, accepted-table schema snapshot, and terminal status. Reject quality evidence is grouped by rule ID/severity, with failed count, evaluated source count, percentage (null for zero denominator), and up to ten sorted sampled business keys. No reject groups means no successful row-rule records are automatically emitted. Warning counts and row flags are separate from these reject groups.
+For each table, record source/exact-duplicate/business-key-loser/accepted/rejected/warning/published counts, quality evidence, accepted-table schema snapshot, and terminal status. Reject quality evidence is grouped by rule ID/severity, with failed count, evaluated source count, percentage (null for zero denominator), and up to ten sorted sampled business keys. No reject groups means no successful row-rule records are automatically emitted. Warning counts and row flags are separate from these reject groups. A successful run must verify that the selected Silver schema contains exactly the 13 expected accepted tables plus the documented convenience views, and that the selected Silver-reject schema contains exactly the 13 expected reject/exception tables, with no unexpected tables.
 
 ### Stage 5 — Reference tables
 
@@ -396,7 +400,7 @@ status = PASSED only when difference == 0
 
 There is a known mismatch in the SQL workflow: `rejected_row_count` counts the published reject table, which already includes business-key losers, while the formula adds those losers again. For two valid distinct rows sharing one key, accepted=1/rejected=1/losers=1/exact=0 gives difference -1. Preserve a regression test demonstrating baseline behavior. For an approved correction, use mutually exclusive categories, or `Bronze = exact duplicates + all rejects + accepted` with business-key losers as a diagnostic subset. Do not conceal the double-count by suppressing legitimate duplicate rejects. Reconcile participants after their additional structural rejections as well.
 
-Reference finalizer reads evidence for the run and expects 13 completed table records, all SUCCEEDED, and 13 reconciliation records, all PASSED. Any CRITICAL quality result with positive failed count causes FAILED. ERROR/WARNING findings alone do not. It does not reliably establish distinct expected-table coverage, that all cross-table checks ran, or that view publication succeeded. A failed workflow task can coexist with an audit success if that failure is outside the finalizer's evidence checks. These are known limitations, not acceptable claims of complete certification.
+Reference finalizer reads evidence for the run and expects 13 completed table records, all SUCCEEDED, and 13 reconciliation records, all PASSED. Any CRITICAL quality result with positive failed count causes FAILED. ERROR/WARNING findings alone do not. It does not reliably establish distinct expected-table coverage, that all cross-table checks ran, or that view publication succeeded. A failed workflow task can coexist with an audit success if that failure is outside the finalizer's evidence checks. These are known reference limitations, not acceptable claims of complete certification. The student construction must additionally require exact selected-profile coverage: all 13 accepted Silver tables, all 13 reject/exception tables, and all five expected views must be present with no unexpected Silver/reject tables. Any failed task or incomplete/failed publication must trigger destructive cleanup of the selected Silver and Silver-reject schemas before the run is marked failed.
 
 Finalize an open pipeline run with Delta `MERGE` on run ID/open completion timestamp; append an end record if no open record exists. Emit the terminal message, expose `final_status` as a task value, and raise when final status is FAILED. Repeated finalization is not guaranteed audit-idempotent. The finalizer must still attempt a failure summary after upstream failures; test failures before the run ID is available rather than assuming `ALL_DONE` solves missing task values.
 
@@ -410,10 +414,10 @@ Requirements:
 
 1. Root `databricks.yml` must include `config/bronze_to_silver/workflows/*.yml`. Preserve unrelated job includes if extending an existing repository. Sync `config/bronze_to_silver/**`, `notebooks/**`, `src/**`, and `requirements.txt`, plus any shared modules/configuration actually imported. Do not sync data or secrets.
 2. Define `script_root` with default `${workspace.file_path}/notebooks`. Provide a default `dev` target in development mode and a workspace host supplied by the team, not copied from the instructor. Use a distinct bundle/team namespace. Configure an authenticated CLI profile locally; never embed tokens.
-3. Job resource key: `napa_bronze_to_silver`; display name `NAPA Bronze to Silver`; `max_concurrent_runs: 1`; `performance_target: STANDARD`; pipeline/owner tags, with team ownership. One job parameter `release_name`, default `napa_5k`.
+3. Job resource key: `napa_bronze_to_silver`; display name `NAPA Bronze to Silver`; `max_concurrent_runs: 1`; `performance_target: STANDARD`; pipeline/owner tags, with team ownership. One job parameter `dataset_profile`, default `napa_5k_clean`.
 4. Reference compute is serverless Python: environment key `napa_serverless_python`, `spec.environment_version: "4"`, dependency `pyyaml`. Every task uses this environment key and `spark_python_task`. Do not add a personal cluster ID or assume a SQL warehouse supplies this execution environment. Verify workspace support for the declared environment and task type using bundle validation and a smoke run; any alternative compute design must be documented.
 5. Keep entry-point scripts thin: resolve repository imports, parse arguments, obtain Spark/dbutils from supported runtime context, invoke reusable code, publish task values, and propagate exceptions. Reuse the repository bootstrap that locates `src/napa_pipeline` from script/current-directory ancestors. Test bundle-relative config lookup without a local Windows path. PySpark is runtime-provided; local tests need the repository's existing `pyyaml`/`pytest`, with Spark integration dependencies only when explicitly required.
-6. All scripts accept `--release-name` with exactly the three release choices and optional `--config-path`; downstream scripts require `--run-id`. Resolve configuration publishes task value `run_id`. Do not generate a different run ID in each task.
+6. All scripts accept `--dataset-profile` with exactly `napa_5k_clean`, `napa_5k_tainted`, `napa_50k_clean`, `napa_50k_tainted`, and `napa_250k_production`, plus optional `--config-path`; downstream scripts require `--run-id`. Resolve configuration publishes task value `run_id`. Do not generate a different run ID in each task.
 
 Task definition (ordinary tasks depend on the immediately preceding task):
 
@@ -435,8 +439,8 @@ Finalization depends on **all nine preceding tasks** and has `run_if: ALL_DONE`,
 ```yaml
 # Every task:
 parameters:
-  - --release-name
-  - "{{job.parameters.release_name}}"
+  - --dataset-profile
+  - "{{job.parameters.dataset_profile}}"
 # Also append these two list entries for every downstream task:
   - --run-id
   - "{{tasks.resolve_configuration.values.run_id}}"
@@ -451,14 +455,16 @@ From the bundle root, after local tests and authorization:
 ```text
 databricks bundle validate -t dev
 databricks bundle deploy -t dev
-databricks bundle run -t dev napa_bronze_to_silver --params release_name=napa_5k
-databricks bundle run -t dev napa_bronze_to_silver --params release_name=napa_50k
-databricks bundle run -t dev napa_bronze_to_silver --params release_name=napa_250k
+databricks bundle run -t dev napa_bronze_to_silver --params dataset_profile=napa_5k_clean
+databricks bundle run -t dev napa_bronze_to_silver --params dataset_profile=napa_5k_tainted
+databricks bundle run -t dev napa_bronze_to_silver --params dataset_profile=napa_50k_clean
+databricks bundle run -t dev napa_bronze_to_silver --params dataset_profile=napa_50k_tainted
+databricks bundle run -t dev napa_bronze_to_silver --params dataset_profile=napa_250k_production
 ```
 
-Select the team's CLI profile through local CLI configuration or `DATABRICKS_CONFIG_PROFILE`. Validate/render the bundle before deployment and inspect actual deployed paths/task dependencies. Advance to 50k only after 5k correctness is demonstrated, and to 250k after validation. Run Raw-to-Bronze first for each chosen release. A successful deploy proves resource creation, not data correctness; capture job/task status, run ID, configuration hash, table/reject counts, reconciliation, quality evidence, and views after each run.
+Select the team's CLI profile through local CLI configuration or `DATABRICKS_CONFIG_PROFILE`. Validate/render the bundle before deployment and inspect actual deployed paths/task dependencies. Run Raw-to-Bronze first for each chosen profile so its destructive Bronze refresh and manifest validation complete before Silver starts. Validate 5K clean and tainted, then 50K clean and tainted, and finally 250K production as the production-scale case. A successful deploy proves resource creation, not data correctness; capture job/task status, run ID, configuration hash, table/reject counts, reconciliation, quality evidence, and views after each run.
 
-Document troubleshooting for missing Bronze tables, wrong catalog/prefix, unavailable serverless environment, missing PyYAML, import/config paths, absent task values, cast failures, rejected-parent cascades, manifest mismatches, and partial table replacement. Do not retry blindly into an unexplained partial release. Do not use `bundle destroy` as routine troubleshooting.
+Document troubleshooting for missing Bronze tables, wrong catalog/prefix, unavailable serverless environment, missing PyYAML, import/config paths, absent task values, cast failures, rejected-parent cascades, manifest mismatches, destructive Silver/reject schema reset failures, and partial table replacement. Do not retry blindly into an unexplained partial release. Do not use `bundle destroy` as routine troubleshooting.
 
 ### Stage 12 — Tests, staged acceptance, and handoff
 
@@ -468,8 +474,8 @@ Minimum test matrix:
 
 | Area | Required cases |
 |---|---|
-| Configuration | Every release, merge precedence, nested placeholders, missing file/key, invalid release/mode/stage/transform, duplicate build order, stable config hash, isolated schemas |
-| Source/manifest | All 13 files/tables; missing manifest/file; wrong release/variant/version; row count/checksum/schema/ordered-column mismatch; technical Bronze columns allowed; no guessed schema hash |
+| Configuration | All five dataset profiles, merge precedence, nested placeholders, missing file/key, invalid profile/mode/stage/transform, invalid clean/tainted/production combination, duplicate build order, stable config hash, isolated schemas |
+| Source/manifest | All 13 files/tables for the selected profile; colocated manifest/provenance; missing manifest/file; wrong release/variant/version; row count/checksum/schema/ordered-column mismatch; technical Bronze columns allowed; no guessed schema hash |
 | Contracts | Every Appendix A required column/null rule/type; schema 1.6 ID/decimal/boolean/string-date handling; `state_province_code` gap; rating alias and team identity/division separation |
 | Normalization | Whitespace/blank/null; all domain aliases; invalid enums; present-but-null preferred alias versus absent alias; competition COALESCE behavior; canonical source names |
 | Keys/dedup | Null keys, exact normalized duplicates, same-key conflicts, completeness and hash tie-break, input permutation, tied sort keys, rejected parent cascade, duplicate-key reconciliation regression |
@@ -479,8 +485,8 @@ Minimum test matrix:
 | Games | Negative/null/malformed scores, zero/negative game number, tie, incorrect winner, optional target/win-by/share, share tolerance just inside/outside 0.0001, close margin at 2/3, extended score equal to/above target, duplicate game number within match |
 | Guide history/FKs | Every listed FK, nullable references, required batch nulls, assigned region validation, complete manifest sequences, date exactly at end-exclusive boundary, future left/dissolution projected null, first-of-month versus month-end as-of, available rating snapshot evidence |
 | Quality/audit | First-rule precedence, reject JSON/hash, grouped counts/samples, zero-row denominator, all 11 cross-check results including PASSED, all eight guide categories, append schema normalization, UTC timestamps and schema hash |
-| Publication/views | Empty accepted/reject schema, repeated full refresh with stable business results, no uncontrolled append, all five views, null active flags excluded, empty roster, duplicate-side join fanout, failure between accepted/reject publication |
-| Finalization | 13 successful builds/reconciliations, missing/duplicated evidence, CRITICAL vs ERROR vs WARNING, cross-check/view task failure, missing run ID, repeated finalization, failed count read, approved gate policy |
+| Publication/views | Destructive reset of selected Silver and Silver-reject schemas, empty accepted/reject schema, repeated standalone Silver refresh with stable business results, no uncontrolled append or stale tables, exactly 13 accepted tables, exactly 13 reject tables, all five views, null active flags excluded, empty roster, duplicate-side join fanout, failure between accepted/reject publication, cleanup after failure |
+| Finalization | 13 successful builds/reconciliations, exact accepted/reject table coverage, missing/duplicated evidence, CRITICAL vs ERROR vs WARNING, cross-check/view task failure, missing run ID, repeated finalization, failed count read, failed-run schema cleanup, approved gate policy |
 | Bundle/runtime | YAML parse, include/sync coverage, ten tasks/scripts, timeouts/environment, release/run parameters, complete finalizer dependencies/ALL_DONE, imports/config resolution from deployed path, Spark SQL execution under actual ANSI/timezone settings |
 
 For the instructor repository, a focused PowerShell baseline command is:
@@ -497,10 +503,10 @@ Staged acceptance:
 
 1. Configuration and contracts pass local tests before data writes.
 2. Reference tables pass before athletes; athletes before organization/partnership; these before competition.
-3. A complete synthetic integration run produces 13 accepted tables, 13 reject tables (possibly empty), six operations tables, five views, and run-linked quality/reconciliation evidence.
-4. A 5k run and rerun demonstrate stable business outputs and explained audit differences. Run IDs/load timestamps naturally differ; do not demand byte-identical audit data.
-5. 50k validates scalability and guide coverage with the same code. 250k is the production-scale case dataset, not evidence that Gold analytics have been performed.
-6. No guide-compliance claim until each required check has evidence or a clearly stated, instructor-reviewed limitation. No unexplained reconciliation difference or hidden partial refresh is acceptable as a successful handoff.
+3. A complete synthetic integration run starts with empty selected Silver and Silver-reject schemas and produces exactly 13 accepted tables, 13 reject tables (possibly empty), six operations tables, five views, and run-linked quality/reconciliation evidence.
+4. A 5K clean run and rerun demonstrate stable business outputs and explained audit differences. Run IDs/load timestamps naturally differ; do not demand byte-identical audit data.
+5. 5K tainted and 50K clean/tainted runs validate defect handling, scalability, and guide coverage with the same code. 250K production is the production-scale case dataset, not evidence that Gold analytics have been performed.
+6. No guide-compliance claim until each required check has evidence or a clearly stated, instructor-reviewed limitation. No unexplained reconciliation difference, stale Silver/reject table, or hidden partial refresh is acceptable as a successful handoff; a failed run must leave the selected Silver and Silver-reject schemas empty or absent while preserving operations evidence.
 
 Final deliverables: source/config/task files; validated bundle; synthetic fixtures and tests; source-to-target/type/rule matrices; decision/gap log; deployment and recovery runbook; run evidence when execution is authorized; concise summary of checks actually run versus not run. Do not fabricate successful deployment, live table counts, or dataset findings.
 
@@ -634,13 +640,13 @@ Do not silently repair these while claiming unchanged replication. Reproduce and
 
 | Gap in the reference | Required handling in the student build |
 |---|---|
-| Manifest/package contract absent from Silver preflight | Add verified upstream evidence or read-only manifest/package validation; configure location and provenance |
+| Manifest/package contract absent from Silver preflight | Raw-to-Bronze now requires colocated manifest validation for the selected profile. Reuse verified run-scoped evidence when available; otherwise configure the colocated manifest/provenance location and perform read-only validation without rebuilding Bronze |
 | Many PDF-required null/type/FK checks absent; dropped fields cannot be checked in Silver | Add source-contract checks on Bronze; include registration assigned region and required batch references |
 | As-of uses maximum batch date instead of snapshot month end | Test both; obtain an explicit date-policy decision for flags, age, duration, future-event validation |
 | `state_province_code` not mapped to `province_state` | Surface missing mapping; add alias only as an approved compatibility correction |
 | Business-key losers double-counted in SQL reconciliation | Preserve regression; approve and test exclusive accounting before claiming correct duplicate reconciliation |
 | Ordinary casts may abort malformed-data processing | Establish ANSI behavior; approve safe casts/quarantine if required for tainted-data handling |
-| Staging/publication policy settings not implemented | Describe partial refresh risk; approve staging/promotion only if scope requires it |
+| Destructive Silver/reject schema reset and failure cleanup are not implemented in the current reference | This prompt now requires dropping/recreating the selected Silver and Silver-reject schemas for every standalone run and cleaning both schemas after failure. Update and test the implementation; do not claim schema-level cleanup from table-level overwrite alone |
 | Cross-table ERROR findings do not fail the task/finalizer; missing check/view evidence can escape finalization | Define guide-aware disposition and exact run-scoped completion evidence; separate job success from audit status |
 | Missing membership history is not flagged; LAG misses some nested overlaps | Add explicit coverage/interval evidence with approved warning/reject policy |
 | Two rows do not prove distinct sides/teams; game-number uniqueness and complete score rules are incomplete | Add structural checks backed by guide/manifest semantics, not invented tournament rules |
