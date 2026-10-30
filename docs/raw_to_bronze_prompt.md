@@ -34,17 +34,19 @@
 >
 > ### Required runtime design
 >
-> Build one shared implementation supporting these three release names:
+> Build one shared implementation supporting these five dataset profiles:
 >
-> | Release name | Role | Raw schema | Bronze schema | Raw Volume path |
-> |---|---|---|---|---|
-> | `napa_5k` | development | `napa_platform_5k_raw` | `napa_platform_5k_bronze` | `/Volumes/workspace/napa_platform_5k_raw/napa_files` |
-> | `napa_50k` | validation | `napa_platform_50k_raw` | `napa_platform_50k_bronze` | `/Volumes/workspace/napa_platform_50k_raw/napa_files` |
-> | `napa_250k` | production-scale case data | `napa_platform_250k_raw` | `napa_platform_250k_bronze` | `/Volumes/workspace/napa_platform_250k_raw/napa_files` |
+> | Dataset profile / release name | Role | Data condition | Raw schema | Bronze schema | Raw Volume path |
+> |---|---|---|---|---|---|
+> | `napa_5k_clean` | development | clean | `napa_platform_5k_clean_raw` | `napa_platform_5k_clean_bronze` | `/Volumes/workspace/napa_platform_5k_clean_raw/napa_files` |
+> | `napa_5k_tainted` | development | tainted | `napa_platform_5k_tainted_raw` | `napa_platform_5k_tainted_bronze` | `/Volumes/workspace/napa_platform_5k_tainted_raw/napa_files` |
+> | `napa_50k_clean` | validation | clean | `napa_platform_50k_clean_raw` | `napa_platform_50k_clean_bronze` | `/Volumes/workspace/napa_platform_50k_clean_raw/napa_files` |
+> | `napa_50k_tainted` | validation | tainted | `napa_platform_50k_tainted_raw` | `napa_platform_50k_tainted_bronze` | `/Volumes/workspace/napa_platform_50k_tainted_raw/napa_files` |
+> | `napa_250k_production` | production-scale case data | production | `napa_platform_250k_raw` | `napa_platform_250k_bronze` | `/Volumes/workspace/napa_platform_250k_raw/napa_files` |
 >
-> Use catalog `workspace` and the shared operations schema `napa_platform_ops` as defaults, but put those values in configuration rather than scattering them through code. The Raw Volume name is `napa_files`. The processing mode is `full_refresh`. Use the same code and source registry for all releases; only the environment configuration may vary.
+> Use catalog `workspace` and the shared operations schema `napa_platform_ops` as defaults, but put those values in configuration rather than scattering them through code. The Raw Volume name is `napa_files`. The processing mode is `full_refresh`. Use the same code and source registry for all profiles; only the environment configuration may vary.
 >
-> These are reference namespace examples. Before running writes, resolve the team's assigned catalog and prefix in configuration so teams do not overwrite one another's tables. Keep the naming pattern `<team_prefix>_<scale>_raw`, `<team_prefix>_<scale>_bronze`, and shared `<team_prefix>_ops`. The three releases are independent full-refresh datasets, not monthly increments; `monthly_batches.parquet` is an input table and does not drive incremental processing.
+> These are reference namespace examples. Before running writes, resolve the team's assigned catalog and prefix in configuration. Keep the naming pattern `<team_prefix>_<scale>_<condition>_raw` and `<team_prefix>_<scale>_<condition>_bronze` for 5K/50K clean and tainted profiles; use `<team_prefix>_250k_raw` and `<team_prefix>_250k_bronze` for the single 250K production profile; and use shared `<team_prefix>_ops`. The five profiles are independent full-refresh datasets, not monthly increments; `monthly_batches.parquet` is an input table and does not drive incremental processing. Do not allow a clean or tainted selector for the 250K production dataset.
 >
 > Raw files and the matching `manifest.json` must already be placed directly in each configured Volume; the pipeline does not upload, generate, or copy them from a local directory. Do not add an extra release subdirectory. The manifest is part of the delivered Raw input, is not a Bronze source table, and must be read from the same directory as the Parquet files. Confirm authenticated Databricks CLI access, a usable catalog, serverless job access, and permissions to create/use the configured schemas, Volume, and tables. Environment setup does not create a catalog or grant privileges.
 >
@@ -78,17 +80,19 @@
 >   raw_sources.yml
 >   logging.yml
 >   environments/
->     napa_5k.yml
->     napa_50k.yml
->     napa_250k.yml
+>     napa_5k_clean.yml
+>     napa_5k_tainted.yml
+>     napa_50k_clean.yml
+>     napa_50k_tainted.yml
+>     napa_250k_production.yml
 > ```
 >
 > Implement a configuration loader that:
 >
-> - accepts only `napa_5k`, `napa_50k`, and `napa_250k`;
+> - accepts only `napa_5k_clean`, `napa_5k_tainted`, `napa_50k_clean`, `napa_50k_tainted`, and `napa_250k_production`;
 > - deep-merges `base.yml`, the selected environment file, the common source registry, and logging configuration without mutating inputs;
 > - resolves `${section.nested_key}` placeholders repeatedly until all are resolved, and fails on an unknown or unresolved placeholder;
-> - validates required top-level sections (`project`, `runtime`, `objects`, `execution`, `publication`, `metadata`, `performance`, `release`, `schemas`, `volume`, `sources`, `logging`), matching selected/reported release, `full_refresh` processing mode, agreement between `volume.name` and `objects.raw_volume_name`, valid `.parquet` source filenames, nonempty source mapping, nonempty `bronze_table` values, and unique integer build order across all configured sources;
+> - validates required top-level sections (`project`, `runtime`, `objects`, `execution`, `publication`, `metadata`, `performance`, `release`, `schemas`, `volume`, `sources`, `logging`), matching selected/reported dataset profile, valid `release.data_condition` (`clean`, `tainted`, or `production`), disallows `clean`/`tainted` conditions for the 250K profile and disallows `production` for 5K/50K profiles, `full_refresh` processing mode, agreement between `volume.name` and `objects.raw_volume_name`, `volume.manifest_name == manifest.json`, valid `.parquet` source filenames, nonempty source mapping, nonempty `bronze_table` values, and unique integer build order across all configured sources;
 > - fails on missing YAML files or non-mapping file content;
 > - produces the configuration hash as SHA-256 of UTF-8 encoded `yaml.safe_dump(resolved_config, sort_keys=True)`;
 > - exposes enabled sources in ascending build order.
@@ -104,7 +108,7 @@
 > runtime:
 >   catalog: workspace
 >   team_prefix: napa_platform
->   default_release: napa_5k
+>   default_release: napa_5k_clean
 >   timezone: America/New_York
 > objects:
 >   raw_volume_name: napa_files
@@ -130,7 +134,7 @@
 > | `performance` | `cache_source_during_reconciliation: false`, `optimize_after_publish: false`, `vacuum_after_publish: false` |
 > | `logging` | `default_level: INFO`; message codes `CONFIG_LOADED`, `ENVIRONMENT_VALIDATED`, `RAW_FILE_MISSING`, `RAW_FILE_UNEXPECTED`, `SOURCE_SCHEMA_MISMATCH`, `SOURCE_READ_STARTED`, `SOURCE_READ_COMPLETED`, `BRONZE_WRITE_STARTED`, `BRONZE_WRITE_COMPLETED`, `ROW_COUNT_MISMATCH`, `PIPELINE_SUCCEEDED`, `PIPELINE_FAILED` |
 >
-> Each environment file supplies `release.release_name`, `release.expected_player_scale` (5000/50000/250000), `release.role` (`development`/`validation`/`production`), `schemas.raw`, `schemas.bronze`, `schemas.operations: ${objects.operations_schema}`, `volume.name: ${objects.raw_volume_name}`, and `volume.path: /Volumes/${runtime.catalog}/${schemas.raw}/${objects.raw_volume_name}`. `performance.shuffle_partitions` is 16, 64, and `auto`, respectively. Each registry entry contains `enabled: true`, `file_name`, `bronze_table`, `build_order`, a descriptive `grain`, and `key_columns` from the source table above.
+> Each environment file supplies `release.release_name` and `release.dataset_profile` (one of the five profiles above), `release.expected_player_scale` (5000/50000/250000), `release.data_condition` (`clean`, `tainted`, or `production`), `release.role` (`development`/`validation`/`production`), `schemas.raw`, `schemas.bronze`, `schemas.operations: ${objects.operations_schema}`, `volume.name: ${objects.raw_volume_name}`, `volume.manifest_name: manifest.json`, and `volume.path: /Volumes/${runtime.catalog}/${schemas.raw}/${objects.raw_volume_name}`. `performance.shuffle_partitions` is 16 for 5K, 64 for 50K, and `auto` for 250K. Each registry entry contains `enabled: true`, `file_name`, `bronze_table`, `build_order`, a descriptive `grain`, and `key_columns` from the source table above.
 >
 > Do not mistake a YAML flag for implemented enforcement: readiness does not reject readable zero-row data or compare it against an expected column/type contract; publication does not use staging; all ten metadata columns are always appended regardless of metadata switches. The runtime does not apply the configured timezone, shuffle partitions, caching, optimization, or vacuum settings. Missing files always fail; only the unexpected-file policy changes inventory behavior. The logging list does not restrict emitted codes or guarantee that every listed code is emitted. Keep these distinctions documented rather than silently adding new processing rules.
 >
@@ -188,7 +192,7 @@
 >
 > Append audit records using the existing target table's explicit schema, including records with null values; do not infer their types. Empty record lists are a no-op. `table_runs` stores separate appended `RUNNING` and terminal rows, so an ordinary successful run has 26 table-run rows, of which 13 have `completed_ts`. The original `RUNNING` table rows are not updated. Pipeline finalization updates its open pipeline row. `workflow_run_id` and `triggered_by` remain null in the reference scripts. Normalize naive audit start/end timestamps as UTC and convert aware timestamps to UTC before calculating duration.
 >
-> 4. **Manifest, inventory, and readiness validation.** List the selected Raw Volume using `dbutils.fs.ls`. Require exactly one readable `manifest.json` in the same directory as the Parquet files; do not treat it as an ignorable inventory entry. `release_manifest.json`, if supported by the repository convention, may remain a non-source auxiliary file, but it must not replace or override `manifest.json`. Parse the manifest and require a per-source contract for every enabled source. The manifest's `output_files` entries are the authoritative delivered-file metadata: `file_name`/`file_path`, `table_name`, `checksum`, `row_count`, ordered `columns`, and `schema_hash`. Normalize trailing slashes from file names and paths before comparison. Fail before Bronze publication if the manifest is missing, malformed, duplicated, missing a configured source, contains an unexpected source, points to a missing/unexpected file, or disagrees with the configured source-to-table mapping. For every configured file, capture file path, size when available, and modification timestamp when available; read it with `spark.read.parquet`; calculate its row count; capture each field as column name, `simpleString()` data type, and nullability; calculate the same ordered schema hash used by the manifest; calculate the SHA-256 checksum of the delivered Parquet file bytes; and compare the actual checksum, row count, ordered column list, and schema hash to the manifest before publication. Any mismatch or unreadable Parquet must fail the task and prevent Bronze publication. Persist the expected and actual manifest values, mismatch type, source file, and release/run identifiers in auditable validation evidence. The manifest itself is not copied into a Bronze data table.
+> 4. **Manifest, inventory, and readiness validation.** List the selected Raw Volume using `dbutils.fs.ls`. Require exactly one readable `manifest.json` in the same directory as the Parquet files; do not treat it as an ignorable inventory entry. `release_manifest.json`, if supported by the repository convention, may remain a non-source auxiliary file, but it must not replace or override `manifest.json`. Parse the manifest and require a per-source contract for every enabled source. The manifest's `output_files` entries are the authoritative delivered-file metadata: `file_name`/`file_path`, `table_name`, `checksum`, `row_count`, ordered `columns`, and `schema_hash`. Normalize trailing slashes from file names and paths before comparison. The selected configuration profile and isolated Volume/schema path identify whether the package is 5K clean, 5K tainted, 50K clean, 50K tainted, or 250K production; do not require a new clean/tainted field in the existing manifest. Preserve the manifest's own release metadata as source evidence and record the selected profile alongside it. Fail before Bronze publication if the manifest is missing, malformed, duplicated, missing a configured source, contains an unexpected source, points to a missing/unexpected file, or disagrees with the configured source-to-table mapping. For every configured file, capture file path, size when available, and modification timestamp when available; read it with `spark.read.parquet`; calculate its row count; capture each field as column name, `simpleString()` data type, and nullability; calculate the same ordered schema hash used by the manifest; calculate the SHA-256 checksum of the delivered Parquet file bytes; and compare the actual checksum, row count, ordered column list, and schema hash to the manifest before publication. Any mismatch or unreadable Parquet must fail the task and prevent Bronze publication. Persist the expected and actual manifest values, mismatch type, source file, selected profile, and release/run identifiers in auditable validation evidence. The manifest itself is not copied into a Bronze data table.
 >
 > Fall back to the path's final component when a listing entry has no name. Use the listing's actual path, including any `dbfs:` prefix, for reads and lineage. Modification times may be absent, already be datetime values, or be epoch milliseconds; the reference converts milliseconds with `datetime.fromtimestamp(milliseconds / 1000)`, which produces a naive local-time datetime. This differs from its UTC audit timestamps and must not be described as uniform UTC handling.
 >
@@ -232,11 +236,11 @@
 > Define `config/raw_to_bronze/workflows/napa_raw_to_bronze.job.yml` with job resource key `napa_raw_to_bronze`, display name `NAPA Raw to Bronze`, `max_concurrent_runs: 1`, tag `pipeline_name: raw_to_bronze`, `performance_target: STANDARD`, and one job parameter:
 >
 > ```yaml
-> - name: release_type
->   default: 5k
+> - name: dataset_profile
+>   default: napa_5k_clean
 > ```
 >
-> Map CLI `release_type` values exactly as follows: `5k` to `napa_5k`, `50k` to `napa_50k`, and `250k` to `napa_250k`. The script parser requires one of those exact choices; the standalone mapping helper trims whitespace and lowercases its input. Configure the reference job environment with `environment_key: napa_serverless_python`, `spec.environment_version: "4"`, and `spec.dependencies: [pyyaml]`; assign this environment key to every script task. Set the owner tag to the assigned team (the reference uses `napa_platform`). These are the checked-in reference settings; validate their support in the target workspace. Do not use an existing cluster, job cluster, cluster ID, or warehouse ID.
+> The CLI `dataset_profile` parser must accept exactly `napa_5k_clean`, `napa_5k_tainted`, `napa_50k_clean`, `napa_50k_tainted`, and `napa_250k_production`; the standalone helper trims whitespace and lowercases its input before validation. The selected profile maps directly to the corresponding environment file and `release.release_name`; do not silently map a clean or tainted profile to the generic scale-only profile. Configure the reference job environment with `environment_key: napa_serverless_python`, `spec.environment_version: "4"`, and `spec.dependencies: [pyyaml]`; assign this environment key to every script task. Set the owner tag to the assigned team (the reference uses `napa_platform`). These are the checked-in reference settings; validate their support in the target workspace. Do not use an existing cluster, job cluster, cluster ID, or warehouse ID.
 >
 > Create six `spark_python_task` tasks, using a configurable `${var.script_root}` that points to the synced `notebooks` directory:
 >
@@ -260,7 +264,7 @@
 > | `validate_bronze_reconciliation` | `05_validate_bronze_reconciliation.py` | 3600 |
 > | `finalize_pipeline_run` | `06_finalize_pipeline_run.py` | 1200 |
 >
-> Each task receives `--release-type {{job.parameters.release_type}}`. Task 1 creates the run ID and publishes it with `dbutils.jobs.taskValues.set(key="run_id", value=...)`; every later task requires `--run-id {{tasks.resolve_configuration.values.run_id}}`. All scripts support optional `--config-path`, defaulting to the repository's `config/raw_to_bronze`; blank paths are treated as unset. The checked-in job does not expose this override as a job parameter. Each script reloads the selected configuration. Task 2 allows creation of missing environment objects; tasks 4 and 5 require them to exist.
+> Each task receives `--dataset-profile {{job.parameters.dataset_profile}}`. Task 1 creates the run ID and publishes it with `dbutils.jobs.taskValues.set(key="run_id", value=...)`; every later task requires `--run-id {{tasks.resolve_configuration.values.run_id}}`. All scripts support optional `--config-path`, defaulting to the repository's `config/raw_to_bronze`; blank paths are treated as unset. The checked-in job does not expose this override as a job parameter. Each script reloads the selected configuration. Task 2 allows creation of missing environment objects; tasks 4 and 5 require them to exist.
 >
 > Preserve diagnostic task values: task 1 sets `run_id`, `pipeline_run_id`, `release_name`, `config_hash`, `catalog`, `raw_schema`, `bronze_schema`, and `source_path`; task 2 adds `operations_schema_fqn`; task 4 adds `bronze_table_count`; task 5 adds `reconciled_source_count`; task 6 adds `final_status`. Tasks 2-6 also set `run_id`. Runtime helpers look for `spark`/`dbutils` in `__main__`, then builtins, and fail if unavailable. The reference task-value helper swallows setter exceptions; missing run-ID propagation can therefore surface as a downstream failure. Do not promise that `ALL_DONE` can finalize a run when task 1 never produced its required run ID or audit storage is unavailable.
 >
@@ -271,12 +275,14 @@
 > ```bash
 > databricks bundle validate -t dev
 > databricks bundle deploy -t dev
-> databricks bundle run -t dev napa_raw_to_bronze --params release_type=5k
-> databricks bundle run -t dev napa_raw_to_bronze --params release_type=50k
-> databricks bundle run -t dev napa_raw_to_bronze --params release_type=250k
+> databricks bundle run -t dev napa_raw_to_bronze --params dataset_profile=napa_5k_clean
+> databricks bundle run -t dev napa_raw_to_bronze --params dataset_profile=napa_5k_tainted
+> databricks bundle run -t dev napa_raw_to_bronze --params dataset_profile=napa_50k_clean
+> databricks bundle run -t dev napa_raw_to_bronze --params dataset_profile=napa_50k_tainted
+> databricks bundle run -t dev napa_raw_to_bronze --params dataset_profile=napa_250k_production
 > ```
 >
-> Add a runbook covering authentication/configuration, initial schema/Volume setup and Raw-file placement, deployment, 5K execution and whole-job rerun, then 50K and 250K execution as those releases become available. Resolve the target namespace before deployment or execution. Do not claim deployment or runtime acceptance if only YAML/local tests were checked.
+> Add a runbook covering authentication/configuration, initial schema/Volume setup and colocated manifest/Raw-file placement, deployment, 5K clean and tainted execution and whole-job reruns, then 50K clean and tainted execution, and finally 250K production execution. Resolve the target namespace before deployment or execution. Do not claim deployment or runtime acceptance if only YAML/local tests were checked.
 >
 > For each successful run, record the run ID, config hash, one validated manifest, 13 readable and manifest-matched inputs, 13 published tables, 13 completed successful table-run records, 13 matched reconciliations, zero manifest/Raw/Bronze count differences, ten metadata columns per table, and a terminal successful pipeline row. Verify business-row preservation in integration tests; count equality alone does not prove it. For troubleshooting, query each operations table by `pipeline_run_id` and `pipeline_name = 'raw_to_bronze'`, inspect completed table-run rows, order messages by `created_ts`, and check the failed task's traceback. Early failures may have no durable audit record. Prefer a whole-job rerun after correcting the cause; task repair with the same run ID can duplicate audit evidence and fail finalization's count checks.
 >
@@ -286,15 +292,15 @@
 >
 > Use the repository's existing test framework (pytest if none exists) and small fakes/fixtures so local unit tests do not require Databricks, network access, or production data. Add tests for at least:
 >
-> - valid configuration resolution for all releases, deep merge, placeholder resolution, unsupported release rejection, duplicate build-order rejection, and deterministic config hash;
+> - valid configuration resolution for all five dataset profiles, deep merge, placeholder resolution, unsupported profile rejection, invalid clean/tainted/production combinations, duplicate build-order rejection, and deterministic config hash;
 > - release-specific schema, Volume path, and fully-qualified Bronze target construction;
 > - missing/malformed manifest files, missing or unexpected manifest entries, checksum mismatches, manifest row-count/column/schema-hash mismatches, missing and unexpected inventory entries, trailing-slash names, unreadable Parquet, readiness row-count/schema capture, and ordered schema hashes;
 > - creation and detection of schemas/Volumes, disabled creation, and inaccessible catalog errors;
 > - the exact metadata-column tuple/order, metadata collision failure, source-record hash semantics, Delta writer format/mode/schema overwrite options, standardized comment/properties, and wrapped publication failures;
 > - matched/mismatched reconciliation for manifest/Raw/Bronze row counts, manifest checksum/schema evidence, missing metadata, missing business columns, unexpected business columns, and column-order mismatches;
 > - operations-table DDL/record construction, UTC duration behavior, audit finalization success and failure, and use of `MERGE` to close an open pipeline row;
-> - CLI mapping and invalid release-type behavior;
-> - bundle workflow definition: one `release_type` parameter, the exact six-task order/dependencies, Python-script task files, downstream run-ID dynamic references, final `ALL_DONE`, serverless environment references, and no cluster configuration;
+> - dataset-profile CLI validation, invalid profile behavior, and rejection of clean/tainted selection for 250K;
+> - bundle workflow definition: one `dataset_profile` parameter with the five allowed values, the exact six-task order/dependencies, Python-script task files, downstream run-ID dynamic references, final `ALL_DONE`, serverless environment references, and no cluster configuration;
 > - cross-pipeline compatibility if a Bronze-to-Silver configuration already exists: same Bronze catalog/schema, source/table mapping, and natural keys.
 >
 > Include characterization tests for the documented limits: readable zero-row input passes readiness; order-only mismatch is returned by the helper and causes finalization failure; repeated same-run terminal audit records fail the count checks; missing audit evidence raises; and a finished pipeline with no open row takes the append fallback. Test task orchestration as well as helper results so a correct helper cannot conceal an incorrect task status. Additional coverage should include metadata collisions, hash sentinel/delimiter ambiguity, and environment/CLI error paths. Do not require an unimplemented strict-schema, staging, or rollback guarantee to pass a baseline compatibility test.
