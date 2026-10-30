@@ -1,0 +1,2081 @@
+{
+  "build_timestamp": "2026-08-16T10:19:59Z",
+  "fact_batch_months": [
+    "2025-01-01",
+    "2025-02-01",
+    "2025-03-01",
+    "2025-04-01",
+    "2025-05-01",
+    "2025-06-01",
+    "2025-07-01",
+    "2025-08-01",
+    "2025-09-01",
+    "2025-10-01",
+    "2025-11-01",
+    "2025-12-01"
+  ],
+  "fact_batch_sequences": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "file_checksums": {
+    "club_memberships": "013fa82310d722adc59bf3b00759c10962b15727ae8f0b69d98e520690d7e16e",
+    "clubs": "c703945fe0584bfb7c6117df7cea6680f6a0c40719611afcdb06340fd5bfae79",
+    "match_games": "f7c659f1d87ad396dabbc6c38f124520a29473b776162e2e25593a37f4097d0a",
+    "match_team_players": "ba71eacfa7ef70127e5173aef11b9bc04f81bdd88f2ce4a5b12c3332cbb9127d",
+    "match_teams": "cadcb122a2fc490dbffd4b5df466024d3fa30ae921e40a550e2af01d968788ea",
+    "matches": "e46c2b14ae42138dbaaaa443fbcc5d3f2db9873585b4c5823a282d723bca0593",
+    "monthly_batches": "887a55e71679ab7ea706f1b4b6b1fc516bfc826e6e7ee1bab9495ccf41ea664d",
+    "player_assessment_history": "fc3978b660e5b60f5c2b165f2d79a3535c8d37dc4f16d7e2c9f16183e91a919b",
+    "player_master": "f9aa35473f2048d41ee88531184cc379016cde17cf2f3a12ee806cdf6b3a9bf1",
+    "player_registrations": "f556bc356c520baa2a212f41de29a32312e86bb21806537a00b7bfbcf6ec794c",
+    "regions": "053d9e9095a3e4bb6a1566cbf222816e80c775fb421ab06c48139d020a4ba444",
+    "team_memberships": "7d0c5889352ab06780ee222d80e4557390a2fafa3ae2e5a98c5bd92f45a1b647",
+    "teams": "ed10c28071d308265dd135dd6a7241ed88ecd57ef13760454614448934605c4d"
+  },
+  "included_batch_months": [
+    "2025-01-01",
+    "2025-02-01",
+    "2025-03-01",
+    "2025-04-01",
+    "2025-05-01",
+    "2025-06-01",
+    "2025-07-01",
+    "2025-08-01",
+    "2025-09-01",
+    "2025-10-01",
+    "2025-11-01",
+    "2025-12-01"
+  ],
+  "included_batch_sequences": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "included_months": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "load_strategy": "full_load",
+  "ordered_columns": {
+    "club_memberships": [
+      "id",
+      "player_id",
+      "club_id",
+      "membership_type",
+      "joined_date",
+      "left_date",
+      "is_primary"
+    ],
+    "clubs": [
+      "id",
+      "club_name",
+      "region_id",
+      "club_type",
+      "competitiveness_level",
+      "member_capacity",
+      "founding_date",
+      "indoor_court_count",
+      "outdoor_court_count"
+    ],
+    "match_games": [
+      "id",
+      "match_id",
+      "game_number",
+      "team_one_score",
+      "team_two_score",
+      "winning_team_number",
+      "target_score",
+      "win_by",
+      "actual_team_one_score_share"
+    ],
+    "match_team_players": [
+      "id",
+      "match_team_id",
+      "player_id",
+      "player_position",
+      "player_rating_at_match"
+    ],
+    "match_teams": [
+      "id",
+      "match_id",
+      "team_number",
+      "team_id",
+      "team_score",
+      "average_team_rating"
+    ],
+    "matches": [
+      "id",
+      "match_date",
+      "region_id",
+      "match_type",
+      "court_type",
+      "match_format",
+      "winning_team_id",
+      "total_points_played",
+      "batch_id"
+    ],
+    "monthly_batches": [
+      "id",
+      "batch_month",
+      "batch_sequence",
+      "batch_type",
+      "active_player_count_start",
+      "new_player_count",
+      "active_player_count_end",
+      "match_count_generated",
+      "rating_update_count",
+      "assessment_update_count"
+    ],
+    "player_assessment_history": [
+      "id",
+      "player_id",
+      "assessment_date",
+      "assessment_type",
+      "assessment_value",
+      "confidence_score",
+      "derived_from_matches",
+      "batch_id"
+    ],
+    "player_master": [
+      "player_id",
+      "external_player_key",
+      "first_name",
+      "last_name",
+      "gender",
+      "birth_date",
+      "dominant_hand",
+      "home_region_id",
+      "country_code",
+      "registration_date",
+      "player_status",
+      "rating",
+      "rating_value",
+      "confidence_score",
+      "volatility_score",
+      "global_percentile",
+      "match_count_used",
+      "rating_date",
+      "rating_batch_id",
+      "snapshot_month"
+    ],
+    "player_registrations": [
+      "id",
+      "player_id",
+      "batch_id",
+      "registration_month",
+      "registration_source",
+      "assigned_region_id",
+      "initial_rating_value",
+      "initial_confidence_score"
+    ],
+    "regions": [
+      "id",
+      "country_code",
+      "region_type",
+      "region_name",
+      "state_province_code",
+      "population",
+      "latitude",
+      "longitude"
+    ],
+    "team_memberships": [
+      "id",
+      "team_id",
+      "player_id",
+      "player_position",
+      "joined_date",
+      "left_date"
+    ],
+    "teams": [
+      "id",
+      "team_type",
+      "team_division",
+      "team_status",
+      "country_code",
+      "formation_date",
+      "dissolution_date"
+    ]
+  },
+  "output_files": [
+    {
+      "checksum": "c703945fe0584bfb7c6117df7cea6680f6a0c40719611afcdb06340fd5bfae79",
+      "columns": [
+        "id",
+        "club_name",
+        "region_id",
+        "club_type",
+        "competitiveness_level",
+        "member_capacity",
+        "founding_date",
+        "indoor_court_count",
+        "outdoor_court_count"
+      ],
+      "file_name": "clubs.parquet",
+      "file_path": "clubs.parquet",
+      "row_count": 2541,
+      "schema_hash": "35eb7b9798052d074ba2983784a9540fc8a49f85ad24d6d5b03c528ec670bfb6",
+      "table_name": "clubs"
+    },
+    {
+      "checksum": "013fa82310d722adc59bf3b00759c10962b15727ae8f0b69d98e520690d7e16e",
+      "columns": [
+        "id",
+        "player_id",
+        "club_id",
+        "membership_type",
+        "joined_date",
+        "left_date",
+        "is_primary"
+      ],
+      "file_name": "club_memberships.parquet",
+      "file_path": "club_memberships.parquet",
+      "row_count": 6565,
+      "schema_hash": "515d5f226e5dd1ac34a16b4412291d55fadb82f218a0d24b6a2a9b3dbb22aba4",
+      "table_name": "club_memberships"
+    },
+    {
+      "checksum": "f7c659f1d87ad396dabbc6c38f124520a29473b776162e2e25593a37f4097d0a",
+      "columns": [
+        "id",
+        "match_id",
+        "game_number",
+        "team_one_score",
+        "team_two_score",
+        "winning_team_number",
+        "target_score",
+        "win_by",
+        "actual_team_one_score_share"
+      ],
+      "file_name": "match_games.parquet",
+      "file_path": "match_games.parquet",
+      "row_count": 129254,
+      "schema_hash": "aa51a058b2a40c8c92e1d6c4ed9ecca951b4280eea390720d8071a0ddf72ac94",
+      "table_name": "match_games"
+    },
+    {
+      "checksum": "ba71eacfa7ef70127e5173aef11b9bc04f81bdd88f2ce4a5b12c3332cbb9127d",
+      "columns": [
+        "id",
+        "match_team_id",
+        "player_id",
+        "player_position",
+        "player_rating_at_match"
+      ],
+      "file_name": "match_team_players.parquet",
+      "file_path": "match_team_players.parquet",
+      "row_count": 345068,
+      "schema_hash": "7d235068a3eeb5498d1bf548ff084dc4622c78e38c8c24f9ef85d1bdc9863a09",
+      "table_name": "match_team_players"
+    },
+    {
+      "checksum": "cadcb122a2fc490dbffd4b5df466024d3fa30ae921e40a550e2af01d968788ea",
+      "columns": [
+        "id",
+        "match_id",
+        "team_number",
+        "team_id",
+        "team_score",
+        "average_team_rating"
+      ],
+      "file_name": "match_teams.parquet",
+      "file_path": "match_teams.parquet",
+      "row_count": 172534,
+      "schema_hash": "8dfd9792339962d602e419ef01e7078ea511e103ce8139f00d0301547a460f2b",
+      "table_name": "match_teams"
+    },
+    {
+      "checksum": "e46c2b14ae42138dbaaaa443fbcc5d3f2db9873585b4c5823a282d723bca0593",
+      "columns": [
+        "id",
+        "match_date",
+        "region_id",
+        "match_type",
+        "court_type",
+        "match_format",
+        "winning_team_id",
+        "total_points_played",
+        "batch_id"
+      ],
+      "file_name": "matches.parquet",
+      "file_path": "matches.parquet",
+      "row_count": 86267,
+      "schema_hash": "c2f3e2fb07a36e953d8ffebc6974530e40c91449e22eed5624bf36e8ddc67018",
+      "table_name": "matches"
+    },
+    {
+      "checksum": "887a55e71679ab7ea706f1b4b6b1fc516bfc826e6e7ee1bab9495ccf41ea664d",
+      "columns": [
+        "id",
+        "batch_month",
+        "batch_sequence",
+        "batch_type",
+        "active_player_count_start",
+        "new_player_count",
+        "active_player_count_end",
+        "match_count_generated",
+        "rating_update_count",
+        "assessment_update_count"
+      ],
+      "file_name": "monthly_batches.parquet",
+      "file_path": "monthly_batches.parquet",
+      "row_count": 12,
+      "schema_hash": "6a7a55756cd0dca73ef26a10801cb59a58eb6e0bc1117e672be89e1c66c8853c",
+      "table_name": "monthly_batches"
+    },
+    {
+      "checksum": "fc3978b660e5b60f5c2b165f2d79a3535c8d37dc4f16d7e2c9f16183e91a919b",
+      "columns": [
+        "id",
+        "player_id",
+        "assessment_date",
+        "assessment_type",
+        "assessment_value",
+        "confidence_score",
+        "derived_from_matches",
+        "batch_id"
+      ],
+      "file_name": "player_assessment_history.parquet",
+      "file_path": "player_assessment_history.parquet",
+      "row_count": 351976,
+      "schema_hash": "dfd340694bbb1183c5187416c0312530dd76ebd42dfc3a1b5cee57a170b28d2a",
+      "table_name": "player_assessment_history"
+    },
+    {
+      "checksum": "f9aa35473f2048d41ee88531184cc379016cde17cf2f3a12ee806cdf6b3a9bf1",
+      "columns": [
+        "player_id",
+        "external_player_key",
+        "first_name",
+        "last_name",
+        "gender",
+        "birth_date",
+        "dominant_hand",
+        "home_region_id",
+        "country_code",
+        "registration_date",
+        "player_status",
+        "rating",
+        "rating_value",
+        "confidence_score",
+        "volatility_score",
+        "global_percentile",
+        "match_count_used",
+        "rating_date",
+        "rating_batch_id",
+        "snapshot_month"
+      ],
+      "file_name": "player_master.parquet",
+      "file_path": "player_master.parquet",
+      "row_count": 6908,
+      "schema_hash": "8cc2820a0a7ee00b878e00a28cc691689789202901aee4a120ca73d634b456fb",
+      "table_name": "player_master"
+    },
+    {
+      "checksum": "f556bc356c520baa2a212f41de29a32312e86bb21806537a00b7bfbcf6ec794c",
+      "columns": [
+        "id",
+        "player_id",
+        "batch_id",
+        "registration_month",
+        "registration_source",
+        "assigned_region_id",
+        "initial_rating_value",
+        "initial_confidence_score"
+      ],
+      "file_name": "player_registrations.parquet",
+      "file_path": "player_registrations.parquet",
+      "row_count": 6908,
+      "schema_hash": "1b0f2d2155ac33bffc5009ddd5b6bd5524e200284683918d3c0d8f1bc0045db3",
+      "table_name": "player_registrations"
+    },
+    {
+      "checksum": "053d9e9095a3e4bb6a1566cbf222816e80c775fb421ab06c48139d020a4ba444",
+      "columns": [
+        "id",
+        "country_code",
+        "region_type",
+        "region_name",
+        "state_province_code",
+        "population",
+        "latitude",
+        "longitude"
+      ],
+      "file_name": "regions.parquet",
+      "file_path": "regions.parquet",
+      "row_count": 488,
+      "schema_hash": "e0b50a0e4c804b3d8a39d74a5f8e615ab64520f638445e6d2fea2ee18a4d2a11",
+      "table_name": "regions"
+    },
+    {
+      "checksum": "7d0c5889352ab06780ee222d80e4557390a2fafa3ae2e5a98c5bd92f45a1b647",
+      "columns": [
+        "id",
+        "team_id",
+        "player_id",
+        "player_position",
+        "joined_date",
+        "left_date"
+      ],
+      "file_name": "team_memberships.parquet",
+      "file_path": "team_memberships.parquet",
+      "row_count": 177560,
+      "schema_hash": "5c862304d3019feda14b984de7322760b6d8fa5aa08168debfbe83a8415e084a",
+      "table_name": "team_memberships"
+    },
+    {
+      "checksum": "ed10c28071d308265dd135dd6a7241ed88ecd57ef13760454614448934605c4d",
+      "columns": [
+        "id",
+        "team_type",
+        "team_division",
+        "team_status",
+        "country_code",
+        "formation_date",
+        "dissolution_date"
+      ],
+      "file_name": "teams.parquet",
+      "file_path": "teams.parquet",
+      "row_count": 88780,
+      "schema_hash": "b7232b4618e9502c2e24bea1343f8724ef14b5b5c6e77d8f6d4bd36f41c60944",
+      "table_name": "teams"
+    }
+  ],
+  "parquet_compression": "snappy",
+  "release_mode": "baseline",
+  "release_month": null,
+  "release_name": "5k_12_months_final_dev_dataset_initial_history",
+  "release_sequence_number": 1,
+  "release_type": "initial_snapshot",
+  "row_counts": {
+    "club_memberships": 6565,
+    "clubs": 2541,
+    "match_games": 129254,
+    "match_team_players": 345068,
+    "match_teams": 172534,
+    "matches": 86267,
+    "monthly_batches": 12,
+    "player_assessment_history": 351976,
+    "player_master": 6908,
+    "player_registrations": 6908,
+    "regions": 488,
+    "team_memberships": 177560,
+    "teams": 88780
+  },
+  "schema_hashes": {
+    "club_memberships": "515d5f226e5dd1ac34a16b4412291d55fadb82f218a0d24b6a2a9b3dbb22aba4",
+    "clubs": "35eb7b9798052d074ba2983784a9540fc8a49f85ad24d6d5b03c528ec670bfb6",
+    "match_games": "aa51a058b2a40c8c92e1d6c4ed9ecca951b4280eea390720d8071a0ddf72ac94",
+    "match_team_players": "7d235068a3eeb5498d1bf548ff084dc4622c78e38c8c24f9ef85d1bdc9863a09",
+    "match_teams": "8dfd9792339962d602e419ef01e7078ea511e103ce8139f00d0301547a460f2b",
+    "matches": "c2f3e2fb07a36e953d8ffebc6974530e40c91449e22eed5624bf36e8ddc67018",
+    "monthly_batches": "6a7a55756cd0dca73ef26a10801cb59a58eb6e0bc1117e672be89e1c66c8853c",
+    "player_assessment_history": "dfd340694bbb1183c5187416c0312530dd76ebd42dfc3a1b5cee57a170b28d2a",
+    "player_master": "8cc2820a0a7ee00b878e00a28cc691689789202901aee4a120ca73d634b456fb",
+    "player_registrations": "1b0f2d2155ac33bffc5009ddd5b6bd5524e200284683918d3c0d8f1bc0045db3",
+    "regions": "e0b50a0e4c804b3d8a39d74a5f8e615ab64520f638445e6d2fea2ee18a4d2a11",
+    "team_memberships": "5c862304d3019feda14b984de7322760b6d8fa5aa08168debfbe83a8415e084a",
+    "teams": "b7232b4618e9502c2e24bea1343f8724ef14b5b5c6e77d8f6d4bd36f41c60944"
+  },
+  "snapshot_batch_months": [
+    "2025-01-01",
+    "2025-02-01",
+    "2025-03-01",
+    "2025-04-01",
+    "2025-05-01",
+    "2025-06-01",
+    "2025-07-01",
+    "2025-08-01",
+    "2025-09-01",
+    "2025-10-01",
+    "2025-11-01",
+    "2025-12-01"
+  ],
+  "snapshot_batch_sequences": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+  ],
+  "snapshot_end_exclusive": "2026-01-01",
+  "snapshot_month": "2025-12-01",
+  "student_dataset_schema_version": "1.6",
+  "validation_status": "passed",
+  "validation_summary": {
+    "check_count": 131,
+    "checks": [
+      {
+        "details": {
+          "file": "clubs.parquet"
+        },
+        "message": "clubs.parquet exists.",
+        "name": "file_exists:clubs",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "club_memberships.parquet"
+        },
+        "message": "club_memberships.parquet exists.",
+        "name": "file_exists:club_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "match_games.parquet"
+        },
+        "message": "match_games.parquet exists.",
+        "name": "file_exists:match_games",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "match_team_players.parquet"
+        },
+        "message": "match_team_players.parquet exists.",
+        "name": "file_exists:match_team_players",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "match_teams.parquet"
+        },
+        "message": "match_teams.parquet exists.",
+        "name": "file_exists:match_teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "matches.parquet"
+        },
+        "message": "matches.parquet exists.",
+        "name": "file_exists:matches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "monthly_batches.parquet"
+        },
+        "message": "monthly_batches.parquet exists.",
+        "name": "file_exists:monthly_batches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "player_assessment_history.parquet"
+        },
+        "message": "player_assessment_history.parquet exists.",
+        "name": "file_exists:player_assessment_history",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "player_master.parquet"
+        },
+        "message": "player_master.parquet exists.",
+        "name": "file_exists:player_master",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "player_registrations.parquet"
+        },
+        "message": "player_registrations.parquet exists.",
+        "name": "file_exists:player_registrations",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "regions.parquet"
+        },
+        "message": "regions.parquet exists.",
+        "name": "file_exists:regions",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "team_memberships.parquet"
+        },
+        "message": "team_memberships.parquet exists.",
+        "name": "file_exists:team_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "file": "teams.parquet"
+        },
+        "message": "teams.parquet exists.",
+        "name": "file_exists:teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "clubs"
+        },
+        "message": "clubs.parquet can be opened by DuckDB.",
+        "name": "readability:clubs",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "club_memberships"
+        },
+        "message": "club_memberships.parquet can be opened by DuckDB.",
+        "name": "readability:club_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "match_games"
+        },
+        "message": "match_games.parquet can be opened by DuckDB.",
+        "name": "readability:match_games",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "match_team_players"
+        },
+        "message": "match_team_players.parquet can be opened by DuckDB.",
+        "name": "readability:match_team_players",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "match_teams"
+        },
+        "message": "match_teams.parquet can be opened by DuckDB.",
+        "name": "readability:match_teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "matches"
+        },
+        "message": "matches.parquet can be opened by DuckDB.",
+        "name": "readability:matches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "monthly_batches"
+        },
+        "message": "monthly_batches.parquet can be opened by DuckDB.",
+        "name": "readability:monthly_batches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "player_assessment_history"
+        },
+        "message": "player_assessment_history.parquet can be opened by DuckDB.",
+        "name": "readability:player_assessment_history",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "player_master"
+        },
+        "message": "player_master.parquet can be opened by DuckDB.",
+        "name": "readability:player_master",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "player_registrations"
+        },
+        "message": "player_registrations.parquet can be opened by DuckDB.",
+        "name": "readability:player_registrations",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "regions"
+        },
+        "message": "regions.parquet can be opened by DuckDB.",
+        "name": "readability:regions",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "team_memberships"
+        },
+        "message": "team_memberships.parquet can be opened by DuckDB.",
+        "name": "readability:team_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "table": "teams"
+        },
+        "message": "teams.parquet can be opened by DuckDB.",
+        "name": "readability:teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "club_name",
+            "region_id",
+            "club_type",
+            "competitiveness_level",
+            "member_capacity",
+            "founding_date",
+            "indoor_court_count",
+            "outdoor_court_count"
+          ],
+          "expected_columns": [
+            "id",
+            "club_name",
+            "region_id",
+            "club_type",
+            "competitiveness_level",
+            "member_capacity",
+            "founding_date",
+            "indoor_court_count",
+            "outdoor_court_count"
+          ],
+          "table": "clubs"
+        },
+        "message": "clubs columns match the projection order.",
+        "name": "column_order:clubs",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "clubs"
+        },
+        "message": "clubs contains no excluded columns.",
+        "name": "excluded_columns:clubs",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "player_id",
+            "club_id",
+            "membership_type",
+            "joined_date",
+            "left_date",
+            "is_primary"
+          ],
+          "expected_columns": [
+            "id",
+            "player_id",
+            "club_id",
+            "membership_type",
+            "joined_date",
+            "left_date",
+            "is_primary"
+          ],
+          "table": "club_memberships"
+        },
+        "message": "club_memberships columns match the projection order.",
+        "name": "column_order:club_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "club_memberships"
+        },
+        "message": "club_memberships contains no excluded columns.",
+        "name": "excluded_columns:club_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "match_id",
+            "game_number",
+            "team_one_score",
+            "team_two_score",
+            "winning_team_number",
+            "target_score",
+            "win_by",
+            "actual_team_one_score_share"
+          ],
+          "expected_columns": [
+            "id",
+            "match_id",
+            "game_number",
+            "team_one_score",
+            "team_two_score",
+            "winning_team_number",
+            "target_score",
+            "win_by",
+            "actual_team_one_score_share"
+          ],
+          "table": "match_games"
+        },
+        "message": "match_games columns match the projection order.",
+        "name": "column_order:match_games",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "match_games"
+        },
+        "message": "match_games contains no excluded columns.",
+        "name": "excluded_columns:match_games",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "match_team_id",
+            "player_id",
+            "player_position",
+            "player_rating_at_match"
+          ],
+          "expected_columns": [
+            "id",
+            "match_team_id",
+            "player_id",
+            "player_position",
+            "player_rating_at_match"
+          ],
+          "table": "match_team_players"
+        },
+        "message": "match_team_players columns match the projection order.",
+        "name": "column_order:match_team_players",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "match_team_players"
+        },
+        "message": "match_team_players contains no excluded columns.",
+        "name": "excluded_columns:match_team_players",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "match_id",
+            "team_number",
+            "team_id",
+            "team_score",
+            "average_team_rating"
+          ],
+          "expected_columns": [
+            "id",
+            "match_id",
+            "team_number",
+            "team_id",
+            "team_score",
+            "average_team_rating"
+          ],
+          "table": "match_teams"
+        },
+        "message": "match_teams columns match the projection order.",
+        "name": "column_order:match_teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "match_teams"
+        },
+        "message": "match_teams contains no excluded columns.",
+        "name": "excluded_columns:match_teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "match_date",
+            "region_id",
+            "match_type",
+            "court_type",
+            "match_format",
+            "winning_team_id",
+            "total_points_played",
+            "batch_id"
+          ],
+          "expected_columns": [
+            "id",
+            "match_date",
+            "region_id",
+            "match_type",
+            "court_type",
+            "match_format",
+            "winning_team_id",
+            "total_points_played",
+            "batch_id"
+          ],
+          "table": "matches"
+        },
+        "message": "matches columns match the projection order.",
+        "name": "column_order:matches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "matches"
+        },
+        "message": "matches contains no excluded columns.",
+        "name": "excluded_columns:matches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "batch_month",
+            "batch_sequence",
+            "batch_type",
+            "active_player_count_start",
+            "new_player_count",
+            "active_player_count_end",
+            "match_count_generated",
+            "rating_update_count",
+            "assessment_update_count"
+          ],
+          "expected_columns": [
+            "id",
+            "batch_month",
+            "batch_sequence",
+            "batch_type",
+            "active_player_count_start",
+            "new_player_count",
+            "active_player_count_end",
+            "match_count_generated",
+            "rating_update_count",
+            "assessment_update_count"
+          ],
+          "table": "monthly_batches"
+        },
+        "message": "monthly_batches columns match the projection order.",
+        "name": "column_order:monthly_batches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "monthly_batches"
+        },
+        "message": "monthly_batches contains no excluded columns.",
+        "name": "excluded_columns:monthly_batches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "player_id",
+            "assessment_date",
+            "assessment_type",
+            "assessment_value",
+            "confidence_score",
+            "derived_from_matches",
+            "batch_id"
+          ],
+          "expected_columns": [
+            "id",
+            "player_id",
+            "assessment_date",
+            "assessment_type",
+            "assessment_value",
+            "confidence_score",
+            "derived_from_matches",
+            "batch_id"
+          ],
+          "table": "player_assessment_history"
+        },
+        "message": "player_assessment_history columns match the projection order.",
+        "name": "column_order:player_assessment_history",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "player_assessment_history"
+        },
+        "message": "player_assessment_history contains no excluded columns.",
+        "name": "excluded_columns:player_assessment_history",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "player_id",
+            "external_player_key",
+            "first_name",
+            "last_name",
+            "gender",
+            "birth_date",
+            "dominant_hand",
+            "home_region_id",
+            "country_code",
+            "registration_date",
+            "player_status",
+            "rating",
+            "rating_value",
+            "confidence_score",
+            "volatility_score",
+            "global_percentile",
+            "match_count_used",
+            "rating_date",
+            "rating_batch_id",
+            "snapshot_month"
+          ],
+          "expected_columns": [
+            "player_id",
+            "external_player_key",
+            "first_name",
+            "last_name",
+            "gender",
+            "birth_date",
+            "dominant_hand",
+            "home_region_id",
+            "country_code",
+            "registration_date",
+            "player_status",
+            "rating",
+            "rating_value",
+            "confidence_score",
+            "volatility_score",
+            "global_percentile",
+            "match_count_used",
+            "rating_date",
+            "rating_batch_id",
+            "snapshot_month"
+          ],
+          "table": "player_master"
+        },
+        "message": "player_master columns match the projection order.",
+        "name": "column_order:player_master",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "player_master"
+        },
+        "message": "player_master contains no excluded columns.",
+        "name": "excluded_columns:player_master",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "player_id",
+            "batch_id",
+            "registration_month",
+            "registration_source",
+            "assigned_region_id",
+            "initial_rating_value",
+            "initial_confidence_score"
+          ],
+          "expected_columns": [
+            "id",
+            "player_id",
+            "batch_id",
+            "registration_month",
+            "registration_source",
+            "assigned_region_id",
+            "initial_rating_value",
+            "initial_confidence_score"
+          ],
+          "table": "player_registrations"
+        },
+        "message": "player_registrations columns match the projection order.",
+        "name": "column_order:player_registrations",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "player_registrations"
+        },
+        "message": "player_registrations contains no excluded columns.",
+        "name": "excluded_columns:player_registrations",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "country_code",
+            "region_type",
+            "region_name",
+            "state_province_code",
+            "population",
+            "latitude",
+            "longitude"
+          ],
+          "expected_columns": [
+            "id",
+            "country_code",
+            "region_type",
+            "region_name",
+            "state_province_code",
+            "population",
+            "latitude",
+            "longitude"
+          ],
+          "table": "regions"
+        },
+        "message": "regions columns match the projection order.",
+        "name": "column_order:regions",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "regions"
+        },
+        "message": "regions contains no excluded columns.",
+        "name": "excluded_columns:regions",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "team_id",
+            "player_id",
+            "player_position",
+            "joined_date",
+            "left_date"
+          ],
+          "expected_columns": [
+            "id",
+            "team_id",
+            "player_id",
+            "player_position",
+            "joined_date",
+            "left_date"
+          ],
+          "table": "team_memberships"
+        },
+        "message": "team_memberships columns match the projection order.",
+        "name": "column_order:team_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "team_memberships"
+        },
+        "message": "team_memberships contains no excluded columns.",
+        "name": "excluded_columns:team_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_columns": [
+            "id",
+            "team_type",
+            "team_division",
+            "team_status",
+            "country_code",
+            "formation_date",
+            "dissolution_date"
+          ],
+          "expected_columns": [
+            "id",
+            "team_type",
+            "team_division",
+            "team_status",
+            "country_code",
+            "formation_date",
+            "dissolution_date"
+          ],
+          "table": "teams"
+        },
+        "message": "teams columns match the projection order.",
+        "name": "column_order:teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_columns_present": [],
+          "table": "teams"
+        },
+        "message": "teams contains no excluded columns.",
+        "name": "excluded_columns:teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "excluded_files": []
+        },
+        "message": "No excluded source tables are emitted as Parquet files.",
+        "name": "excluded_tables_absent",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "unexpected_files": []
+        },
+        "message": "No unexpected Parquet files are present.",
+        "name": "unexpected_parquet_files_absent",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "clubs"
+        },
+        "message": "clubs.id remains unique and populated.",
+        "name": "primary_key:clubs.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "club_memberships"
+        },
+        "message": "club_memberships.id remains unique and populated.",
+        "name": "primary_key:club_memberships.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "match_games"
+        },
+        "message": "match_games.id remains unique and populated.",
+        "name": "primary_key:match_games.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "match_team_players"
+        },
+        "message": "match_team_players.id remains unique and populated.",
+        "name": "primary_key:match_team_players.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "match_teams"
+        },
+        "message": "match_teams.id remains unique and populated.",
+        "name": "primary_key:match_teams.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "matches"
+        },
+        "message": "matches.id remains unique and populated.",
+        "name": "primary_key:matches.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "monthly_batches"
+        },
+        "message": "monthly_batches.id remains unique and populated.",
+        "name": "primary_key:monthly_batches.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "player_assessment_history"
+        },
+        "message": "player_assessment_history.id remains unique and populated.",
+        "name": "primary_key:player_assessment_history.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "player_id",
+          "table": "player_master"
+        },
+        "message": "player_master.player_id remains unique and populated.",
+        "name": "primary_key:player_master.player_id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "player_registrations"
+        },
+        "message": "player_registrations.id remains unique and populated.",
+        "name": "primary_key:player_registrations.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "regions"
+        },
+        "message": "regions.id remains unique and populated.",
+        "name": "primary_key:regions.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "team_memberships"
+        },
+        "message": "team_memberships.id remains unique and populated.",
+        "name": "primary_key:team_memberships.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0,
+          "primary_key_column": "id",
+          "table": "teams"
+        },
+        "message": "teams.id remains unique and populated.",
+        "name": "primary_key:teams.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 2541,
+          "expected_count": 2541,
+          "table": "clubs"
+        },
+        "message": "clubs row count matches manifest.",
+        "name": "row_count:clubs",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 6565,
+          "expected_count": 6565,
+          "table": "club_memberships"
+        },
+        "message": "club_memberships row count matches manifest.",
+        "name": "row_count:club_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 129254,
+          "expected_count": 129254,
+          "table": "match_games"
+        },
+        "message": "match_games row count matches manifest.",
+        "name": "row_count:match_games",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 345068,
+          "expected_count": 345068,
+          "table": "match_team_players"
+        },
+        "message": "match_team_players row count matches manifest.",
+        "name": "row_count:match_team_players",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 172534,
+          "expected_count": 172534,
+          "table": "match_teams"
+        },
+        "message": "match_teams row count matches manifest.",
+        "name": "row_count:match_teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 86267,
+          "expected_count": 86267,
+          "table": "matches"
+        },
+        "message": "matches row count matches manifest.",
+        "name": "row_count:matches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 12,
+          "expected_count": 12,
+          "table": "monthly_batches"
+        },
+        "message": "monthly_batches row count matches manifest.",
+        "name": "row_count:monthly_batches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 351976,
+          "expected_count": 351976,
+          "table": "player_assessment_history"
+        },
+        "message": "player_assessment_history row count matches manifest.",
+        "name": "row_count:player_assessment_history",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 6908,
+          "expected_count": 6908,
+          "table": "player_master"
+        },
+        "message": "player_master row count matches manifest.",
+        "name": "row_count:player_master",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 6908,
+          "expected_count": 6908,
+          "table": "player_registrations"
+        },
+        "message": "player_registrations row count matches manifest.",
+        "name": "row_count:player_registrations",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 488,
+          "expected_count": 488,
+          "table": "regions"
+        },
+        "message": "regions row count matches manifest.",
+        "name": "row_count:regions",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 177560,
+          "expected_count": 177560,
+          "table": "team_memberships"
+        },
+        "message": "team_memberships row count matches manifest.",
+        "name": "row_count:team_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_count": 88780,
+          "expected_count": 88780,
+          "table": "teams"
+        },
+        "message": "teams row count matches manifest.",
+        "name": "row_count:teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 6565,
+          "table": "club_memberships"
+        },
+        "message": "club_memberships contains at least one row.",
+        "name": "required_non_empty:club_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 2541,
+          "table": "clubs"
+        },
+        "message": "clubs contains at least one row.",
+        "name": "required_non_empty:clubs",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 129254,
+          "table": "match_games"
+        },
+        "message": "match_games contains at least one row.",
+        "name": "required_non_empty:match_games",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 345068,
+          "table": "match_team_players"
+        },
+        "message": "match_team_players contains at least one row.",
+        "name": "required_non_empty:match_team_players",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 172534,
+          "table": "match_teams"
+        },
+        "message": "match_teams contains at least one row.",
+        "name": "required_non_empty:match_teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 86267,
+          "table": "matches"
+        },
+        "message": "matches contains at least one row.",
+        "name": "required_non_empty:matches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 12,
+          "table": "monthly_batches"
+        },
+        "message": "monthly_batches contains at least one row.",
+        "name": "required_non_empty:monthly_batches",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 6908,
+          "table": "player_master"
+        },
+        "message": "player_master contains at least one row.",
+        "name": "required_non_empty:player_master",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 6908,
+          "table": "player_registrations"
+        },
+        "message": "player_registrations contains at least one row.",
+        "name": "required_non_empty:player_registrations",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 488,
+          "table": "regions"
+        },
+        "message": "regions contains at least one row.",
+        "name": "required_non_empty:regions",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 177560,
+          "table": "team_memberships"
+        },
+        "message": "team_memberships contains at least one row.",
+        "name": "required_non_empty:team_memberships",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "row_count": 88780,
+          "table": "teams"
+        },
+        "message": "teams contains at least one row.",
+        "name": "required_non_empty:teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "region_id",
+          "child_table": "clubs",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "regions"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:clubs.region_id->regions.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "player_id",
+          "child_table": "club_memberships",
+          "missing_count": 0,
+          "parent_column": "player_id",
+          "parent_table": "player_master"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:club_memberships.player_id->player_master.player_id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "club_id",
+          "child_table": "club_memberships",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "clubs"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:club_memberships.club_id->clubs.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "match_id",
+          "child_table": "match_games",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "matches"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:match_games.match_id->matches.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "match_team_id",
+          "child_table": "match_team_players",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "match_teams"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:match_team_players.match_team_id->match_teams.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "player_id",
+          "child_table": "match_team_players",
+          "missing_count": 0,
+          "parent_column": "player_id",
+          "parent_table": "player_master"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:match_team_players.player_id->player_master.player_id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "match_id",
+          "child_table": "match_teams",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "matches"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:match_teams.match_id->matches.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "team_id",
+          "child_table": "match_teams",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "teams"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:match_teams.team_id->teams.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "region_id",
+          "child_table": "matches",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "regions"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:matches.region_id->regions.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "batch_id",
+          "child_table": "matches",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "monthly_batches"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:matches.batch_id->monthly_batches.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "winning_team_id",
+          "child_table": "matches",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "teams"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:matches.winning_team_id->teams.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "player_id",
+          "child_table": "player_assessment_history",
+          "missing_count": 0,
+          "parent_column": "player_id",
+          "parent_table": "player_master"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:player_assessment_history.player_id->player_master.player_id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "batch_id",
+          "child_table": "player_assessment_history",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "monthly_batches"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:player_assessment_history.batch_id->monthly_batches.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "home_region_id",
+          "child_table": "player_master",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "regions"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:player_master.home_region_id->regions.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "player_id",
+          "child_table": "player_registrations",
+          "missing_count": 0,
+          "parent_column": "player_id",
+          "parent_table": "player_master"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:player_registrations.player_id->player_master.player_id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "batch_id",
+          "child_table": "player_registrations",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "monthly_batches"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:player_registrations.batch_id->monthly_batches.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "assigned_region_id",
+          "child_table": "player_registrations",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "regions"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:player_registrations.assigned_region_id->regions.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "team_id",
+          "child_table": "team_memberships",
+          "missing_count": 0,
+          "parent_column": "id",
+          "parent_table": "teams"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:team_memberships.team_id->teams.id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "child_column": "player_id",
+          "child_table": "team_memberships",
+          "missing_count": 0,
+          "parent_column": "player_id",
+          "parent_table": "player_master"
+        },
+        "message": "Relationship check passed.",
+        "name": "relationship:team_memberships.player_id->player_master.player_id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0
+        },
+        "message": "player_master contains exactly one row per player_id.",
+        "name": "player_master:one_row_per_player",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expected_snapshot_month": "2025-12-01",
+          "failure_count": 0
+        },
+        "message": "player_master snapshot_month matches the release snapshot month.",
+        "name": "player_master:snapshot_month_consistent",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0
+        },
+        "message": "player_master rating fields are internally coherent.",
+        "name": "player_master:rating_state_coherent",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "mismatch_count": 0
+        },
+        "message": "Winning team ids match one side's source team for the match.",
+        "name": "relationship:matches.winning_team_id_same_match",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0
+        },
+        "message": "Every match has exactly two match teams.",
+        "name": "match_shape:exactly_two_match_teams",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "failure_count": 0
+        },
+        "message": "Every match team has at least one player row.",
+        "name": "match_shape:match_team_has_players",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "actual_sequences": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "expected_sequences": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ]
+        },
+        "message": "monthly_batches.batch_sequence matches the fact window.",
+        "name": "temporal:monthly_batch_sequences",
+        "status": "passed"
+      },
+      {
+        "details": {},
+        "message": "monthly_batches.batch_month values are unique.",
+        "name": "temporal:monthly_batch_months_unique",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expression": "founding_date IS NULL OR founding_date < snapshot_end_exclusive",
+          "failure_count": 0,
+          "snapshot_end_exclusive": "2026-01-01",
+          "table": "clubs"
+        },
+        "message": "Clubs must not be founded after the release snapshot month.",
+        "name": "temporal:clubs:founding_date IS NULL OR founding_date < snapshot_end_exclusive",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expression": "joined_date < snapshot_end_exclusive",
+          "failure_count": 0,
+          "snapshot_end_exclusive": "2026-01-01",
+          "table": "club_memberships"
+        },
+        "message": "Club memberships must start before the release snapshot end.",
+        "name": "temporal:club_memberships:joined_date < snapshot_end_exclusive",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expression": "left_date IS NULL OR left_date < snapshot_end_exclusive",
+          "failure_count": 0,
+          "snapshot_end_exclusive": "2026-01-01",
+          "table": "club_memberships"
+        },
+        "message": "Future club membership end dates must be suppressed.",
+        "name": "temporal:club_memberships:left_date IS NULL OR left_date < snapshot_end_exclusive",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expression": "registration_date < snapshot_end_exclusive",
+          "failure_count": 0,
+          "snapshot_end_exclusive": "2026-01-01",
+          "table": "player_master"
+        },
+        "message": "Player rows must be registered before the release snapshot end.",
+        "name": "temporal:player_master:registration_date < snapshot_end_exclusive",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expression": "rating_date IS NULL OR rating_date < snapshot_end_exclusive",
+          "failure_count": 0,
+          "snapshot_end_exclusive": "2026-01-01",
+          "table": "player_master"
+        },
+        "message": "Player ratings must not be newer than the release snapshot month.",
+        "name": "temporal:player_master:rating_date IS NULL OR rating_date < snapshot_end_exclusive",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expression": "joined_date < snapshot_end_exclusive",
+          "failure_count": 0,
+          "snapshot_end_exclusive": "2026-01-01",
+          "table": "team_memberships"
+        },
+        "message": "Team memberships must start before the release snapshot end.",
+        "name": "temporal:team_memberships:joined_date < snapshot_end_exclusive",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expression": "left_date IS NULL OR left_date < snapshot_end_exclusive",
+          "failure_count": 0,
+          "snapshot_end_exclusive": "2026-01-01",
+          "table": "team_memberships"
+        },
+        "message": "Future team membership left dates must be suppressed.",
+        "name": "temporal:team_memberships:left_date IS NULL OR left_date < snapshot_end_exclusive",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expression": "formation_date < snapshot_end_exclusive",
+          "failure_count": 0,
+          "snapshot_end_exclusive": "2026-01-01",
+          "table": "teams"
+        },
+        "message": "Teams must be formed before the release snapshot end.",
+        "name": "temporal:teams:formation_date < snapshot_end_exclusive",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "expression": "dissolution_date IS NULL OR dissolution_date < snapshot_end_exclusive",
+          "failure_count": 0,
+          "snapshot_end_exclusive": "2026-01-01",
+          "table": "teams"
+        },
+        "message": "Future team dissolution dates must be suppressed.",
+        "name": "temporal:teams:dissolution_date IS NULL OR dissolution_date < snapshot_end_exclusive",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "missing_count": 0,
+          "table": "matches"
+        },
+        "message": "matches rows reference included monthly batches.",
+        "name": "batch_window:matches.batch_id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "missing_count": 0,
+          "table": "player_assessment_history"
+        },
+        "message": "player_assessment_history rows reference included monthly batches.",
+        "name": "batch_window:player_assessment_history.batch_id",
+        "status": "passed"
+      },
+      {
+        "details": {
+          "missing_count": 0,
+          "table": "player_registrations"
+        },
+        "message": "player_registrations rows reference included monthly batches.",
+        "name": "batch_window:player_registrations.batch_id",
+        "status": "passed"
+      }
+    ],
+    "failed_check_count": 0,
+    "status": "passed"
+  }
+}
