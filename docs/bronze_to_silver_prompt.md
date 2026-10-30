@@ -1,10 +1,10 @@
 # Student AI Build Prompt: NAPA Bronze-to-Silver Pipeline
 
-**Purpose:** Give an AI coding assistant the instructions below to build and test a configuration-driven NAPA Bronze-to-Silver pipeline. The prompt describes the student pipeline architecture, the Databricks bundle needed to run it, and the additional quality evidence required by the dataset release guide. Students remain responsible for reviewing the implementation, explaining decisions, and executing their own validation.
+**Purpose:** Give an AI coding assistant this complete construction contract to build and test a configuration-driven NAPA Bronze-to-Silver pipeline. It specifies the student pipeline architecture, data contracts, quality rules, Databricks bundle, and acceptance evidence. Students remain responsible for reviewing the generated implementation, explaining decisions, and executing their own validation. No completed pipeline or unpublished repository is required.
 
-**Dataset basis:** [NAPA Dataset Specification and Release Guide](NAPA_Dataset_Specification_and_Release_Guide_Final.pdf), document version 4.0, student dataset schema 1.6. Page references below use the PDF's 1-based page numbers. This is a technical build prompt, not an analytical solution.
+**Dataset basis:** NAPA student dataset schema 1.6. The source-field contract, relationships, rules, and required outputs needed for construction are included below. The selected release's actual Parquet schema and colocated manifest are the authoritative delivered-data evidence. No separate publication or private implementation artifact is needed to execute this construction contract.
 
-**Important distinction:** The requirements below define the student construction contract. Where the release guide leaves an implementation choice open, document the chosen behavior, keep it deterministic, and test it. Do not silently alter accepted data, date semantics, publication, or failure policy.
+**Important distinction:** The requirements below define the student construction contract. Follow its specified decisions; if a genuine ambiguity remains, document it and request team direction before implementing that affected behavior. Keep choices deterministic and tested. Do not silently alter accepted data, date semantics, publication, or failure policy.
 
 ---
 
@@ -12,11 +12,11 @@
 
 ### Task, boundaries, and working agreement
 
-Build a reusable, configuration-driven **Bronze-to-Silver** pipeline for the NAPA case study. Reproduce the functional behavior specified here, write meaningful tests, and package the workflow as a deployable Databricks Asset Bundle. Incorporate the release guide's quality requirements through traceable validation and documented dispositions.
+Build a reusable, configuration-driven **Bronze-to-Silver** pipeline for the NAPA case study. Implement the functional contract specified here, write meaningful tests, and package the workflow as a deployable Databricks Asset Bundle. Produce traceable validation and documented dispositions for the quality requirements included in this prompt. Do not seek or copy an existing completed implementation.
 
 Work in stages. At each stage, explain the files changed, assumptions, tests executed, and remaining issues. Inspect before editing. Preserve existing work. Do not introduce a new framework merely for preference. Do not claim that local tests prove a Spark SQL job or bundle has run successfully.
 
-Include typed and standardized entities, deterministic key handling, duplicate-key rejection, parent-key validation, reject tables, quality evidence, reconciliation, operational auditing, convenience views, and full-refresh execution. Read the selected profile's freshly refreshed Bronze managed Delta tables; do not rebuild Bronze or modify Raw files as part of Silver. Each run is a unique standalone table replacement for the selected profile: replace the specified Silver and Silver-reject targets, do not append prior business rows, and preserve available outputs and evidence if a technical failure interrupts the run. Existing Raw files and their colocated manifest remain available for release-quality evidence when needed.
+Include typed and standardized entities, deterministic key handling, duplicate-key rejection, parent-key validation, reject tables, quality evidence, reconciliation, operational auditing, convenience views, and full-refresh execution. Read the selected profile's freshly refreshed Bronze managed Delta tables; do not rebuild Bronze or modify Raw files as part of Silver. Each run is a full refresh for the selected profile: after successful configuration, environment, and Bronze-source preflight validation, remove only the specified Silver tables, Silver-reject tables, and convenience views before rebuilding them. Do not append prior business rows. If a technical failure interrupts the run, preserve all available outputs and evidence until a subsequent run completes its preflight checks and performs the next targeted reset. Existing Raw files and their colocated manifest remain available for release-quality evidence when needed.
 
 Exclude Gold feature engineering, model selection/training, chemistry scores, confidence models, roster selection, business conclusions, hidden simulation parameters, streaming, Auto Loader, CDC, and incremental upserts into Silver. Do not invent athletes, teams, source columns, measurements, numeric acceptance thresholds, or successful run results. Existing `ad_hoc` teams are real source entities, not permission to manufacture new teams.
 
@@ -24,11 +24,11 @@ Before running writes, confirm the team's catalog, schema prefix, release, works
 
 ### Stage 0 — Inspect, establish contracts, and record decisions
 
-1. Read the repository instructions, `README.md`, the Raw-to-Bronze prompt, relevant documentation, requirements, configuration, source modules, notebooks, and tests. Run `git status --short`, `git branch --show-current`, and `git remote -v`; report unrelated changes and preserve them.
-2. Inspect the existing repository structure and identify the planned source, transformation, workflow, and test entry points. Confirm that the implementation path, reusable modules, notebooks/scripts, and tests are consistent with this prompt. Do not assume that an example, older design document, or helper implementation satisfies the requirements without testing it.
-3. Read the supplied PDF and actual release manifest. Inspect the physical Bronze schemas and their Raw schema evidence. Do not confuse schema 1.6's `team_type` identity with `team_division`, or `matches.winning_team_id` with `match_teams.id`.
-4. Produce a source-to-target contract and a quality coverage matrix. For each rule record source/page, table and columns, implementation location, severity, disposition, and test. Explicitly distinguish original source defects from orphan records caused by rejection of an upstream parent.
-5. Review the gap and decision register with the team. Continue independent work while unresolved decisions remain; do not implement conflicting semantics by assumption. Keep decisions in a project log and separate required behavior from optional improvements.
+1. Read repository instructions, `README.md`, and relevant documentation, requirements, configuration, source modules, notebooks, and tests that are actually present. Consult the Raw-to-Bronze prompt if supplied; the necessary Silver input contracts are also stated here. Run `git status --short`, `git branch --show-current`, and `git remote -v`; report unrelated changes and preserve them. A clean student template may not yet contain pipeline code.
+2. Inspect the student repository structure and identify the source, transformation, workflow, and test entry points to create. Implement this contract without assuming an existing finished pipeline, private helper library, or unpublished test suite.
+3. Read the actual release manifest and inspect the physical Bronze schemas and their Raw schema evidence. Use Appendix A for the published source-field contract. Do not confuse schema 1.6's `team_type` identity with `team_division`, or `matches.winning_team_id` with `match_teams.id`.
+4. Produce a source-to-target contract and quality coverage matrix. For each rule record its section or source field, table and columns, implementation location, severity, disposition, and test. Explicitly distinguish original source defects from orphan records caused by rejection of an upstream parent.
+5. Review the implementation-risk register with the team. Follow the requirements already decided in this prompt; identify genuine remaining ambiguities before changing affected behavior, and continue unrelated work while they are resolved. Keep any approved decisions in a project log.
 
 Deliverable: an implementation plan, contract matrix, configuration inventory, and test plan, with no invented source data or analytical decisions.
 
@@ -44,7 +44,7 @@ Use one implementation for these five independent, complete historical dataset p
 | `napa_50k_tainted` | validation | tainted | 50,000 | false | `50k_tainted` |
 | `napa_250k_production` | production-scale case data | production | 250,000 | true | `250k` |
 
-The guide assigns these to development, Silver validation, and production-scale analysis respectively. Use configuration changes, not forks of transformation code. These scale values are labels/expectations, not a reason to invent exact row-count assertions for every file. The colocated manifest supplies actual counts. Do not permit a clean or tainted selector for the 250K production dataset.
+Use these profiles for development, Silver validation, and production-scale analysis respectively. Use configuration changes, not forks of transformation code. These scale values are labels/expectations, not a reason to invent exact row-count assertions for every file. The colocated manifest supplies actual counts. Do not permit a clean or tainted selector for the 250K production dataset.
 
 Use team-owned configuration for the catalog, prefix, pipeline name, version, project, and `full_refresh` processing mode. Externalize these values. Resolve fully qualified tables as `<catalog>.<schema>.<table>`:
 
@@ -83,7 +83,7 @@ Preserve these configuration values and distinguish declarative settings from ac
 | Section | Required configuration |
 |---|---|
 | runtime | `catalog`, `team_prefix`, `default_release: napa_5k_clean`, `timezone: America/New_York` |
-| execution | `fail_fast: true`, `publish_only_after_validation: true`, `stop_dependents_on_failure: true`, `unexpected_column_policy: warn`, `missing_required_column_policy: fail`, `duplicate_primary_key_policy: reject_all`, `create_convenience_views: true`, `destructive_silver_refresh: false`, `cleanup_silver_on_failure: false` |
+| execution | `fail_fast: true`, `publish_only_after_validation: true`, `stop_dependents_on_failure: true`, `unexpected_column_policy: warn`, `missing_required_column_policy: fail`, `duplicate_primary_key_policy: reject_all`, `create_convenience_views: true`, `reset_selected_targets_before_build: true`, `cleanup_silver_on_failure: false` |
 | publication | `format: delta`, `mode: overwrite`, `overwrite_schema: true`, `use_staging: false`; publish directly with full-refresh table replacement into designated Silver and Silver-reject schemas; Bronze schema reset is performed upstream by Raw-to-Bronze |
 | metadata | seven `add_*` settings for run ID, version, source dataset, source table, load timestamp, record hash, quality status; all true |
 | thresholds | `close_game_margin: 2`, `score_share_tolerance: 0.0001`, `warning_quality_deduction: 5`, `expected_match_team_count: 2`, `expected_match_team_player_count: 2`, `duplicate_active_team_pair_severity: WARNING` |
@@ -102,7 +102,7 @@ Normalize configured string domains after trimming and uppercasing:
 | country | `USA`, `CAN`; `US`, `UNITED STATES`, `UNITED STATES OF AMERICA` → `USA`; `CA`, `CANADA` → `CAN` |
 | gender | `M`, `F`; `MALE` → `M`, `FEMALE` → `F` |
 | dominant hand | `LEFT`, `RIGHT`, `AMBIDEXTROUS`; `L` → `LEFT`, `R` → `RIGHT`, `BOTH` → `AMBIDEXTROUS` |
-| player status | configured `ACTIVE`, `INACTIVE`; the SQL active flag additionally recognizes boolean-like strings, described below |
+| player status | configured `ACTIVE`, `INACTIVE`; the derived active flag also recognizes the boolean-like strings specified below |
 | team status | `ACTIVE`, `INACTIVE`, `DISSOLVED`; `DORMANT` → `INACTIVE`, `RETIRED` → `DISSOLVED` |
 | team identity | `COMPETITIVE`, `AD_HOC`; `AD HOC` → `AD_HOC` |
 | team division/category | `MENS`, `WOMENS`, `MIXED`, `OPEN`; corresponding `*_DOUBLES` values map to these categories |
@@ -112,7 +112,7 @@ Keep legacy division-valued `team_type` support separate from the schema 1.6 ide
 
 ### Stage 2 — Environment, run context, and operations tables
 
-Validate catalog access and resolve the selected profile's Bronze, Silver, Silver-reject, and operations schemas. The selected profile's Bronze schema is created and refreshed by Raw-to-Bronze; Silver must validate that it is reading the expected fully qualified Bronze schema and must not drop, recreate, or repopulate it. Create designated Silver and Silver-reject schemas with `CREATE SCHEMA IF NOT EXISTS` when necessary and authorized. Do not drop schemas or automatically delete existing/unexpected objects during normal processing or failure handling. The operations schema and its audit evidence remain available. Do not create catalogs, grant permissions, upload files, or create a Raw Volume as part of this pipeline. Creation of an empty Bronze schema does not satisfy the source-table prerequisites.
+Validate catalog access and resolve the selected profile's Bronze, Silver, Silver-reject, and operations schemas. The selected profile's Bronze schema is created and refreshed by Raw-to-Bronze; Silver must validate that it is reading the expected fully qualified Bronze schema and must not drop, recreate, or repopulate it. Create designated Silver and Silver-reject schemas with `CREATE SCHEMA IF NOT EXISTS` when necessary and authorized. Never drop entire schemas, delete unexpected/unrelated objects, or clean up published outputs in response to failure. The **only** permitted automatic output deletion is the explicit, profile-scoped pre-build reset specified in Stage 3. The operations schema and its audit evidence remain available. Do not create catalogs, grant permissions, upload files, or create a Raw Volume as part of this pipeline. Creation of an empty Bronze schema does not satisfy the source-table prerequisites.
 
 Create a UUID pipeline run ID once and pass it to every task. Carry pipeline name/version, release, mode, configuration hash, and operations schema in the run context. Use UTC-aware operational timestamps, controlled clocks in tests, and structured messages that do not expose secrets or full sensitive records.
 
@@ -165,10 +165,10 @@ Preserve message codes `CONFIG_LOADED`, `ENVIRONMENT_VALIDATED`, `BRONZE_CONTRAC
 
 All 13 Bronze tables for the selected dataset profile must exist and be readable, with no profile mix-up or unexpected source-table substitution. Validate source schemas, the manifest, physical files, and lineage according to the Raw-to-Bronze contract; table existence alone does not prove that the correct release was imported. The Raw-to-Bronze workflow is responsible for destructive Bronze schema refresh and manifest/file validation; Silver may reuse that run-scoped evidence.
 
-Guide-required coverage (PDF pp. 3–6, 14–17):
+Required release-package coverage (the complete requirements are listed here):
 
 1. Identify the complete dataset profile and its clean/tainted or production condition. Each profile contains 13 Parquet files plus required `manifest.json` in the same directory as those files, not a monthly delta that needs earlier packages. Preserve package provenance and the selected profile (`napa_5k_clean`, `napa_5k_tainted`, `napa_50k_clean`, `napa_50k_tainted`, or `napa_250k_production`). Do not use hidden injection manifests or generator internals.
-2. Validate manifest `release_name`, `student_dataset_schema_version`, `included_batch_months`, `included_batch_sequences`, `snapshot_month`, `snapshot_end_exclusive`, `parquet_compression`, `build_timestamp`, `validation_status`, and `validation_summary`. Require `snapshot_month` to be a valid calendar month and `snapshot_end_exclusive` to be the first day following that month. Compute `snapshot_as_of_date` as the day before the exclusive boundary; do not hard-code example dates or use wall-clock time, pipeline execution time, manifest build time, or `MAX(monthly_batches.batch_date)` as a substitute.
+2. Validate manifest `release_name`, `student_dataset_schema_version`, `included_batch_months`, `included_batch_sequences`, `snapshot_month`, `snapshot_end_exclusive`, `parquet_compression`, `build_timestamp`, `validation_status`, and `validation_summary`. Require `snapshot_month` to be a valid calendar month and `snapshot_end_exclusive` to be the first day following that month. Compute `snapshot_as_of_date` as the day before the exclusive boundary; do not hard-code example dates or use wall-clock time, pipeline execution time, manifest build time, or `MAX(monthly_batches.batch_month)` as a substitute.
 
 For example, a manifest containing:
 
@@ -180,12 +180,14 @@ For example, a manifest containing:
 ```
 
 represents a release whose snapshot as-of date is 2025-12-31 and whose included history ends before 2026-01-01. This is an example of the calculation, not a hard-coded release value.
-3. Reconcile file-level evidence from `output_files` and the manifest's `row_counts`, `ordered_columns`, `schema_hashes`, and `file_checksums`. Verify file inventory, actual counts, ordered columns, physical schema, checksums, and matching release identity. Use the published checksum/schema-hash definition; do not substitute a guessed canonicalization algorithm or the Silver audit hash.
+3. Reconcile file-level evidence from `output_files` and the manifest's `row_counts`, `ordered_columns`, `schema_hashes`, and `file_checksums`. Verify file inventory, actual counts, ordered columns, physical schema, checksums, and matching release identity. The Raw-file checksum is SHA-256 of the delivered Parquet file bytes. The Raw schema hash is SHA-256 over UTF-8 text formed by joining each source column's ordered `column_name:data_type:nullable` with `|`; use Spark `simpleString()` for `data_type` and Python `True`/`False`/`None` spelling for nullability. Do not substitute the Silver operational audit hash or guess a different canonicalization.
 4. Reuse verified Raw-to-Bronze manifest/readiness evidence when available, with an explicit provenance link to this run and selected dataset profile. Otherwise read the colocated package metadata/files read-only using a configurable manifest/provenance location. Do not require a new clean/tainted field inside the existing manifest; the selected profile and isolated Raw/Bronze schema path establish the dataset condition. Preserve the distinction between the application-selected profile and the manifest's native `release_name`; a documented mapping may relate them without requiring identical strings. Do not assume Bronze audit tables contain snapshot fields unless their actual schemas demonstrate that they do. Missing, malformed, or contradictory release metadata must cause technical validation failure; do not invent a substitute snapshot date.
 5. Validate the physical contract in Appendix A before aliases or casts can hide drift. Bronze metadata columns are additional technical columns, not unexpected source fields. Count reconciliation against the manifest applies to Raw/Bronze source rows, not deduplicated/filtered Silver rows.
 6. Validate full historical coverage and snapshot boundaries as described in Stage 9. Do not infer completeness from one maximum batch date or the presence of a table. Events and timestamps must be strictly before `snapshot_end_exclusive`; an event exactly at that exclusive boundary is outside the release. For timestamp values, compare to the exclusive boundary rather than midnight on the final snapshot day.
 
-The guide's clean and tainted variants can both be legitimate engineering inputs. Distinguish a corrupted/misidentified package from intentional, manifest-consistent business defects. Report, quarantine, or flag business defects according to an explicit policy; do not assume every quality finding invalidates the whole release.
+Both clean and tainted variants are legitimate engineering inputs. Distinguish a corrupted/misidentified package from intentional, manifest-consistent business defects. Report, quarantine, or flag business defects according to the explicit policies below; do not assume every quality finding invalidates the whole release.
+
+**Pre-build target reset (required after successful preflight):** As the last step of `validate_bronze_sources`, and only after all required configuration, environment, source, manifest, and Bronze-readiness checks have succeeded, resolve and verify the selected profile's fully qualified target names. Drop the five documented convenience views using `DROP VIEW IF EXISTS`, followed by the 13 designated accepted Silver tables and 13 designated Silver exception tables using `DROP TABLE IF EXISTS`. Use the exact target registry and naming contracts in this prompt; never discover targets by dropping every object in a schema. If a target cannot be safely resolved, belongs to another profile, has an unexpected object type, or the reset fails, stop and report a technical failure. Do not start table construction after an incomplete reset. On a first run, absent targets are normal. This reset clears the outputs from any preceding successful or failed run but does **not** delete Bronze, Raw, operations tables, run histories, or unrelated objects. If any preflight check fails, do not reset anything. If reset or later construction fails, preserve whatever objects and operational evidence remain; do not execute failure cleanup or rollback. A new run repeats preflight validation before it can clear those outputs.
 
 ### Stage 4 — Shared transformation, deduplication, and publication framework
 
@@ -259,7 +261,7 @@ Use these record-hash field sequences, joined with `|`, with null represented by
 
 | Table | Ordered record-hash inputs |
 |---|---|
-| monthly_batches | batch_id, batch_sequence, batch_date |
+| monthly_batches | batch_id, batch_sequence, derived_batch_date |
 | regions | region_id, region_name, country_code |
 | players | player_id, first_name, last_name, birth_date, home_region_id |
 | player_registrations | registration_id, player_id, batch_id, registration_date, effective_start_date, effective_end_date |
@@ -268,7 +270,7 @@ Use these record-hash field sequences, joined with `|`, with null represented by
 | teams | team_id, team_category, team_identity_type, country_code |
 | club_memberships | club_membership_id, player_id, club_id, membership_start_date, membership_end_date |
 | team_memberships | team_membership_id, team_id, player_id, membership_start_date, membership_end_date |
-| matches | match_id, batch_id, region_id, match_date, winning_team_id, winning_team_number |
+| matches | match_id, batch_id, region_id, match_date, winning_team_id, derived_winning_team_number |
 | match_teams | match_team_id, match_id, team_id, team_number |
 | match_team_players | match_team_player_id, match_team_id, player_id |
 | match_games | match_game_id, match_id, game_number, team_one_score, team_two_score |
@@ -289,7 +291,7 @@ Alias handling for foundational, athlete, and organization tables must choose th
 
 Use safe, non-throwing conversion expressions for every potentially malformed source value. For dates and timestamps, use supported defensive parsing that distinguishes valid values from malformed values without aborting the transformation. Validate the expressions in the actual Databricks serverless environment and document runtime compatibility. Preserve the original offending value in `failed_source_value` and/or `source_record_json`; never emit only the null conversion result. Conversion failures are recoverable record-level rejections, while unsupported expressions, unreadable inputs, failed writes, and unexpected runtime exceptions remain technical failures.
 
-Publish the complete expected set of 13 accepted Silver tables and 13 reject/exception tables with `CREATE OR REPLACE TABLE <fqn> USING DELTA AS <select>`, including empty results with their declared SQL schema. Every accepted Silver table must contain all mapped Bronze business attributes, existing standardized fields, derived business fields, data-quality indicators, surrogate keys, and operational metadata. Use full-refresh table replacement for the specified targets, never append. A completely successful full job replaces prior business data and produces a complete selected-profile release. Do not automatically delete unexpected database objects. If a technical failure occurs after some tables are published, preserve available Silver tables, exception records, quality evidence, and operational audit evidence; mark the run incomplete/FAILED and require a subsequent successful full-job rerun before downstream Gold consumption. The Bronze, Raw, and operations schemas must remain intact.
+After the required Stage 3 pre-build reset, publish the complete expected set of 13 accepted Silver tables and 13 reject/exception tables with `CREATE OR REPLACE TABLE <fqn> USING DELTA AS <select>`, including empty results with their declared SQL schema. Every accepted Silver table must contain all mapped Bronze business attributes, existing standardized fields, derived business fields, data-quality indicators, surrogate keys, and operational metadata. Use full-refresh table replacement for the specified targets, never append. A completely successful full job produces a complete selected-profile release with no business rows carried forward from the preceding run. Do not automatically delete unexpected database objects. If a technical failure occurs after the reset or after some tables are published, preserve available Silver tables, exception records, quality evidence, and operational audit evidence; mark the run incomplete/FAILED and require a subsequent successful full-job rerun before downstream Gold consumption. The Bronze, Raw, and operations schemas must remain intact.
 
 For each table, record source/exact-duplicate/duplicate-key-rejected/accepted/rejected/warning/published counts, quality evidence, accepted-table schema snapshot, and terminal status. Reject quality evidence is grouped by rule ID/severity, with failed count, evaluated source count, percentage (null for zero denominator), and up to ten sorted sampled business keys. No reject groups means no successful row-rule records are automatically emitted. Warning counts and row flags are separate from these reject groups. Direct defects, duplicate-primary-key rejections, parent-rejection consequences, and non-rejecting warnings must remain distinguishable without double-counting rejected occurrences. A successful run must verify that the selected Silver schema contains exactly the 13 expected accepted tables plus the documented convenience views, and that the selected Silver-reject schema contains exactly the 13 expected reject/exception tables, with no unexpected tables.
 
@@ -323,7 +325,7 @@ The registry also declares `assessment_confidence`, `membership_start_date`, and
 
 **regions:** Map `id`/`region_id`, `region_name`/`name`, `province_state`/`province`/`state`, `country_code`/`country`, and preserve `state_province_code` as its own source attribute. Standardize country to USA/CAN. Reject missing key (`REGION_001`, CRITICAL), missing name (`REGION_002`, CRITICAL), and invalid/missing country (`REGION_003`, ERROR). Document any canonical `province_state` mapping separately from the preserved source value.
 
-Use the manifest-derived `snapshot_as_of_date` for current-state calculations. Do not use `MAX(accepted monthly_batches.batch_date)` as a universal as-of date; batch dates remain available for batch-period context and included-period validation.
+Use the manifest-derived `snapshot_as_of_date` for current-state calculations. Do not use `MAX(accepted monthly_batches.derived_batch_date)` as a universal as-of date; batch dates remain available for batch-period context and included-period validation.
 
 ### Stage 6 — Athlete tables
 
@@ -331,13 +333,13 @@ Use the manifest-derived `snapshot_as_of_date` for current-state calculations. D
 
 Safely convert rating/confidence to DOUBLE and reject non-null malformed values with the appropriate conversion reason. Compute `derived_age_at_snapshot` and `derived_age_group_at_snapshot` using `snapshot_as_of_date` with birthday adjustment and the configured age groups. Status strings `TRUE,T,YES,Y,1,ACTIVE` give true; `FALSE,F,NO,N,0,INACTIVE` give false; other/null values give null, with unsupported required status values rejected under the categorical-domain rule. Produce `derived_active_flag` from the documented status semantics and do not filter inactive players from the base table.
 
-Reject in this priority: missing key (`PLAYER_001`, CRITICAL); malformed or future birth date (`PLAYER_005`); populated orphan home region (`PLAYER_002`); invalid supplied gender (`PLAYER_003`); hand (`PLAYER_004`); unresolved invalid supplied country (`PLAYER_007`); malformed rating (`PLAYER_008`); malformed confidence (`PLAYER_009`). These other findings are ERROR. Do not invent rating/confidence bounds or require every PDF-required field through rules that are not part of the documented contract. Null first/last names and other optional fields may pass when the source contract permits them.
+Reject in this priority: missing key (`PLAYER_001`, CRITICAL); malformed or future birth date (`PLAYER_005`); populated orphan home region (`PLAYER_002`); invalid supplied gender (`PLAYER_003`); hand (`PLAYER_004`); unresolved invalid supplied country (`PLAYER_007`); malformed rating (`PLAYER_008`); malformed confidence (`PLAYER_009`). These other findings are ERROR. Do not invent rating/confidence bounds. Apply the required source-field/nullability contract in Appendix A, and permit optional nulls where that contract allows them.
 
 **player_registrations:** Map `registration_id`/`id`; preserve `registration_month`, `registration_source`, `assigned_region_id`, `initial_rating_value`, and `initial_confidence_score`; resolve required accepted player and optional populated `batch_id`/`monthly_batch_id`. Safely parse populated registration/start/end values; date uses `registration_date`, otherwise `registration_month`; start uses `effective_start_date`/`start_date`, otherwise `registration_month`; end uses optional `effective_end_date`. A valid `YYYY-MM` month becomes the first day of that month. Uppercase `registration_type`/`registration_source`.
 
 Reject missing key (`REG_001`, CRITICAL), missing/orphan player (`REG_002`), populated orphan batch (`REG_003`), malformed registration/start/end dates (`REG_004`/`005`/`006`), and end before start (`REG_007`). Derive `derived_registration_status` ACTIVE when end is null or at/after `COALESCE(snapshot_as_of_date, registration_date)`, otherwise INACTIVE; if that comparison date is null, status is null. `derived_current_registration_flag` additionally considers future start relative to `snapshot_as_of_date`, with inclusive boundaries and the same fallback date. `derived_registration_duration_days = snapshot_as_of_date - effective_start_date`, regardless of end date. Assign `derived_registration_sequence` per player ordered by registration date nulls first, effective start nulls first, then registration ID. Do not substitute membership-duration logic.
 
-**player_assessment_history:** Map `assessment_id`/`id`, player, batch alias as above; date from `assessment_date`, otherwise `assessment_month`/`snapshot_month`; uppercase assessment type; value from `assessment_value`/`value`; confidence from `assessment_confidence`/`confidence`/`confidence_score`. Safely convert value/confidence to DOUBLE and preserve the original assessment date and batch reference. Reject missing key (`ASSESS_001`, CRITICAL), missing/orphan player (`ASSESS_002`), populated orphan batch (`ASSESS_003`), malformed or future assessment date relative to `snapshot_as_of_date` (`ASSESS_004`), malformed value (`ASSESS_005`), malformed confidence (`ASSESS_006`); other severities ERROR. Do not use later assessments to rewrite earlier events. Required batch/date/type coverage from the guide needs additional checks.
+**player_assessment_history:** Map `assessment_id`/`id`, player, batch alias as above; date from `assessment_date`, otherwise `assessment_month`/`snapshot_month`; uppercase assessment type; value from `assessment_value`/`value`; confidence from `assessment_confidence`/`confidence`/`confidence_score`. Safely convert value/confidence to DOUBLE and preserve the original assessment date and batch reference. Reject missing key (`ASSESS_001`, CRITICAL), missing/orphan player (`ASSESS_002`), populated orphan batch (`ASSESS_003`), malformed or future assessment date relative to `snapshot_as_of_date` (`ASSESS_004`), malformed value (`ASSESS_005`), malformed confidence (`ASSESS_006`); other severities ERROR. Do not use later assessments to rewrite earlier events. Enforce the required batch/date/type coverage defined in Appendix A and Stage 9.
 
 ### Stage 7 — Organization and partnership tables
 
@@ -345,7 +347,7 @@ Reject missing key (`REG_001`, CRITICAL), missing/orphan player (`REG_002`), pop
 
 **teams:** Preserve source `team_type`, `team_division`, `team_status`, `country_code`, `formation_date`, and `dissolution_date` while also producing canonical category, identity, country, status, and date fields. Category precedence is supplied `team_division`, then `team_category`/`category`, then legacy division-valued `team_type`. Invalid explicit higher-priority values do not silently fall back. Modern `team_type` becomes identity COMPETITIVE/AD_HOC, while legacy category values may yield null identity. Standardize status, country, formation/start and dissolution/end dates. Active boolean-like `active_flag`/`status` overrides; otherwise normalized team status ACTIVE yields true, another populated status false, absent status null. `derived_team_age_at_snapshot_days` is `snapshot_as_of_date` minus formation date, and the resulting flag is `derived_active_flag`.
 
-Reject missing key (`TEAM_001`, CRITICAL), invalid category (`TEAM_002`), invalid identity not explainable as legacy category (`TEAM_008`), invalid status (`TEAM_003`), invalid country (`TEAM_004`), malformed formation/dissolution (`TEAM_005`/`006`), or dissolution before formation (`TEAM_007`); other severities ERROR. Baseline does not comprehensively enforce future-formation/snapshot boundaries. Never interpret a team identity as its gender division or create replacement team IDs.
+Reject missing key (`TEAM_001`, CRITICAL), invalid category (`TEAM_002`), invalid identity not explainable as legacy category (`TEAM_008`), invalid status (`TEAM_003`), invalid country (`TEAM_004`), malformed formation/dissolution (`TEAM_005`/`006`), or dissolution before formation (`TEAM_007`); other severities ERROR. Also apply the explicit release-boundary checks in Stage 9. Never interpret a team identity as its gender division or create replacement team IDs.
 
 **club_memberships:** Resolve membership ID, required accepted player and club, start from `membership_start_date`/`joined_date`/`start_date`, end from `membership_end_date`/`left_date`/`end_date`. Safely parse populated start/end values and reject malformed values without aborting other records. Reject missing key, missing/orphan parents, malformed dates, or end before start (`CLUB_MEMBERSHIP_001` through `006`; key CRITICAL, others ERROR). Start null can pass when the source contract permits it. Duration is `COALESCE(end, snapshot_as_of_date) - start` when an open interval is measured for current-state context. `derived_current_membership_flag` uses inclusive interval bounds at `COALESCE(snapshot_as_of_date, start)`, null if no comparison date. Historical validity uses the actual event date, not the snapshot date.
 
@@ -357,21 +359,21 @@ For both membership tables, set `dq_membership_overlap_flag` against the immedia
 
 **matches:** Resolve ID from `match_id`/`id`; safely parse populated `match_date`/`date`; optional populated batch and region must resolve to accepted parents. Preserve `court_type`, `match_format`, and `total_points_played` in addition to the standardized match attributes. Derive `competition_category` by uppercasing `match_type`, not from a separate category column. Preserve persistent `winning_team_id` from `winning_team_id`/`winner_team_id`. Derive side number by joining **Bronze** `match_teams` on the same match ID and persistent team ID, requiring an unambiguous side 1 or 2. An explicit `winning_team_number`/`winner_team_number` must be safely converted when populated, valid, and agree with the derived value when both exist. This Bronze lookup avoids a circular dependency before Silver sides are built.
 
-Reject missing key (`MATCH_001`, CRITICAL), populated orphan batch (`MATCH_002`), populated orphan region (`MATCH_003`), malformed date (`MATCH_004`), invalid/ambiguous winner mapping or conflicting side number (`MATCH_005`); others ERROR. `derived_completed_flag` is true when a winning side number exists; derive `derived_match_year` and `derived_match_month` from date. Baseline does not require all of the guide's batch/date/type nonnull fields or enforce a full snapshot boundary.
+Reject missing key (`MATCH_001`, CRITICAL), populated orphan batch (`MATCH_002`), populated orphan region (`MATCH_003`), malformed date (`MATCH_004`), invalid/ambiguous winner mapping or conflicting side number (`MATCH_005`); others ERROR. `derived_completed_flag` is true when a winning side number exists; derive `derived_match_year` and `derived_match_month` from date. Also enforce the required batch/date/type fields in Appendix A and snapshot-boundary checks in Stage 9.
 
 **match_teams:** A row is a match side with its own `match_team_id`; `team_id` is the persistent team. Preserve source `team_score` and `average_team_rating`. Require accepted match and accepted team. Safely convert `team_number`/`side_number` to integer 1 or 2 and safely parse pre-match rating from `pre_match_team_rating`/`team_rating_before`/`average_team_rating`. Post-match rating and rating change remain null when no source-supported calculation exists; do not manufacture post-match outcomes. Inherit match date/keys from the accepted match and produce `derived_winner_flag`. Count accepted side rows per match and set `dq_side_cardinality_warning_flag` for counts other than two.
 
-Reject missing key (`MATCH_TEAM_001`, CRITICAL), missing/orphan match (`MATCH_TEAM_002`), missing/orphan persistent team (`MATCH_TEAM_006`), invalid side number (`MATCH_TEAM_003`), or malformed pre-match rating (`MATCH_TEAM_004`); others ERROR. A count of two is not proof of distinct side numbers or distinct persistent teams; separately cover structural requirements from the guide.
+Reject missing key (`MATCH_TEAM_001`, CRITICAL), missing/orphan match (`MATCH_TEAM_002`), missing/orphan persistent team (`MATCH_TEAM_006`), invalid side number (`MATCH_TEAM_003`), or malformed pre-match rating (`MATCH_TEAM_004`); others ERROR. A count of two is not proof of distinct side numbers or distinct persistent teams; separately apply the structural checks in Stage 9.
 
 **match_team_players:** Require accepted match side and accepted player. Preserve `player_rating_at_match` as the historical match-time rating; never replace it with snapshot `rating` or `rating_value`. Normalize position and optional rating from `player_rating_at_match`/`rating_at_match`; inherit match/team/date context from the side. Calculate `derived_age_at_match` and `derived_age_group_at_match` from the accepted player's birth date and the actual match date using the configured age groups. Do not use `snapshot_as_of_date` for these event-time calculations. Initial rejects: missing key (`MATCH_TEAM_PLAYER_001`, CRITICAL), missing/orphan side (`002`), missing/orphan player (`003`), invalid position (`004`), malformed rating (`005`); others ERROR. After duplicate-primary-key rejection, reject all implicated participant occurrences when the same player occurs repeatedly on one side (`006`, `INVALID_PARTICIPANT_CARDINALITY`) or appears on both sides of the same match (`007`, `PLAYER_ON_BOTH_MATCH_SIDES`), respecting first-reason precedence and preserving one final outcome per source occurrence.
 
-For accepted participants, set `dq_membership_history_warning_flag` only when history exists for that team/player but no interval contains the actual match date inclusively. **No history at all does not trigger the baseline flag.** Do not reject historical participation solely because the player or team is inactive at the snapshot. Count these warnings plus side groups whose accepted participant count differs from two. Guide-required evidence must not confuse this limited check with proof of valid membership for every participant.
+For accepted participants, set `dq_membership_history_warning_flag` only when history exists for that team/player but no interval contains the actual match date inclusively. **No history at all does not trigger this flag.** Do not reject historical participation solely because the player or team is inactive at the snapshot. Count these warnings plus side groups whose accepted participant count differs from two. Do not confuse this limited check with proof of valid membership for every participant; report missing history separately.
 
 **match_games:** Safely convert game number, scores, winner side, optional target score, optional win-by, and optional score share using non-throwing expressions. Require accepted match, positive integer game number, nonnegative integer scores, and winner side 1 or 2. Reject non-null malformed values with conversion-specific evidence; then reject ties and any winner inconsistent with the larger score. Optional target score and win-by must be nonnegative; optional actual side-one score share must, when total points > 0, agree with `team_one_score / total_points` within 0.0001. No invented universal score target or rating range.
 
-Rule IDs `MATCH_GAME_001` through `011` cover, respectively: missing key (CRITICAL), missing/orphan match, invalid game number, invalid side-one score, invalid side-two score, invalid winner side, winner/score disagreement, invalid target, invalid win-by, invalid score-share type, and score-share mismatch (others ERROR). Derive absolute `derived_score_margin`, `derived_total_points`, `derived_close_game_flag` for margin <= 2, and `derived_extended_game_flag` when winning score is strictly greater than target. The baseline does not enforce all target/win-by completion rules or uniqueness of `(match_id, game_number)`; document and test those guide-related decisions separately.
+Rule IDs `MATCH_GAME_001` through `011` cover, respectively: missing key (CRITICAL), missing/orphan match, invalid game number, invalid side-one score, invalid side-two score, invalid winner side, winner/score disagreement, invalid target, invalid win-by, invalid score-share type, and score-share mismatch (others ERROR). Derive absolute `derived_score_margin`, `derived_total_points`, `derived_close_game_flag` for margin <= 2, and `derived_extended_game_flag` when winning score is strictly greater than target. Also check uniqueness of `(match_id, game_number)` and report target/win-by anomalies under the explicit game rules; do not invent additional tournament score thresholds.
 
-### Stage 9 — Cross-table validation and guide-required quality evidence
+### Stage 9 — Cross-table validation and required quality evidence
 
 Implement the 11 cross-table SQL checks after all tables are built. Emit one PASSED/FAILED quality result per check, including denominator, failed count, severity, timestamp, and up to ten sampled keys. Aggregate warning/error counts are counts of findings, not necessarily distinct affected entities.
 
@@ -391,22 +393,22 @@ Recoverable conversion failures are data-quality findings: record the rejection 
 | `CROSS_WINNER_001` | Match winner agrees with side winner flags when present and with game-win aggregation | ERROR |
 | `CROSS_WINNER_002` | Populated match winning team ID occurs among that match's persistent side team IDs | ERROR |
 
-For game-win aggregation, choose the side with most game wins; a tie is broken by ascending side number. Treat that tie-break as an implementation detail, not a tournament rule supplied by the guide. The cross-table task records data-quality findings but does not fail solely because ERROR or WARNING findings exist. Technical query failures or missing required cross-table evidence still fail the pipeline.
+For game-win aggregation, choose the side with most game wins; a tie is broken by ascending side number. Treat that tie-break as a deterministic calculation convention, not a rule for deciding actual tournament outcomes. The cross-table task records data-quality findings but does not fail solely because ERROR or WARNING findings exist. Technical query failures or missing required cross-table evidence still fail the pipeline.
 
-The PDF (p. 15, section 13) requires evidence across **all eight** categories below. Its typical High/Medium labels are not the pipeline's CRITICAL/ERROR/WARNING enum and are not automatic whole-run abort rules. Add a documented policy mapping; do not invent a percentage allowance.
+Record quality evidence across **all eight** categories below. The High/Medium labels describe priority, not the pipeline's CRITICAL/ERROR/WARNING enum, and are not automatic whole-run abort rules. Document the distinction without inventing percentage allowances.
 
-| Guide category | Typical guide severity | Required coverage beyond merely running the baseline |
+| Quality category | Priority | Required evidence |
 |---|---|---|
 | Release integrity | High | Expected files/manifest, checksums, ordered schemas and schema hashes, row counts, correct release/variant/version |
 | Primary keys | High | Every accepted published PK nonnull and unique; report every original duplicate occurrence as rejected evidence |
-| Foreign keys | High | Every guide relationship resolves within the same release; distinguish nullable references and rejected-parent cascades |
+| Foreign keys | High | Every relationship listed below resolves within the same release; distinguish nullable references and rejected-parent cascades |
 | Match structure | High | Two sides, coherent side numbering, persistent team identity, valid participants, coherent winner relationships |
 | Game integrity | Medium | Nonnegative scores and consistent game winner; explain treatment of target/win-by/share anomalies |
 | Temporal integrity | Medium | Registration, formation, membership, rating, assessment, match, and dissolution dates have logical ordering and fit the release snapshot |
 | Historical completeness | High | Included months/sequences and completed-batch history agree with manifest; fact history and as-of snapshots are coherent |
 | Tournament eligibility | High | Referenced team IDs exist, memberships and divisions are valid; retain evidence for downstream eligibility without selecting a roster |
 
-Validate these source relationships (PDF pp. 5–6) while retaining the related source attributes in Silver. All listed foreign keys are nonnull unless marked nullable:
+Validate these source relationships while retaining the related source attributes in Silver. All listed foreign keys are nonnull unless marked nullable:
 
 | Source child field | Referenced field | Nullable |
 |---|---|---|
@@ -430,7 +432,7 @@ Validate these source relationships (PDF pp. 5–6) while retaining the related 
 | team_memberships.team_id | teams.id | no |
 | team_memberships.player_id | player_master.player_id | no |
 
-Temporal/history coverage must explicitly address PDF pp. 3–7 and use the manifest-derived temporal contract:
+Temporal/history coverage must use the following complete manifest-derived requirements:
 
 - `snapshot_end_exclusive` is the first day after the snapshot month and `snapshot_as_of_date` is the preceding calendar day. Included event dates and timestamps are **strictly before** the exclusive boundary, not <= it. Use `snapshot_as_of_date` for current-state calculations and the actual event date for historical calculations.
 - Full historical fact tables retain included completed batches and their matches/games/sides/participants, registrations, and assessments. Reconcile included batch months/sequences and parent-child history; do not append only the newest month or remove old inactive entities.
@@ -457,18 +459,18 @@ Create these five views in the release Silver schema, using explicit selected co
 reconciliation_difference = bronze_row_count - (
     accepted_row_count + rejected_row_count
 )
-status = MATCHED only when difference == 0
+status = MATCHED only when difference == 0 and required schema/column checks pass
 ```
 
 Every original Bronze row occurrence must contribute to exactly one accepted Silver occurrence or one rejected exception occurrence. Identical duplicates remain separately counted rejected occurrences. `duplicate_key_rejected_count`, parent-rejection counts, and other quality subsets are diagnostic subsets of `rejected_row_count`; never add them again to the reconciliation total. Reject tables must preserve row multiplicity, and all 13 sources must be reconciled independently. A nonzero unexplained difference is a technical pipeline failure, not merely a data-quality finding. Persist reconciliation results and diagnostic messages before raising where audit storage is available. Reconcile participants after their additional structural rejections as well.
 
-Every reconciliation result with `status != "MATCHED"` must cause the reconciliation orchestration task to fail, including column-order, row-count, missing-column, and unexpected-column mismatches. Persist the result and relevant diagnostics before raising whenever audit storage is available. The task must never report successful reconciliation when any source has a `MISMATCH` result.
+Every reconciliation result with `status != "MATCHED"` must cause the reconciliation orchestration task to fail, including column-order, row-count, missing-column, and unexpected-column mismatches. Check these schema/column contracts separately from the row-count equation, attach their status to the relevant reconciliation result, and persist the result and diagnostics before raising whenever audit storage is available. The task must never report successful reconciliation when any source has a `MISMATCH` result.
 
 The finalizer reads evidence for the run and expects 13 completed table records, all SUCCEEDED, and 13 reconciliation records, all MATCHED. The pipeline must separate execution status from data quality: CRITICAL, ERROR, and WARNING findings, rejected rows, and nonzero quality counts do not independently fail execution. Missing required execution evidence, failed tasks, failed writes, incomplete publication, or unexplained reconciliation differences do fail execution. The finalizer must identify selected-profile coverage, preserve quality summaries, mark failed/incomplete runs unsuitable for downstream Gold, and never delete available Silver, exception, quality, or operational evidence.
 
 Finalize an open pipeline run with Delta `MERGE` on run ID/open completion timestamp; append an end record if no open record exists. Emit the terminal message, expose `final_status` as a task value, and raise when final status is FAILED. Repeated finalization is not guaranteed audit-idempotent. The finalizer must still attempt a failure summary after upstream failures; test failures before the run ID is available rather than assuming `ALL_DONE` solves missing task values.
 
-For an approved guide-compliant gate, define exact required table/check/view evidence, distinct run-scoped coverage, reconciliation with disjoint categories, and the agreed severity/disposition mapping. Keep diagnostic quality success, workflow success, and downstream eligibility separate. Do not label any result production-certified merely because the baseline finalizer returns SUCCEEDED.
+The completion gate must verify exact required table/check/view evidence, distinct run-scoped coverage, reconciliation with disjoint categories, and the severity/disposition rules already stated here. Keep diagnostic quality results, workflow execution status, and downstream eligibility separate. Do not label a dataset production-certified merely because the pipeline run returns SUCCEEDED.
 
 ### Stage 11 — Databricks bundle, task entry points, and deployment runbook
 
@@ -499,6 +501,8 @@ Task definition (ordinary tasks depend on the immediately preceding task):
 | finalize_pipeline_summary | 20_b2s_finalize_pipeline_summary.py | 1200 |
 
 Finalization depends on **all nine preceding tasks** and has `run_if: ALL_DONE`, not merely a success dependency on the view task. Task parameters are:
+
+The `validate_bronze_sources` task performs all Bronze/manifest preflight checks **before** its final, targeted Silver output reset. Its success means both preflight and the complete reset succeeded; `build_reference` must not run if either fails. Do not add a separate cleanup-on-failure task or reset operations tables. Include the verified reset target list and outcome in run-linked operational messages.
 
 ```yaml
 # Every task:
@@ -561,10 +565,10 @@ Minimum test matrix:
 | Organization | Modern/legacy teams, invalid explicit division, identity errors, open/ended club versus team membership duration, inclusive endpoints, overlaps including nested intervals, future formation and snapshot eligibility |
 | Competition | Persistent team ID versus side-row ID; missing/ambiguous/conflicting winner; valid modern match_teams.team_id; duplicate/missing sides; same player repeated or on both sides; absent versus noncovering history; no fabricated post-rating |
 | Games | Negative/null/malformed scores, zero/negative game number, tie, incorrect winner, optional target/win-by/share, share tolerance just inside/outside 0.0001, close margin at 2/3, extended score equal to/above target, duplicate game number within match |
-| Guide history/FKs | Every listed FK, nullable references, required batch nulls, assigned region validation, complete manifest sequences, date exactly at end-exclusive boundary, future left/dissolution projected null, first-of-month versus month-end as-of, available rating snapshot evidence |
-| Quality/audit | First-rule precedence, one reject occurrence per source occurrence, reject JSON/hash, grouped counts/samples, direct versus parent-rejection subsets, zero-row denominator, all 11 cross-check results including PASSED, all eight guide categories, append schema normalization, UTC timestamps and schema hash |
+| Historical integrity/FKs | Every listed FK, nullable references, required batch nulls, assigned region validation, complete manifest sequences, date exactly at end-exclusive boundary, future left/dissolution projected null, first-of-month versus month-end as-of, available rating snapshot evidence |
+| Quality/audit | First-rule precedence, one reject occurrence per source occurrence, reject JSON/hash, grouped counts/samples, direct versus parent-rejection subsets, zero-row denominator, all 11 cross-check results including PASSED, all eight quality categories, append schema normalization, UTC timestamps and schema hash |
 | Reconciliation | Every Bronze row is counted exactly once as accepted or rejected; duplicate-key and parent-rejection subsets are not double-counted; multiplicity is preserved; unexplained differences fail; results and diagnostics are persisted |
-| Publication/views | Full-refresh replacement of specified tables, repeated standalone Silver refresh with stable business results, no uncontrolled append or stale business rows, complete source-attribute projections, exactly 13 accepted tables, exactly 13 reject tables, all five views, renamed-column compatibility, null active flags excluded, empty roster, duplicate-side join fanout, failure between table publications preserves available outputs and evidence |
+| Publication/views | Successful preflight followed by a targeted reset of exactly five views, 13 Silver tables, and 13 reject tables for only the selected profile; missing targets on first run; no reset when preflight fails; unrelated objects and operations history preserved; subsequent run removes outputs of earlier success/failure before building; failure during reset or between table publications preserves remaining outputs and evidence; no uncontrolled append or stale business rows after successful completion; complete source-attribute projections, exactly 13 accepted tables, exactly 13 reject tables, all five views, renamed-column compatibility, null active flags excluded, empty roster, duplicate-side join fanout |
 | Finalization | 13 successful builds/reconciliations, exact accepted/reject table coverage, missing/duplicated evidence, CRITICAL vs ERROR vs WARNING without quality-only execution failure, cross-check/view task failure, missing run ID, repeated finalization, failed count read, preserved evidence after failure, approved gate policy |
 | Bundle/runtime | YAML parse, include/sync coverage, ten tasks/scripts, timeouts/environment, release/run parameters, complete finalizer dependencies/ALL_DONE, imports/config resolution from deployed path, Spark SQL execution under actual ANSI/timezone settings |
 
@@ -575,15 +579,15 @@ Staged acceptance:
 1. Configuration, source-to-Silver mappings, naming contracts, and source contracts pass local tests before data writes.
 2. Foundational tables pass before athletes; athletes before organization/partnership; these before competition.
 3. A complete synthetic integration run produces exactly 13 accepted tables, 13 reject tables (possibly empty), six operations tables, five views, and run-linked quality/reconciliation evidence; the specified tables are full-refresh replacements rather than appends.
-4. A 5K clean run and rerun demonstrate stable business outputs and explained audit differences. Run IDs/load timestamps naturally differ; do not demand byte-identical audit data.
-5. 5K tainted and 50K clean/tainted runs validate defect handling, scalability, and guide coverage with the same code. 250K production is the production-scale case dataset, not evidence that Gold analytics have been performed.
-6. No guide-compliance claim until each required check has evidence or a clearly stated, documented limitation. No unexplained reconciliation difference, stale Silver/reject table, or hidden partial refresh is acceptable as a successful handoff; a failed run preserves available Silver, exception, quality, and operations evidence, is marked incomplete/unsuitable for Gold, and requires a subsequent successful full-job rerun.
+4. A 5K clean run and rerun demonstrate that the next run resets the selected Silver/reject tables and views after successful preflight, rebuilds stable business outputs, and preserves prior operational audit history. Also test a preflight failure that leaves existing outputs intact and a post-reset build failure that preserves partial outputs until the following run clears them. Run IDs/load timestamps naturally differ; do not demand byte-identical audit data.
+5. 5K tainted and 50K clean/tainted runs validate defect handling and required quality coverage with the same code. 250K production is the production-scale case dataset, not evidence that Gold analytics have been performed. Performance optimization is outside the required student scope.
+6. Do not claim all acceptance requirements passed until each required check has evidence or a clearly stated limitation. No unexplained reconciliation difference, stale Silver/reject table, or hidden partial refresh is acceptable as a successful handoff; a failed run preserves available Silver, exception, quality, and operations evidence, is marked incomplete/unsuitable for Gold, and requires a subsequent successful full-job rerun.
 
 Final deliverables: source/config/task files; validated bundle; synthetic fixtures and tests; source-to-target/type/rule matrices; decision/gap log; deployment and recovery runbook; run evidence when execution is authorized; concise summary of checks actually run versus not run. Do not fabricate successful deployment, live table counts, or dataset findings.
 
 ### Appendix A — Published source contract for schema 1.6
 
-Use these to validate the source and to enumerate every business attribute that must be mapped into accepted Silver. PDF pp. 7–14 and the delivered manifest define ordered physical columns; inspect precision/scale/nullability from the actual contract. Source IDs and counts are INT64; dates/timestamps and UUIDs are published as strings; numeric measurement fields use DECIMAL; `club_memberships.is_primary` is BOOLEAN. Source country examples US/CA are not Silver's standardized USA/CAN.
+Use this appendix to validate the source and enumerate every business attribute that must be mapped into accepted Silver. The delivered manifest and Parquet schemas provide the final ordered physical evidence; inspect actual precision, scale, and nullability rather than guessing. Source IDs and counts are INT64; dates/timestamps and UUIDs are published as strings; numeric measurement fields use DECIMAL; `club_memberships.is_primary` is BOOLEAN. Source country examples US/CA are not Silver's standardized USA/CAN.
 
 Ordered source columns:
 
@@ -629,7 +633,7 @@ teams:
   formation_date, dissolution_date
 ```
 
-Required nonnull source fields (all other fields are nullable according to the guide):
+Required nonnull source fields (all other fields are nullable under this source contract):
 
 | Source | Required fields |
 |---|---|
@@ -728,34 +732,29 @@ match_games:
 
 The mapping matrix must accompany these projections and identify the source origin of every column. A canonical Silver name does not authorize dropping original information: preserve both `rating` and `rating_value`, preserve `team_type` separately from `team_division`, preserve `derived_from_matches` as a source attribute, and retain source lifecycle, activity-count, score, rating, location, and membership attributes even when no current Silver rule uses them. Reject tables continue to preserve rejected source occurrences and diagnostic evidence through the established exception-table contract; rejected rows do not need to appear in accepted Silver.
 
-### Appendix C — Required gap/decision register
+### Appendix C — Implementation risks and required safeguards
 
-The requirements in this prompt govern duplicate handling, reconciliation accounting, quality-versus-execution status, and failure preservation. Implement and test them directly; guide-required validations can produce additional evidence without altering accepted projections, but any gate/disposition must still be explicit.
+The requirements in this prompt govern duplicate handling, reconciliation accounting, quality-versus-execution status, and failure preservation. Implement and test them directly. These are safeguards for construction, not a list of defects in an inaccessible existing implementation or a request to recreate old code.
 
 | Implementation risk | Required handling in the student build |
 |---|---|
-| Manifest/package contract absent from Silver preflight | Raw-to-Bronze now requires colocated manifest validation for the selected profile. Reuse verified run-scoped evidence when available; otherwise configure the colocated manifest/provenance location and perform read-only validation without rebuilding Bronze |
-| Many PDF-required null/type/FK checks absent; source attributes must remain available in Silver | Add source-contract checks on Bronze; include registration assigned region and required batch references; maintain a complete source-to-Silver mapping |
+| Manifest/package evidence cannot be established from table existence alone | Raw-to-Bronze validates the colocated manifest for the selected profile. Reuse verified run-scoped evidence when available; otherwise read the colocated manifest/provenance location without rebuilding Bronze |
+| Required null/type/FK checks and complete attribute mappings | Check the Appendix A source contract on Bronze; include registration assigned region and required batch references; maintain a complete source-to-Silver mapping |
 | As-of calculations can use maximum batch date instead of the manifest boundary | Derive `snapshot_as_of_date` from `snapshot_end_exclusive`; use it for current-state calculations and use actual event dates or batch dates for their respective temporal contexts |
 | `state_province_code` mapping can lose the original source attribute | Preserve `state_province_code` and document any canonical `province_state` mapping separately |
 | Duplicate-key records can be double-counted in reconciliation | Reject every occurrence of a duplicated non-null primary key and reconcile `Bronze = accepted + rejected`; keep duplicate and parent-rejection counts as diagnostic subsets, not additive categories |
 | Runtime conversion behavior can vary by expression and Databricks runtime | Validate the selected non-throwing numeric/date/timestamp/boolean expressions in the actual serverless environment and document supported runtime behavior |
 | Ordinary `CAST`/`TO_DATE` expressions can abort a transformation or confuse failed conversion with a legitimate null | Use runtime-validated non-throwing conversion expressions; distinguish optional source nulls, missing required values, malformed non-null values, and post-conversion business-rule violations; preserve original offending values and reject only the affected records |
-| Destructive Silver/reject schema reset and failure cleanup can erase evidence | Use designated schemas plus full-refresh replacement of the specified tables, with available outputs, rejected rows, and audit evidence preserved after technical failure. Do not require schema deletion or cleanup |
+| A fresh run can inherit stale outputs, while failure cleanup can erase evidence | Only after successful preflight, drop the five designated views, 13 Silver tables, and 13 exception tables for the selected profile before rebuilding. Never drop schemas, unrelated objects, or operations history; preserve available outputs and evidence after any technical failure until a later run completes preflight and resets them |
 | Quality findings can be confused with execution failure | Record CRITICAL/ERROR/WARNING findings without failing execution solely for quality; missing evidence, failed tasks, publication failures, and unexplained reconciliation differences still fail finalization |
-| Missing membership history is not flagged; LAG misses some nested overlaps | Add explicit coverage/interval evidence with approved warning/reject policy |
-| Two rows do not prove distinct sides/teams; game-number uniqueness and complete score rules are incomplete | Add structural checks backed by guide/manifest semantics, not invented tournament rules |
+| Missing membership history and nested interval overlaps | Report missing history separately from known contradictory history; test nested overlaps and document any interval-warning limitation without inventing membership data |
+| Two rows do not prove distinct sides/teams; game-number and score integrity | Check distinct sides/teams and game-number uniqueness; report anomalies under the existing rules without inventing tournament thresholds |
 | Narrow source projections or partial hashes can omit attributes | Preserve every Bronze business attribute in accepted Silver, keep source attributes distinguishable, and ensure record hashes/mappings document the selected field coverage without discarding source information |
-| SQL/Python helper behavior differs; local tests are not live Spark execution | Test deployed SQL directly and document supported compatibility, not assumed parity |
-| Publication count helper can return zero when counting fails | Make the failure visible in integration tests; approve fail-loud counting instead of interpreting unknown as zero |
-| Retry/finalizer evidence is not fully idempotent; exact count checks do not prove unique table coverage | Test duplicate evidence and retries; preserve evidence after failure and require a subsequent successful full-job rerun for a complete Silver release; approve distinct latest-per-table/run evidence rules |
+| Local mocks are not proof of live Spark execution | Test SQL/DataFrame transformations in a real Spark/Delta integration environment and verify actual Databricks deployment before claiming runtime success |
+| Count queries or publication evidence fail | Propagate the failure and retain diagnostics; never interpret an unavailable count as zero |
+| Repeated-task evidence does not establish distinct table coverage | Test duplicate evidence and whole-job reruns; preserve evidence after failure and require a subsequent successful full-job run for a complete Silver release |
 
 ## End prompt
 
 ---
 
-## Instructor review notes
-
-This revision makes complete Bronze business-attribute preservation, source/standardized/derived/data-quality/surrogate/operational naming conventions, manifest-based temporal processing, and safe malformed-value rejection part of the student construction specification. The existing executable Python/SQL implementation may still require updates to expand its Silver projections, rename derived and quality fields, update convenience views, implement manifest-derived temporal context, and replace throwing conversions with runtime-validated safe conversions. This document does not claim that the executable implementation has already been updated.
-
----
